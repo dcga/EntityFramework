@@ -218,7 +218,24 @@
     <Compile Include="Query\Annotations\IncludeQueryAnnotation.cs" />
     <Compile Include="EF.cs" />
     <Compile Include="Query\CompiledQueryCacheKeyGenerator.cs" />
+    <Compile Include="Query\EntityTrackingInfoFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\IMemberAccessBindingExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\IRequiresMaterializationExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\ITaskBlockingExpressionVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\MemberAccessBindingExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\RequiresMaterializationExpressionVisitorFactory.cs" />
+    <Compile Include="Query\IEntityQueryModelVisitorFactory.cs" />
+    <Compile Include="Query\IEntityTrackingInfoFactory.cs" />
+    <Compile Include="Query\IEntityTrackingInfoFinder.cs" />
+    <Compile Include="Query\ExpressionVisitors\IOrderingExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\IProjectionExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\IEntityQueryableExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\IQuerySourceTracingExpressionVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\ISubQueryMemberPushDownExpressionVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\OrderingExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\ProjectionExpressionVisitorFactory.cs" />
     <Compile Include="Query\ICompiledQueryCacheKeyGenerator.cs" />
+    <Compile Include="Query\IQueryAnnotationExtractor.cs" />
     <Compile Include="Query\IQueryCompiler.cs" />
     <Compile Include="Query\EntityLoadInfo.cs" />
     <Compile Include="Query\EntityTrackingInfo.cs" />
@@ -235,9 +252,11 @@
     <Compile Include="Query\IIncludableQueryable.cs" />
     <Compile Include="Query\Internal\IExpressionPrinter.cs" />
     <Compile Include="Query\IQueryExecutor.cs" />
+    <Compile Include="Query\IQueryOptimizer.cs" />
     <Compile Include="Query\IQueryPreprocessor.cs" />
     <Compile Include="Query\QueryableHelpers.cs" />
     <Compile Include="Query\QueryAnnotationMethodAttribute.cs" />
+    <Compile Include="Query\QueryCompilationContextServices.cs" />
     <Compile Include="Query\QueryCompiler.cs" />
     <Compile Include="Query\QueryExecutor.cs" />
     <Compile Include="Query\QueryPreprocessor.cs" />
@@ -263,7 +282,7 @@
     <Compile Include="Metadata\TypedAnnotation.cs" />
     <Compile Include="Query\ExpressionVisitors\EntityQueryableExpressionVisitor.cs" />
     <Compile Include="Query\ExpressionVisitors\DefaultQueryExpressionVisitor.cs" />
-    <Compile Include="Query\ExpressionVisitors\EntityResultFindingExpressionVisitor.cs" />
+    <Compile Include="Query\EntityTrackingInfoFinder.cs" />
     <Compile Include="Query\IAsyncEnumerableAccessor.cs" />
     <Compile Include="Query\ExpressionVisitors\MemberAccessBindingExpressionVisitor.cs" />
     <Compile Include="Query\ExpressionVisitors\ProjectionExpressionVisitor.cs" />
@@ -406,6 +425,7 @@
       <CustomToolNamespace>Microsoft.Data.Entity.Internal</CustomToolNamespace>
     </Content>
     <None Include="project.json" />
+    <Compile Include="Query\ExpressionVisitors\INavigationRewriter.cs" />
   </ItemGroup>
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />

@@ -9,6 +9,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Query.Expressions;
 using Microsoft.Data.Entity.Query.ExpressionVisitors;
 using Microsoft.Data.Entity.Utilities;
@@ -29,26 +30,56 @@ namespace Microsoft.Data.Entity.Query
         private readonly Dictionary<IQuerySource, RelationalQueryModelVisitor> _subQueryModelVisitorsBySource
             = new Dictionary<IQuerySource, RelationalQueryModelVisitor>();
 
+        private readonly IIncludeExpressionVisitorFactory _includeExpressionVisitorFactory;
+
+        private RelationalQueryModelVisitor _parentQueryModelVisitor;
+
+        private bool _requiresClientProjection;
         private bool _requiresClientFilter;
         private bool _requiresClientResultOperator;
         private bool _bindParentQueries;
 
-        private RelationalProjectionExpressionVisitor _projectionVisitor;
-
         private Dictionary<IncludeSpecification, List<int>> _navigationIndexMap = new Dictionary<IncludeSpecification, List<int>>();
 
         public RelationalQueryModelVisitor(
-            [NotNull] RelationalQueryCompilationContext queryCompilationContext,
-            [CanBeNull] RelationalQueryModelVisitor parentQueryModelVisitor)
-            : base(Check.NotNull(queryCompilationContext, nameof(queryCompilationContext)))
+            [NotNull] IModel model,
+            [NotNull] IQueryOptimizer queryOptimizer,
+            [NotNull] INavigationRewritingExpressionVisitor navigationRewritingExpressionVisitor,
+            [NotNull] ISubQueryMemberPushDownExpressionVisitor subQueryMemberPushDownExpressionVisitor,
+            [NotNull] IQuerySourceTracingExpressionVisitor querySourceTracingExpressionVisitor,
+            [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
+            [NotNull] IResultOperatorHandler resultOperatorHandler,
+            [NotNull] IEntityMaterializerSource entityMaterializerSource,
+            [NotNull] IIncludeExpressionVisitorFactory includeExpressionVisitorFactory)
+            : base(
+                  model,
+                  queryOptimizer,
+                  navigationRewritingExpressionVisitor,
+                  subQueryMemberPushDownExpressionVisitor,
+                  querySourceTracingExpressionVisitor,
+                  queryAnnotationExtractor,
+                  resultOperatorHandler,
+                  entityMaterializerSource)
         {
-            ParentQueryModelVisitor = parentQueryModelVisitor;
+            Check.NotNull(includeExpressionVisitorFactory, nameof(includeExpressionVisitorFactory));
+
+            _includeExpressionVisitorFactory = includeExpressionVisitorFactory;
         }
 
         public virtual bool RequiresClientEval { get; set; }
         public virtual bool RequiresClientSelectMany { get; set; }
         public virtual bool RequiresClientFilter => _requiresClientFilter || RequiresClientEval;
-        public virtual bool RequiresClientProjection => _projectionVisitor.RequiresClientEval || RequiresClientEval;
+        public virtual bool RequiresClientProjection
+        {
+            get { return _requiresClientProjection || RequiresClientEval; }
+            [param: NotNull]
+            set
+            {
+                Check.NotNull(value, nameof(value));
+
+                _requiresClientProjection = value;
+            }
+        }
 
         public virtual bool RequiresClientResultOperator
         {
@@ -57,11 +88,40 @@ namespace Microsoft.Data.Entity.Query
         }
 
         public new virtual RelationalQueryCompilationContext QueryCompilationContext
-            => (RelationalQueryCompilationContext)base.QueryCompilationContext;
+        {
+            get { return (RelationalQueryCompilationContext)base.QueryCompilationContext; }
+            [param: NotNull]
+            set
+            {
+                Check.NotNull(value, nameof(value));
+
+                base.QueryCompilationContext = value;
+            }
+        }
 
         public virtual ICollection<SelectExpression> Queries => _queriesBySource.Values;
 
-        public virtual RelationalQueryModelVisitor ParentQueryModelVisitor { get; }
+        public virtual RelationalQueryModelVisitor ParentQueryModelVisitor
+        {
+            get { return _parentQueryModelVisitor; }
+            [param: NotNull]
+            set
+            {
+                Check.NotNull(value, nameof(value));
+
+                _parentQueryModelVisitor = value;
+            }
+        }
+
+        public override Func<QueryContext, IEnumerable<TResult>> CreateQueryExecutor<TResult>([NotNull] QueryModel queryModel)
+        {
+            return base.CreateQueryExecutor<TResult>(queryModel);
+        }
+
+        public override Func<QueryContext, IAsyncEnumerable<TResult>> CreateAsyncQueryExecutor<TResult>([NotNull] QueryModel queryModel)
+        {
+            return base.CreateAsyncQueryExecutor<TResult>(queryModel);
+        }
 
         public virtual void RegisterSubQueryVisitor(
             [NotNull] IQuerySource querySource, [NotNull] RelationalQueryModelVisitor queryModelVisitor)
@@ -96,21 +156,6 @@ namespace Microsoft.Data.Entity.Query
             return (_queriesBySource.TryGetValue(querySource, out selectExpression)
                 ? selectExpression
                 : _queriesBySource.Values.SingleOrDefault(se => se.HandlesQuerySource(querySource)));
-        }
-
-        protected override ExpressionVisitor CreateQueryingExpressionVisitor(IQuerySource querySource)
-        {
-            Check.NotNull(querySource, nameof(querySource));
-
-            return new RelationalEntityQueryableExpressionVisitor(this, querySource);
-        }
-
-        protected override ExpressionVisitor CreateProjectionExpressionVisitor(IQuerySource querySource)
-        {
-            Check.NotNull(querySource, nameof(querySource));
-
-            return _projectionVisitor
-                = new RelationalProjectionExpressionVisitor(this, querySource);
         }
 
         public override void VisitQueryModel(QueryModel queryModel)
@@ -193,12 +238,13 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(accessorLambda, nameof(accessorLambda));
 
             Expression
-                = new IncludeExpressionVisitor(
-                    includeSpecification.QuerySource,
-                    includeSpecification.NavigationPath,
-                    QueryCompilationContext,
-                    _navigationIndexMap[includeSpecification],
-                    querySourceRequiresTracking)
+                = _includeExpressionVisitorFactory
+                    .Create(
+                        includeSpecification.QuerySource,
+                        includeSpecification.NavigationPath,
+                        QueryCompilationContext,
+                        _navigationIndexMap[includeSpecification],
+                        querySourceRequiresTracking)
                     .Visit(Expression);
         }
 
@@ -247,7 +293,7 @@ namespace Microsoft.Data.Entity.Query
                                 fromClause,
                                 QueryCompilationContext,
                                 readerOffset,
-                                LinqOperatorProvider.SelectMany)
+                                QueryCompilationContext.LinqOperatorProvider.SelectMany)
                                 .Visit(Expression);
 
                         RequiresClientSelectMany = false;
@@ -294,7 +340,7 @@ namespace Microsoft.Data.Entity.Query
                 queryModel,
                 index,
                 () => base.VisitJoinClause(joinClause, queryModel, index),
-                LinqOperatorProvider.Join);
+                QueryCompilationContext.LinqOperatorProvider.Join);
         }
 
         protected override Expression CompileJoinClauseInnerSequenceExpression(JoinClause joinClause, QueryModel queryModel)
@@ -317,7 +363,7 @@ namespace Microsoft.Data.Entity.Query
                 queryModel,
                 index,
                 () => base.VisitGroupJoinClause(groupJoinClause, queryModel, index),
-                LinqOperatorProvider.GroupJoin,
+                QueryCompilationContext.LinqOperatorProvider.GroupJoin,
                 outerJoin: true);
         }
 
@@ -447,7 +493,7 @@ namespace Microsoft.Data.Entity.Query
 
                 var innerQuerySource = (IQuerySource)((ConstantExpression)shaperMethodArgs[0]).Value;
 
-                foreach (var queryAnnotation 
+                foreach (var queryAnnotation
                     in QueryCompilationContext.QueryAnnotations
                         .Where(qa => qa.QuerySource == innerQuerySource))
                 {
@@ -688,7 +734,10 @@ namespace Microsoft.Data.Entity.Query
 
                         selectExpression
                             .AddToProjection(
-                                QueryCompilationContext.RelationalExtensions.For(property).ColumnName,
+                                QueryCompilationContext
+                                    .RelationalServices
+                                    .RelationalExtensions
+                                    .For(property).ColumnName,
                                 property,
                                 querySource);
                     }
@@ -703,7 +752,10 @@ namespace Microsoft.Data.Entity.Query
                     = ParentQueryModelVisitor?.TryGetQuery(querySource);
 
                 selectExpression?.AddToProjection(
-                    QueryCompilationContext.RelationalExtensions.For(property).ColumnName,
+                    QueryCompilationContext
+                        .RelationalServices
+                        .RelationalExtensions
+                        .For(property).ColumnName,
                     property,
                     querySource);
             }

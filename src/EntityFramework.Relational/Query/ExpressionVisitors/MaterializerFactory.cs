@@ -16,7 +16,7 @@ using Remotion.Linq.Clauses;
 
 namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
-    public class MaterializerFactory
+    public class MaterializerFactory : IMaterializerFactory
     {
         private readonly IEntityMaterializerSource _entityMaterializerSource;
 

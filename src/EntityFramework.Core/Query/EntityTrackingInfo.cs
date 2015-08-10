@@ -18,14 +18,15 @@ namespace Microsoft.Data.Entity.Query
         private static readonly IEnumerable<IncludedEntity> _emptyIncludedEntities
             = Enumerable.Empty<IncludedEntity>();
 
-        private readonly QueryCompilationContext _queryCompilationContext;
-        private readonly IEntityType _entityType;
-        private readonly IReadOnlyList<IProperty> _entityKeyProperties;
-        private readonly EntityKeyFactory _entityKeyFactory;
-        private readonly IReadOnlyList<IReadOnlyList<INavigation>> _includedNavigationPaths;
-        private readonly IDictionary<INavigation, IncludedEntityTrackingInfo> _includedEntityTrackingInfos;
+        private QuerySourceReferenceExpression _querySourceReferenceExpression;
+        private QueryCompilationContext _queryCompilationContext;
+        private IEntityType _entityType;
+        private IReadOnlyList<IProperty> _entityKeyProperties;
+        private EntityKeyFactory _entityKeyFactory;
+        private IReadOnlyList<IReadOnlyList<INavigation>> _includedNavigationPaths;
+        private IDictionary<INavigation, IncludedEntityTrackingInfo> _includedEntityTrackingInfos;
 
-        public EntityTrackingInfo(
+        public virtual void Initialize(
             [NotNull] QueryCompilationContext queryCompilationContext,
             [NotNull] QuerySourceReferenceExpression querySourceReferenceExpression,
             [NotNull] IEntityType entityType)
@@ -34,15 +35,14 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(entityType, nameof(entityType));
             Check.NotNull(queryCompilationContext, nameof(queryCompilationContext));
 
-            QuerySourceReferenceExpression = querySourceReferenceExpression;
-
+            _querySourceReferenceExpression = querySourceReferenceExpression;
             _entityType = entityType;
             _queryCompilationContext = queryCompilationContext;
 
             _entityKeyProperties = _entityType.GetPrimaryKey().Properties;
 
             _entityKeyFactory
-                = queryCompilationContext.EntityKeyFactorySource
+                = queryCompilationContext.Services.EntityKeyFactorySource
                     .GetKeyFactory(_entityType.GetPrimaryKey());
 
             _includedNavigationPaths
@@ -65,14 +65,14 @@ namespace Microsoft.Data.Entity.Query
                             navigation,
                             new IncludedEntityTrackingInfo(
                                 targetEntityType,
-                                _queryCompilationContext.EntityKeyFactorySource.GetKeyFactory(targetKey),
+                                _queryCompilationContext.Services.EntityKeyFactorySource.GetKeyFactory(targetKey),
                                 targetKey.Properties));
                     }
                 }
             }
         }
 
-        public virtual QuerySourceReferenceExpression QuerySourceReferenceExpression { get; }
+        public virtual QuerySourceReferenceExpression QuerySourceReferenceExpression => _querySourceReferenceExpression;
         public virtual IQuerySource QuerySource => QuerySourceReferenceExpression.ReferencedQuerySource;
 
         public virtual void StartTracking(
@@ -163,7 +163,7 @@ namespace Microsoft.Data.Entity.Query
 
                 if (navigation.IsCollection())
                 {
-                    var propertyGetter = _queryCompilationContext.ClrPropertyGetterSource.GetAccessor(navigation);
+                    var propertyGetter = _queryCompilationContext.Services.ClrPropertyGetterSource.GetAccessor(navigation);
                     var referencedEntities = (IEnumerable<object>)propertyGetter.GetClrValue(entity);
 
                     foreach (var referencedEntity 
@@ -181,7 +181,7 @@ namespace Microsoft.Data.Entity.Query
                 else
                 {
                     var propertyGetter
-                        = _queryCompilationContext.ClrPropertyGetterSource
+                        = _queryCompilationContext.Services.ClrPropertyGetterSource
                             .GetAccessor(navigation);
 
                     var referencedEntity = propertyGetter.GetClrValue(entity);

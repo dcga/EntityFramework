@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Runtime.CompilerServices;
+using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Query.Expressions;
 using Microsoft.Data.Entity.Query.ExpressionVisitors;
@@ -26,17 +26,21 @@ namespace Microsoft.Data.Entity.Query
 
             public HandlerContext(
                 IResultOperatorHandler resultOperatorHandler,
+                IModel model,
                 RelationalQueryModelVisitor queryModelVisitor,
                 ResultOperatorBase resultOperator,
                 QueryModel queryModel,
                 SelectExpression selectExpression)
             {
                 _resultOperatorHandler = resultOperatorHandler;
+                Model = model;
                 QueryModelVisitor = queryModelVisitor;
                 ResultOperator = resultOperator;
                 QueryModel = queryModel;
                 SelectExpression = selectExpression;
             }
+
+            public IModel Model { get; }
 
             public ResultOperatorBase ResultOperator { get; }
 
@@ -82,7 +86,19 @@ namespace Microsoft.Data.Entity.Query
                 { typeof(TakeResultOperator), HandleTake }
             };
 
-        private readonly IResultOperatorHandler _resultOperatorHandler = new ResultOperatorHandler();
+        private readonly IModel _model;
+        private readonly ResultOperatorHandler _resultOperatorHandler;
+
+        public RelationalResultOperatorHandler(
+            [NotNull] IModel model,
+            [NotNull] ResultOperatorHandler resultOperatorHandler)
+        {
+            Check.NotNull(model, nameof(model));
+            Check.NotNull(resultOperatorHandler, nameof(resultOperatorHandler));
+
+            _model = model;
+            _resultOperatorHandler = resultOperatorHandler;
+        }
 
         public virtual Expression HandleResultOperator(
             EntityQueryModelVisitor entityQueryModelVisitor,
@@ -103,6 +119,7 @@ namespace Microsoft.Data.Entity.Query
             var handlerContext
                 = new HandlerContext(
                     _resultOperatorHandler,
+                    _model,
                     relationalQueryModelVisitor,
                     resultOperator,
                     queryModel,
@@ -302,9 +319,7 @@ namespace Microsoft.Data.Entity.Query
             var ofTypeResultOperator
                 = (OfTypeResultOperator)handlerContext.ResultOperator;
 
-            var entityType
-                = handlerContext.QueryModelVisitor.QueryCompilationContext.Model
-                    .FindEntityType(ofTypeResultOperator.SearchedItemType);
+            var entityType = handlerContext.Model.FindEntityType(ofTypeResultOperator.SearchedItemType);
 
             if (entityType == null)
             {
@@ -317,7 +332,11 @@ namespace Microsoft.Data.Entity.Query
             if (concreteEntityTypes.Length != 1
                 || concreteEntityTypes[0].RootType() != concreteEntityTypes[0])
             {
-                var extensions = handlerContext.QueryModelVisitor.QueryCompilationContext.RelationalExtensions;
+                var extensions = handlerContext
+                    .QueryModelVisitor
+                    .QueryCompilationContext
+                    .RelationalServices
+                    .RelationalExtensions;
 
                 var discriminatorProperty = extensions.For(concreteEntityTypes[0]).DiscriminatorProperty;
 
@@ -342,7 +361,7 @@ namespace Microsoft.Data.Entity.Query
             }
 
             return Expression.Call(
-                handlerContext.QueryModelVisitor.LinqOperatorProvider.Cast
+                handlerContext.QueryModelVisitor.QueryCompilationContext.LinqOperatorProvider.Cast
                     .MakeGenericMethod(ofTypeResultOperator.SearchedItemType),
                 handlerContext.QueryModelVisitor.Expression);
         }

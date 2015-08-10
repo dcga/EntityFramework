@@ -9,23 +9,40 @@ using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Query.ExpressionVisitors;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
-using Remotion.Linq.Clauses;
 
 namespace Microsoft.Data.Entity.Query
 {
     public class InMemoryQueryModelVisitor : EntityQueryModelVisitor
     {
-        public InMemoryQueryModelVisitor([NotNull] QueryCompilationContext queryCompilationContext)
-            : base(Check.NotNull(queryCompilationContext, nameof(queryCompilationContext)))
-        {
-        }
+        private readonly IMaterializerFactory _materializerFactory;
 
-        protected override ExpressionVisitor CreateQueryingExpressionVisitor(IQuerySource querySource)
+        public InMemoryQueryModelVisitor(
+            [NotNull] IModel model,
+            [NotNull] IQueryOptimizer queryOptimizer,
+            [NotNull] INavigationRewritingExpressionVisitor navigationRewritingExpressionVisitor,
+            [NotNull] ISubQueryMemberPushDownExpressionVisitor subQueryMemberPushDownExpressionVisitor,
+            [NotNull] IQuerySourceTracingExpressionVisitor querySourceTracingExpressionVisitor,
+            [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
+            [NotNull] IResultOperatorHandler resultOperatorHandler,
+            [NotNull] IEntityMaterializerSource entityMaterializerSource,
+            [NotNull] IMaterializerFactory materializerFactory)
+            : base(
+                  model,
+                  queryOptimizer,
+                  navigationRewritingExpressionVisitor,
+                  subQueryMemberPushDownExpressionVisitor,
+                  querySourceTracingExpressionVisitor,
+                  queryAnnotationExtractor,
+                  resultOperatorHandler,
+                  entityMaterializerSource)
         {
-            return new InMemoryEntityQueryableExpressionVisitor(this, querySource);
+            Check.NotNull(materializerFactory, nameof(materializerFactory));
+
+            _materializerFactory = materializerFactory;
         }
 
         protected override void IncludeNavigations(
@@ -57,9 +74,7 @@ namespace Microsoft.Data.Entity.Query
                                     var targetType = n.GetTargetType();
 
                                     var materializer
-                                        = new MaterializerFactory(
-                                            QueryCompilationContext
-                                                .EntityMaterializerSource)
+                                        = _materializerFactory
                                             .CreateMaterializer(targetType);
 
                                     return Expression.Lambda<RelatedEntitiesLoader>(
@@ -124,7 +139,7 @@ namespace Microsoft.Data.Entity.Query
                         .Where(eli => relatedKeyFactory(eli.ValueBuffer).Equals(primaryKey)));
         }
 
-        private static readonly MethodInfo _entityQueryMethodInfo
+        public static readonly MethodInfo EntityQueryMethodInfo
             = typeof(InMemoryQueryModelVisitor).GetTypeInfo()
                 .GetDeclaredMethod(nameof(EntityQuery));
 
@@ -157,7 +172,7 @@ namespace Microsoft.Data.Entity.Query
                         }));
         }
 
-        private static readonly MethodInfo _projectionQueryMethodInfo
+        public static readonly MethodInfo ProjectionQueryMethodInfo
             = typeof(InMemoryQueryModelVisitor).GetTypeInfo()
                 .GetDeclaredMethod(nameof(ProjectionQuery));
 
@@ -169,63 +184,6 @@ namespace Microsoft.Data.Entity.Query
             return ((InMemoryQueryContext)queryContext).Store
                 .GetTables(entityType)
                 .SelectMany(t => t.Select(vs => new ValueBuffer(vs)));
-        }
-
-        private class InMemoryEntityQueryableExpressionVisitor : EntityQueryableExpressionVisitor
-        {
-            private readonly IQuerySource _querySource;
-
-            public InMemoryEntityQueryableExpressionVisitor(
-                EntityQueryModelVisitor entityQueryModelVisitor, IQuerySource querySource)
-                : base(entityQueryModelVisitor)
-            {
-                _querySource = querySource;
-            }
-
-            private new InMemoryQueryModelVisitor QueryModelVisitor => (InMemoryQueryModelVisitor)base.QueryModelVisitor;
-
-            protected override Expression VisitEntityQueryable(Type elementType)
-            {
-                Check.NotNull(elementType, nameof(elementType));
-
-                var entityType
-                    = QueryModelVisitor.QueryCompilationContext.Model
-                        .GetEntityType(elementType);
-
-                var keyProperties
-                    = entityType.GetPrimaryKey().Properties;
-
-                var keyFactory
-                    = QueryModelVisitor
-                        .QueryCompilationContext
-                        .EntityKeyFactorySource.GetKeyFactory(entityType.GetPrimaryKey());
-
-                Func<ValueBuffer, EntityKey> entityKeyFactory
-                    = vr => keyFactory.Create(keyProperties, vr);
-
-                if (QueryModelVisitor.QueryCompilationContext
-                    .QuerySourceRequiresMaterialization(_querySource))
-                {
-                    var materializer
-                       = new MaterializerFactory(QueryModelVisitor
-                           .QueryCompilationContext
-                           .EntityMaterializerSource)
-                           .CreateMaterializer(entityType);
-
-                    return Expression.Call(
-                        _entityQueryMethodInfo.MakeGenericMethod(elementType),
-                        QueryContextParameter,
-                        Expression.Constant(entityType),
-                        Expression.Constant(entityKeyFactory),
-                        materializer,
-                        Expression.Constant(QueryModelVisitor.QuerySourceRequiresTracking(_querySource)));
-                }
-
-                return Expression.Call(
-                    _projectionQueryMethodInfo,
-                    QueryContextParameter,
-                    Expression.Constant(entityType));
-            }
         }
     }
 }

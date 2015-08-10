@@ -15,12 +15,8 @@ using Remotion.Linq.Parsing;
 
 namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
-    public class NavigationRewritingExpressionVisitor : RelinqExpressionVisitor
+    public class NavigationRewritingExpressionVisitor : RelinqExpressionVisitor, INavigationRewritingExpressionVisitor
     {
-        private readonly EntityQueryModelVisitor _queryModelVisitor;
-
-        private readonly List<NavigationJoin> _navigationJoins = new List<NavigationJoin>();
-
         private class NavigationJoin
         {
             public NavigationJoin(
@@ -52,19 +48,20 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             }
         }
 
+        private EntityQueryModelVisitor _queryModelVisitor;
+        private List<NavigationJoin> _navigationJoins;
         private IEntityQueryProvider _entityQueryProvider;
 
-        public NavigationRewritingExpressionVisitor(
-            [NotNull] EntityQueryModelVisitor queryModelVisitor)
+        public virtual void Rewrite(
+            [NotNull] EntityQueryModelVisitor queryModelVisitor,
+            [NotNull] QueryModel queryModel)
         {
             Check.NotNull(queryModelVisitor, nameof(queryModelVisitor));
+            Check.NotNull(queryModel, nameof(queryModel));
 
             _queryModelVisitor = queryModelVisitor;
-        }
-
-        public virtual void Rewrite([NotNull] QueryModel queryModel)
-        {
-            Check.NotNull(queryModel, nameof(queryModel));
+            _navigationJoins = new List<NavigationJoin>();
+            _entityQueryProvider = null;
 
             queryModel.TransformExpressions(Visit);
 
@@ -180,7 +177,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     }
 
                     joinClause.InnerKeySelector = innerKeySelector;
-                    
+
                     navigationJoins.Add(
                         navigationJoin
                             = new NavigationJoin(

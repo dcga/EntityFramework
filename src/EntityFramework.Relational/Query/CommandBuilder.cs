@@ -15,19 +15,23 @@ namespace Microsoft.Data.Entity.Query
     public class CommandBuilder
     {
         private readonly IRelationalValueBufferFactoryFactory _valueBufferFactoryFactory;
-        private readonly Func<ISqlQueryGenerator> _sqlGeneratorFactory;
 
+        private Func<ISqlQueryGenerator> _sqlGeneratorFactory;
         private IRelationalValueBufferFactory _valueBufferFactory;
 
-        public CommandBuilder(
-            [NotNull] Func<ISqlQueryGenerator> sqlGeneratorFactory,
-            [NotNull] IRelationalValueBufferFactoryFactory valueBufferFactoryFactory)
+        public CommandBuilder([NotNull] IRelationalValueBufferFactoryFactory valueBufferFactoryFactory)
         {
-            Check.NotNull(sqlGeneratorFactory, nameof(sqlGeneratorFactory));
             Check.NotNull(valueBufferFactoryFactory, nameof(valueBufferFactoryFactory));
 
-            _sqlGeneratorFactory = sqlGeneratorFactory;
             _valueBufferFactoryFactory = valueBufferFactoryFactory;
+        }
+
+        public virtual void Initialize(
+            [NotNull] Func<ISqlQueryGenerator> sqlGeneratorFactory)
+        {
+            Check.NotNull(sqlGeneratorFactory, nameof(sqlGeneratorFactory));
+
+            _sqlGeneratorFactory = sqlGeneratorFactory;
         }
 
         public virtual IRelationalValueBufferFactory ValueBufferFactory => _valueBufferFactory;

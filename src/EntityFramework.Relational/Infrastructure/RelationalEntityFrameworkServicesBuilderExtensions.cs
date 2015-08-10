@@ -8,6 +8,8 @@ using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Migrations;
 using Microsoft.Data.Entity.Migrations.Infrastructure;
 using Microsoft.Data.Entity.Query;
+using Microsoft.Data.Entity.Query.ExpressionVisitors;
+using Microsoft.Data.Entity.Query.Sql;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Update;
 using Microsoft.Data.Entity.Utilities;
@@ -69,7 +71,24 @@ namespace Microsoft.Data.Entity.Infrastructure
         private static IServiceCollection AddQuery(this IServiceCollection serviceCollection)
         {
             return serviceCollection
-                .AddScoped<RelationalQueryContextFactory>();
+                .AddScoped<IIncludeExpressionVisitorFactory, IncludeExpressionVisitorFactory>()
+                .AddScoped<IMaterializerFactory, MaterializerFactory>()
+                .AddScoped<ICommandBuilderFactory, CommandBuilderFactory>()
+                .AddScoped<RelationalQueryContextFactory>()
+                .AddScoped<RelationalResultOperatorHandler>()
+                .AddScoped<RelationalQueryCompilationContextFactory>()
+                .AddScoped<RelationalEntityQueryableExpressionVisitorFactory>()
+                .AddScoped<RelationalProjectionExpressionVisitorFactory>()
+                .AddScoped<RelationalQueryCompilationContextServices>()
+                .AddScoped<RelationalQueryModelVisitorFactory>()
+                .AddScoped(p => GetProviderServices(p).SqlQueryGeneratorFactory)
+                .AddTransient<RelationalQueryCompilationContext>()
+                .AddTransient<RelationalQueryModelVisitor>()
+                .AddTransient<RawSqlQueryGenerator>()
+                .AddTransient<RelationalEntityQueryableExpressionVisitor>()
+                .AddTransient<RelationalProjectionExpressionVisitor>()
+                .AddTransient<IncludeExpressionVisitor>()
+                .AddTransient<CommandBuilder>();
         }
 
         private static IRelationalDatabaseProviderServices GetProviderServices(IServiceProvider serviceProvider)

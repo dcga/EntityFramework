@@ -8,6 +8,7 @@ using Microsoft.Data.Entity.InMemory;
 using Microsoft.Data.Entity.Query;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
+using Microsoft.Data.Entity.Query.ExpressionVisitors;
 
 // ReSharper disable once CheckNamespace
 
@@ -40,8 +41,14 @@ namespace Microsoft.Framework.DependencyInjection
         private static IServiceCollection AddQuery(this IServiceCollection serviceCollection)
         {
             return serviceCollection
+                .AddScoped<IMaterializerFactory, MaterializerFactory>()
                 .AddScoped<InMemoryQueryContextFactory>()
-                .AddScoped<InMemoryQueryCompilationContextFactory>();
+                .AddScoped<InMemoryQueryCompilationContextFactory>()
+                .AddScoped<InMemoryEntityQueryableExpressionVisitorFactory>()
+                .AddScoped<InMemoryQueryModelVisitorFactory>()
+                .AddTransient<InMemoryQueryCompilationContext>()
+                .AddTransient<InMemoryQueryModelVisitor>()
+                .AddTransient<InMemoryEntityQueryableExpressionVisitor>();
         }
     }
 }

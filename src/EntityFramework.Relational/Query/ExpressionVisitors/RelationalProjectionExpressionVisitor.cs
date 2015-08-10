@@ -1,7 +1,6 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
@@ -15,26 +14,31 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
     public class RelationalProjectionExpressionVisitor : ProjectionExpressionVisitor
     {
-        private readonly RelationalQueryModelVisitor _queryModelVisitor;
-        private readonly IQuerySource _querySource;
+        private IQuerySource _querySource;
 
-        private bool _requiresClientEval;
-
-        public RelationalProjectionExpressionVisitor(
-            [NotNull] RelationalQueryModelVisitor queryModelVisitor,
-            [NotNull] IQuerySource querySource)
-            : base(Check.NotNull(queryModelVisitor, nameof(queryModelVisitor)))
+        public virtual IQuerySource QuerySource
         {
-            Check.NotNull(querySource, nameof(querySource));
+            get { return _querySource; }
+            [param: NotNull]
+            set
+            {
+                Check.NotNull(value, nameof(value));
 
-            _queryModelVisitor = queryModelVisitor;
-            _querySource = querySource;
+                _querySource = value;
+            }
         }
 
-        private new RelationalQueryModelVisitor QueryModelVisitor
-            => (RelationalQueryModelVisitor)base.QueryModelVisitor;
+        public virtual new RelationalQueryModelVisitor QueryModelVisitor
+        {
+            get { return (RelationalQueryModelVisitor)base.QueryModelVisitor; }
+            [param: NotNull]
+            set
+            {
+                Check.NotNull(value, nameof(value));
 
-        public virtual bool RequiresClientEval => _requiresClientEval;
+                base.QueryModelVisitor = value;
+            }
+        }
 
         protected override Expression VisitMethodCall(MethodCallExpression methodCallExpression)
         {
@@ -102,14 +106,14 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             {
                 var sqlExpression
                     = new SqlTranslatingExpressionVisitor(
-                        _queryModelVisitor, selectExpression, inProjection: true)
+                        QueryModelVisitor, selectExpression, inProjection: true)
                         .Visit(expression);
 
                 if (sqlExpression == null)
                 {
                     if (!(expression is QuerySourceReferenceExpression))
                     {
-                        _requiresClientEval = true;
+                        QueryModelVisitor.RequiresClientProjection = true;
                     }
                 }
                 else

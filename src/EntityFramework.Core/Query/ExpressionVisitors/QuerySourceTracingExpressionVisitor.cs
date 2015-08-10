@@ -3,20 +3,21 @@
 
 using System.Linq.Expressions;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Query.ExpressionVisitors;
 using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
 
-namespace Microsoft.Data.Entity.Query.ExpressionVisitors
+namespace Microsoft.Data.Entity.Query
 {
-    public class QuerySourceTracingExpressionVisitor : ExpressionVisitorBase
+    public class QuerySourceTracingExpressionVisitor : ExpressionVisitorBase, IQuerySourceTracingExpressionVisitor
     {
         private IQuerySource _targetQuerySource;
         private QuerySourceReferenceExpression _originQuerySourceReferenceExpression;
 
         private bool _reachable;
 
-        public virtual QuerySourceReferenceExpression FindResultQuerySourceReferenceExpression(
+        public virtual QuerySourceReferenceExpression Find(
             [NotNull] Expression expression,
             [NotNull] IQuerySource targetQuerySource)
         {

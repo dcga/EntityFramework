@@ -5,23 +5,41 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Query.ExpressionVisitors;
 using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
 
-namespace Microsoft.Data.Entity.Query.ExpressionVisitors
+namespace Microsoft.Data.Entity.Query
 {
-    public class EntityResultFindingExpressionVisitor : ExpressionVisitorBase
+    public class EntityTrackingInfoFinder : ExpressionVisitorBase, IEntityTrackingInfoFinder
     {
-        private readonly QueryCompilationContext _queryCompilationContext;
-        private readonly ISet<IQuerySource> _untrackedQuerySources;
+        private readonly IModel _model;
+        private readonly IEntityTrackingInfoFactory _entityTrackingInfoFactory;
+
+        private QueryCompilationContext _queryCompilationContext;
+        private ISet<IQuerySource> _untrackedQuerySources;
 
         private List<EntityTrackingInfo> _entityTrackingInfos;
 
-        public EntityResultFindingExpressionVisitor(
-            [NotNull] QueryCompilationContext queryCompilationContext)
+        public EntityTrackingInfoFinder(
+            [NotNull] IModel model,
+            [NotNull] IEntityTrackingInfoFactory entityTrackingInfoFactory)
+        {
+            Check.NotNull(model, nameof(model));
+            Check.NotNull(entityTrackingInfoFactory, nameof(entityTrackingInfoFactory));
+
+            _model = model;
+            _entityTrackingInfoFactory = entityTrackingInfoFactory;
+        }
+
+        public virtual IReadOnlyCollection<EntityTrackingInfo> Find(
+            [NotNull] QueryCompilationContext queryCompilationContext,
+            [NotNull] Expression expression)
         {
             Check.NotNull(queryCompilationContext, nameof(queryCompilationContext));
+            Check.NotNull(expression, nameof(expression));
 
             _queryCompilationContext = queryCompilationContext;
 
@@ -30,11 +48,6 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     _queryCompilationContext
                         .GetCustomQueryAnnotations(EntityFrameworkQueryableExtensions.AsNoTrackingMethodInfo)
                         .Select(qa => qa.QuerySource));
-        }
-
-        public virtual IReadOnlyCollection<EntityTrackingInfo> FindEntitiesInResult([NotNull] Expression expression)
-        {
-            Check.NotNull(expression, nameof(expression));
 
             _entityTrackingInfos = new List<EntityTrackingInfo>();
 
@@ -48,17 +61,13 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         {
             if (!_untrackedQuerySources.Contains(querySourceReferenceExpression.ReferencedQuerySource))
             {
-                var entityType
-                    = _queryCompilationContext.Model
-                        .FindEntityType(querySourceReferenceExpression.Type);
+                var entityType = _model.FindEntityType(querySourceReferenceExpression.Type);
 
                 if (entityType != null)
                 {
-                    var entityTrackingInfo
-                        = new EntityTrackingInfo(
-                            _queryCompilationContext, querySourceReferenceExpression, entityType);
-
-                    _entityTrackingInfos.Add(entityTrackingInfo);
+                    _entityTrackingInfos.Add(
+                        _entityTrackingInfoFactory
+                            .Create(_queryCompilationContext, querySourceReferenceExpression, entityType));
                 }
             }
 
