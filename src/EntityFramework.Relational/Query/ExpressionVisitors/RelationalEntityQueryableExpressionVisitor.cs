@@ -23,6 +23,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
     public class RelationalEntityQueryableExpressionVisitor : EntityQueryableExpressionVisitor
     {
         private readonly IModel _model;
+        private readonly IEntityKeyFactorySource _entityKeyFactorySource;
         private readonly IMaterializerFactory _materializerFactory;
         private readonly ISqlQueryGeneratorFactory _sqlQueryGeneratorFactory;
         private readonly ICommandBuilderFactory _commandBuilderFactory;
@@ -47,18 +48,21 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 
         public RelationalEntityQueryableExpressionVisitor(
             [NotNull] IModel model,
+            [NotNull] IEntityKeyFactorySource entityKeyFactorySource,
             [NotNull] IMaterializerFactory materializerFactory,
             [NotNull] ISqlQueryGeneratorFactory sqlQueryGeneratorFactory,
             [NotNull] ICommandBuilderFactory commandBuilderFactory,
             [NotNull] IRelationalMetadataExtensionProvider relationalMetadataExtensionProvider)
         {
             Check.NotNull(model, nameof(model));
+            Check.NotNull(entityKeyFactorySource, nameof(entityKeyFactorySource));
             Check.NotNull(materializerFactory, nameof(materializerFactory));
             Check.NotNull(sqlQueryGeneratorFactory, nameof(sqlQueryGeneratorFactory));
             Check.NotNull(commandBuilderFactory, nameof(commandBuilderFactory));
             Check.NotNull(relationalMetadataExtensionProvider, nameof(relationalMetadataExtensionProvider));
 
             _model = model;
+            _entityKeyFactorySource = entityKeyFactorySource;
             _materializerFactory = materializerFactory;
             _sqlQueryGeneratorFactory = sqlQueryGeneratorFactory;
             _commandBuilderFactory = commandBuilderFactory;
@@ -234,7 +238,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     = CreateEntityMethodInfo.MakeGenericMethod(elementType);
 
                 var keyFactory
-                    = relationalQueryCompilationContext.Services.EntityKeyFactorySource
+                    = _entityKeyFactorySource
                         .GetKeyFactory(entityType.GetPrimaryKey());
 
                 queryMethodArguments.AddRange(

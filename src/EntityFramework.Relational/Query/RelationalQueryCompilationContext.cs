@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Query.Expressions;
+using Microsoft.Data.Entity.Query.ExpressionVisitors;
 using Microsoft.Data.Entity.Query.Internal;
 using Microsoft.Data.Entity.Utilities;
 using Microsoft.Framework.Logging;
@@ -20,9 +21,13 @@ namespace Microsoft.Data.Entity.Query
         private IQueryMethodProvider _queryMethodProvider;
 
         public RelationalQueryCompilationContext(
-            [NotNull] QueryCompilationContextServices services,
-            [NotNull] ILoggerFactory loggerFactory)
-            : base(services, loggerFactory)
+            [NotNull] ILoggerFactory loggerFactory,
+            [NotNull] IEntityQueryModelVisitorFactory entityQueryModelVisitorFactory,
+            [NotNull] IRequiresMaterializationExpressionVisitorFactory requiresMaterializationExpressionVisitorFactory)
+            : base(
+                Check.NotNull(loggerFactory, nameof(loggerFactory)),
+                Check.NotNull(entityQueryModelVisitorFactory, nameof(entityQueryModelVisitorFactory)),
+                Check.NotNull(requiresMaterializationExpressionVisitorFactory, nameof(requiresMaterializationExpressionVisitorFactory)))
         {
         }
 

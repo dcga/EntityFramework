@@ -53,6 +53,11 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] ISubQueryMemberPushDownExpressionVisitor subQueryMemberPushDownExpressionVisitor,
             [NotNull] IQuerySourceTracingExpressionVisitor querySourceTracingExpressionVisitor,
             [NotNull] IEntityResultFindingExpressionVisitor entityResultFindingExpressionVisitor,
+            [NotNull] ITaskBlockingExpressionVisitor taskBlockingExpressionVisitor,
+            [NotNull] IMemberAccessBindingExpressionVisitorFactory memberAccessBindingExpressionVisitorFactory,
+            [NotNull] IOrderingExpressionVisitorFactory orderingExpressionVisitorFactory,
+            [NotNull] IProjectionExpressionVisitorFactory projectionExpressionVisitorFactory,
+            [NotNull] IEntityQueryableExpressionVisitorFactory entityQueryableExpressionVisitorFactory,
             [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
             [NotNull] IResultOperatorHandler resultOperatorHandler,
             [NotNull] IEntityMaterializerSource entityMaterializerSource,
@@ -63,15 +68,20 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] IQueryFlatteningExpressionVisitorFactory queryFlatteningExpressionVisitorFactory,
             [NotNull] IShapedQueryFindingExpressionVisitorFactory shapedQueryFindingExpressionVisitorFactory)
             : base(
-                  model,
-                  queryOptimizer,
-                  navigationRewritingExpressionVisitor,
-                  subQueryMemberPushDownExpressionVisitor,
-                  querySourceTracingExpressionVisitor,
-                  entityResultFindingExpressionVisitor,
-                  queryAnnotationExtractor,
-                  resultOperatorHandler,
-                  entityMaterializerSource)
+                  Check.NotNull(model, nameof(model)),
+                  Check.NotNull(queryOptimizer, nameof(queryOptimizer)),
+                  Check.NotNull(navigationRewritingExpressionVisitor, nameof(navigationRewritingExpressionVisitor)),
+                  Check.NotNull(subQueryMemberPushDownExpressionVisitor, nameof(subQueryMemberPushDownExpressionVisitor)),
+                  Check.NotNull(querySourceTracingExpressionVisitor, nameof(querySourceTracingExpressionVisitor)),
+                  Check.NotNull(entityResultFindingExpressionVisitor, nameof(entityResultFindingExpressionVisitor)),
+                  Check.NotNull(taskBlockingExpressionVisitor, nameof(taskBlockingExpressionVisitor)),
+                  Check.NotNull(memberAccessBindingExpressionVisitorFactory, nameof(memberAccessBindingExpressionVisitorFactory)),
+                  Check.NotNull(orderingExpressionVisitorFactory, nameof(orderingExpressionVisitorFactory)),
+                  Check.NotNull(projectionExpressionVisitorFactory, nameof(projectionExpressionVisitorFactory)),
+                  Check.NotNull(entityQueryableExpressionVisitorFactory, nameof(entityQueryableExpressionVisitorFactory)),
+                  Check.NotNull(queryAnnotationExtractor, nameof(queryAnnotationExtractor)),
+                  Check.NotNull(resultOperatorHandler, nameof(resultOperatorHandler)),
+                  Check.NotNull(entityMaterializerSource, nameof(entityMaterializerSource)))
         {
             Check.NotNull(relationalMetadataExtensionProvider, nameof(relationalMetadataExtensionProvider));
             Check.NotNull(includeExpressionVisitorFactory, nameof(includeExpressionVisitorFactory));

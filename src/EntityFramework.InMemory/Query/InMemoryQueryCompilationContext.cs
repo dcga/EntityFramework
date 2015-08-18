@@ -6,6 +6,7 @@ using JetBrains.Annotations;
 using Microsoft.Data.Entity.Utilities;
 using Microsoft.Framework.Logging;
 using Microsoft.Framework.DependencyInjection;
+using Microsoft.Data.Entity.Query.ExpressionVisitors;
 
 namespace Microsoft.Data.Entity.Query
 {
@@ -14,12 +15,14 @@ namespace Microsoft.Data.Entity.Query
         private readonly IServiceProvider _serviceProvider;
 
         public InMemoryQueryCompilationContext(
-            [NotNull] QueryCompilationContextServices services,
             [NotNull] ILoggerFactory loggerFactory,
+            [NotNull] IEntityQueryModelVisitorFactory entityQueryModelVisitorFactory,
+            [NotNull] IRequiresMaterializationExpressionVisitorFactory requiresMaterializationExpressionVisitorFactory,
             [NotNull] IServiceProvider serviceProvider)
             : base(
-                Check.NotNull(services, nameof(services)),
-                Check.NotNull(loggerFactory, nameof(loggerFactory)))
+                Check.NotNull(loggerFactory, nameof(loggerFactory)),
+                Check.NotNull(entityQueryModelVisitorFactory, nameof(entityQueryModelVisitorFactory)),
+                Check.NotNull(requiresMaterializationExpressionVisitorFactory, nameof(requiresMaterializationExpressionVisitorFactory)))
         {
             Check.NotNull(serviceProvider, nameof(serviceProvider));
 

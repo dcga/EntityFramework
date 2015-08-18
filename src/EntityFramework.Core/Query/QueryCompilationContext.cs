@@ -7,6 +7,7 @@ using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Query.Annotations;
+using Microsoft.Data.Entity.Query.ExpressionVisitors;
 using Microsoft.Data.Entity.Query.Internal;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
@@ -18,6 +19,9 @@ namespace Microsoft.Data.Entity.Query
 {
     public abstract class QueryCompilationContext
     {
+        private readonly IRequiresMaterializationExpressionVisitorFactory _requiresMaterializationExpressionVisitorFactory;
+        private readonly IEntityQueryModelVisitorFactory _entityQueryModelVisitorFactory;
+
         private ILinqOperatorProvider _linqOperatorProvider;
 
         private IReadOnlyCollection<QueryAnnotationBase> _queryAnnotations;
@@ -25,14 +29,17 @@ namespace Microsoft.Data.Entity.Query
         private ISet<IQuerySource> _querySourcesRequiringMaterialization;
 
         protected QueryCompilationContext(
-            [NotNull] QueryCompilationContextServices services,
-            [NotNull] ILoggerFactory loggerFactory)
+            [NotNull] ILoggerFactory loggerFactory,
+            [NotNull] IEntityQueryModelVisitorFactory entityQueryModelVisitorFactory,
+            [NotNull] IRequiresMaterializationExpressionVisitorFactory requiresMaterializationExpressionVisitorFactory)
         {
-            Check.NotNull(services, nameof(services));
             Check.NotNull(loggerFactory, nameof(loggerFactory));
+            Check.NotNull(entityQueryModelVisitorFactory, nameof(entityQueryModelVisitorFactory));
+            Check.NotNull(requiresMaterializationExpressionVisitorFactory, nameof(requiresMaterializationExpressionVisitorFactory));
 
-            Services = services;
             Logger = loggerFactory.CreateLogger<Database>();
+            _entityQueryModelVisitorFactory = entityQueryModelVisitorFactory;
+            _requiresMaterializationExpressionVisitorFactory = requiresMaterializationExpressionVisitorFactory;
         }
 
         public virtual void Initialize(bool isAsync)
@@ -46,8 +53,6 @@ namespace Microsoft.Data.Entity.Query
                 _linqOperatorProvider = new LinqOperatorProvider();
             }
         }
-
-        public virtual QueryCompilationContextServices Services { get; }
 
         public virtual ILogger Logger { get; }
         public virtual ILinqOperatorProvider LinqOperatorProvider
@@ -82,10 +87,10 @@ namespace Microsoft.Data.Entity.Query
                 .Where(qa => qa.IsCallTo(Check.NotNull(methodInfo, nameof(methodInfo))));
 
         public virtual EntityQueryModelVisitor CreateQueryModelVisitor()
-            => Services.EntityQueryModelVisitorFactory.Create(this);
+            => _entityQueryModelVisitorFactory.Create(this);
 
         public virtual EntityQueryModelVisitor CreateQueryModelVisitor([CanBeNull] EntityQueryModelVisitor parentEntityQueryModelVisitor)
-            => Services.EntityQueryModelVisitorFactory.Create(parentEntityQueryModelVisitor.QueryCompilationContext, parentEntityQueryModelVisitor);
+            => _entityQueryModelVisitorFactory.Create(parentEntityQueryModelVisitor.QueryCompilationContext, parentEntityQueryModelVisitor);
 
         public virtual IExpressionPrinter CreateExpressionPrinter()
         {
@@ -133,7 +138,7 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(queryModel, nameof(queryModel));
 
             var requiresEntityMaterializationExpressionVisitor
-                = Services.RequiresMaterializationExpressionVisitorFactory.Create(queryModelVisitor);
+                = _requiresMaterializationExpressionVisitorFactory.Create(queryModelVisitor);
 
             _querySourcesRequiringMaterialization
                 = requiresEntityMaterializationExpressionVisitor

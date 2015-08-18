@@ -138,7 +138,6 @@ namespace Microsoft.Framework.DependencyInjection
                 .AddScoped<CompiledQueryCacheKeyGenerator>()
                 .AddScoped<ResultOperatorHandler>()
                 .AddScoped<ProjectionExpressionVisitorFactory>()
-                .AddScoped<QueryCompilationContextServices>()
                 .AddScoped(p => GetProviderServices(p).QueryContextFactory)
                 .AddScoped(p => GetProviderServices(p).QueryCompilationContextFactory)
                 .AddScoped(p => GetProviderServices(p).CompiledQueryCacheKeyGenerator)

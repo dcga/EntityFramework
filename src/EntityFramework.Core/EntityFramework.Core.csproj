@@ -256,7 +256,6 @@
     <Compile Include="Query\IQueryPreprocessor.cs" />
     <Compile Include="Query\QueryableHelpers.cs" />
     <Compile Include="Query\QueryAnnotationMethodAttribute.cs" />
-    <Compile Include="Query\QueryCompilationContextServices.cs" />
     <Compile Include="Query\QueryCompiler.cs" />
     <Compile Include="Query\QueryExecutor.cs" />
     <Compile Include="Query\QueryPreprocessor.cs" />
