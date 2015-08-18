@@ -226,7 +226,7 @@
     <Compile Include="Query\ExpressionVisitors\RequiresMaterializationExpressionVisitorFactory.cs" />
     <Compile Include="Query\IEntityQueryModelVisitorFactory.cs" />
     <Compile Include="Query\IEntityTrackingInfoFactory.cs" />
-    <Compile Include="Query\IEntityTrackingInfoFinder.cs" />
+    <Compile Include="Query\ExpressionVisitors\IEntityResultFindingExpressionVisitor.cs" />
     <Compile Include="Query\ExpressionVisitors\IOrderingExpressionVisitorFactory.cs" />
     <Compile Include="Query\ExpressionVisitors\IProjectionExpressionVisitorFactory.cs" />
     <Compile Include="Query\ExpressionVisitors\IEntityQueryableExpressionVisitorFactory.cs" />
@@ -282,7 +282,7 @@
     <Compile Include="Metadata\TypedAnnotation.cs" />
     <Compile Include="Query\ExpressionVisitors\EntityQueryableExpressionVisitor.cs" />
     <Compile Include="Query\ExpressionVisitors\DefaultQueryExpressionVisitor.cs" />
-    <Compile Include="Query\EntityTrackingInfoFinder.cs" />
+    <Compile Include="Query\ExpressionVisitors\EntityResultFindingExpressionVisitor.cs" />
     <Compile Include="Query\IAsyncEnumerableAccessor.cs" />
     <Compile Include="Query\ExpressionVisitors\MemberAccessBindingExpressionVisitor.cs" />
     <Compile Include="Query\ExpressionVisitors\ProjectionExpressionVisitor.cs" />

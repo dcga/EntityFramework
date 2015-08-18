@@ -19,14 +19,14 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
     public class SqlTranslatingExpressionVisitor : ThrowingExpressionVisitor
     {
-        private readonly RelationalQueryModelVisitor _queryModelVisitor;
-        private readonly SelectExpression _targetSelectExpression;
-        private readonly Expression _topLevelPredicate;
+        private RelationalQueryModelVisitor _queryModelVisitor;
+        private SelectExpression _targetSelectExpression;
+        private Expression _topLevelPredicate;
 
-        private readonly bool _bindParentQueries;
-        private readonly bool _inProjection;
+        private bool _bindParentQueries;
+        private bool _inProjection;
 
-        public SqlTranslatingExpressionVisitor(
+        public virtual void Initialize(
             [NotNull] RelationalQueryModelVisitor queryModelVisitor,
             [CanBeNull] SelectExpression targetSelectExpression,
             [CanBeNull] Expression topLevelPredicate = null,

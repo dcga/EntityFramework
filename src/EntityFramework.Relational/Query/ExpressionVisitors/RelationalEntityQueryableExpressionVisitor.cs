@@ -23,7 +23,9 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
     public class RelationalEntityQueryableExpressionVisitor : EntityQueryableExpressionVisitor
     {
         private readonly IModel _model;
+        private readonly IMaterializerFactory _materializerFactory;
         private readonly ICommandBuilderFactory _commandBuilderFactory;
+        private readonly IRelationalMetadataExtensionProvider _relationalMetadataExtensionProvider;
 
         private static readonly ParameterExpression _valueBufferParameter
             = Expression.Parameter(typeof(ValueBuffer));
@@ -44,13 +46,19 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 
         public RelationalEntityQueryableExpressionVisitor(
             [NotNull] IModel model,
-            [NotNull] ICommandBuilderFactory commandBuilderFactory)
+            [NotNull] IMaterializerFactory materializerFactory,
+            [NotNull] ICommandBuilderFactory commandBuilderFactory,
+            [NotNull] IRelationalMetadataExtensionProvider relationalMetadataExtensionProvider)
         {
             Check.NotNull(model, nameof(model));
+            Check.NotNull(materializerFactory, nameof(materializerFactory));
             Check.NotNull(commandBuilderFactory, nameof(commandBuilderFactory));
+            Check.NotNull(relationalMetadataExtensionProvider, nameof(relationalMetadataExtensionProvider));
 
             _model = model;
+            _materializerFactory = materializerFactory;
             _commandBuilderFactory = commandBuilderFactory;
+            _relationalMetadataExtensionProvider = relationalMetadataExtensionProvider;
         }
 
         public virtual new RelationalQueryModelVisitor QueryModelVisitor
@@ -96,11 +104,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     memberExpression,
                     (property, querySource, selectExpression)
                         => selectExpression.AddToProjection(
-                            QueryModelVisitor
-                                .QueryCompilationContext
-                                .RelationalServices
-                                .RelationalExtensions
-                                .For(property).ColumnName,
+                            _relationalMetadataExtensionProvider.For(property).ColumnName,
                             property,
                             querySource),
                     bindSubQueries: true);
@@ -117,11 +121,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     methodCallExpression,
                     (property, querySource, selectExpression)
                         => selectExpression.AddToProjection(
-                            QueryModelVisitor
-                                .QueryCompilationContext
-                                .RelationalServices
-                                .RelationalExtensions
-                                .For(property).ColumnName,
+                            _relationalMetadataExtensionProvider.For(property).ColumnName,
                             property,
                             querySource),
                     bindSubQueries: true);
@@ -137,10 +137,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             var relationalQueryCompilationContext = QueryModelVisitor.QueryCompilationContext;
             var entityType = _model.GetEntityType(elementType);
             var selectExpression = new SelectExpression();
-            var name = relationalQueryCompilationContext
-                .RelationalServices
-                .RelationalExtensions
-                .For(entityType).TableName;
+            var name = _relationalMetadataExtensionProvider.For(entityType).TableName;
 
             var tableAlias
                 = _querySource.HasGeneratedItemName()
@@ -161,10 +158,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                 selectExpression.AddTable(
                     new TableExpression(
                         name,
-                        relationalQueryCompilationContext
-                            .RelationalServices
-                            .RelationalExtensions
-                            .For(entityType).Schema,
+                        _relationalMetadataExtensionProvider.For(entityType).Schema,
                         tableAlias,
                         _querySource));
             }
@@ -221,25 +215,15 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                 || QueryModelVisitor.RequiresClientEval)
             {
                 var materializer
-                    = new MaterializerFactory(
-                        relationalQueryCompilationContext
-                            .Services
-                            .EntityMaterializerSource)
+                    = _materializerFactory
                         .CreateMaterializer(
                             entityType,
                             selectExpression,
                             (p, se) =>
                                 se.AddToProjection(
-                                    relationalQueryCompilationContext
-                                        .RelationalServices
-                                        .RelationalExtensions
-                                        .For(p).ColumnName,
+                                    _relationalMetadataExtensionProvider.For(p).ColumnName,
                                     p,
                                     _querySource),
-                            QueryModelVisitor
-                                .QueryCompilationContext
-                                .RelationalServices
-                                .RelationalExtensions,
                             _querySource);
 
                 queryMethodInfo

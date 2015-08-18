@@ -26,6 +26,7 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] INavigationRewritingExpressionVisitor navigationRewritingExpressionVisitor,
             [NotNull] ISubQueryMemberPushDownExpressionVisitor subQueryMemberPushDownExpressionVisitor,
             [NotNull] IQuerySourceTracingExpressionVisitor querySourceTracingExpressionVisitor,
+            [NotNull] IEntityResultFindingExpressionVisitor entityResultFindingExpressionVisitor,
             [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
             [NotNull] IResultOperatorHandler resultOperatorHandler,
             [NotNull] IEntityMaterializerSource entityMaterializerSource,
@@ -36,6 +37,7 @@ namespace Microsoft.Data.Entity.Query
                   navigationRewritingExpressionVisitor,
                   subQueryMemberPushDownExpressionVisitor,
                   querySourceTracingExpressionVisitor,
+                  entityResultFindingExpressionVisitor,
                   queryAnnotationExtractor,
                   resultOperatorHandler,
                   entityMaterializerSource)

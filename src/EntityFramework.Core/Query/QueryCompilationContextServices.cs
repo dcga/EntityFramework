@@ -19,7 +19,6 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] IProjectionExpressionVisitorFactory projectionExpressionVisitorFactory,
             [NotNull] IOrderingExpressionVisitorFactory orderingExpressionVisitorFactory,
             [NotNull] IQuerySourceTracingExpressionVisitor querySourceTracingExpressionVisitor,
-            [NotNull] IEntityTrackingInfoFinder entityTrackingInfoFinder,
             [NotNull] IEntityTrackingInfoFactory entityTrackingInfoFactory,
             [NotNull] ITaskBlockingExpressionVisitor taskBlockingExpressionVisitor,
             [NotNull] IMemberAccessBindingExpressionVisitorFactory memberAccessBindingExpressionVisitorFactory,
@@ -33,7 +32,6 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(projectionExpressionVisitorFactory, nameof(projectionExpressionVisitorFactory));
             Check.NotNull(orderingExpressionVisitorFactory, nameof(orderingExpressionVisitorFactory));
             Check.NotNull(querySourceTracingExpressionVisitor, nameof(querySourceTracingExpressionVisitor));
-            Check.NotNull(entityTrackingInfoFinder, nameof(entityTrackingInfoFinder));
             Check.NotNull(entityTrackingInfoFactory, nameof(entityTrackingInfoFactory));
             Check.NotNull(taskBlockingExpressionVisitor, nameof(taskBlockingExpressionVisitor));
             Check.NotNull(memberAccessBindingExpressionVisitorFactory, nameof(memberAccessBindingExpressionVisitorFactory));
@@ -47,7 +45,6 @@ namespace Microsoft.Data.Entity.Query
             ProjectionExpressionVisitorFactory = projectionExpressionVisitorFactory;
             OrderingExpressionVisitorFactory = orderingExpressionVisitorFactory;
             QuerySourceTracingExpressionVisitor = querySourceTracingExpressionVisitor;
-            EntityTrackingInfoFinder = entityTrackingInfoFinder;
             EntityTrackingInfoFactory = entityTrackingInfoFactory;
             TaskBlockingExpressionVisitor = taskBlockingExpressionVisitor;
             MemberAccessBindingExpressionVisitorFactory = memberAccessBindingExpressionVisitorFactory;
@@ -62,7 +59,6 @@ namespace Microsoft.Data.Entity.Query
         public virtual IProjectionExpressionVisitorFactory ProjectionExpressionVisitorFactory { get; }
         public virtual IOrderingExpressionVisitorFactory OrderingExpressionVisitorFactory { get; }
         public virtual IQuerySourceTracingExpressionVisitor QuerySourceTracingExpressionVisitor { get; }
-        public virtual IEntityTrackingInfoFinder EntityTrackingInfoFinder { get; }
         public virtual IEntityTrackingInfoFactory EntityTrackingInfoFactory { get; }
         public virtual ITaskBlockingExpressionVisitor TaskBlockingExpressionVisitor { get; }
         public virtual IMemberAccessBindingExpressionVisitorFactory MemberAccessBindingExpressionVisitorFactory { get; }

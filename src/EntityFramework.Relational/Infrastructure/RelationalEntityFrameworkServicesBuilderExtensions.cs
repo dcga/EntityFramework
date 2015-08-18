@@ -72,6 +72,8 @@ namespace Microsoft.Data.Entity.Infrastructure
         {
             return serviceCollection
                 .AddScoped<IIncludeExpressionVisitorFactory, IncludeExpressionVisitorFactory>()
+                .AddScoped<ISqlTranslatingExpressionVisitorFactory, SqlTranslatingExpressionVisitorFactory>()
+                .AddScoped<ICompositePredicateExpressionVisitorFactory, CompositePredicateExpressionVisitorFactory>()
                 .AddScoped<IMaterializerFactory, MaterializerFactory>()
                 .AddScoped<ICommandBuilderFactory, CommandBuilderFactory>()
                 .AddScoped<RelationalQueryContextFactory>()
@@ -86,6 +88,8 @@ namespace Microsoft.Data.Entity.Infrastructure
                 .AddTransient<RelationalQueryModelVisitor>()
                 .AddTransient<RawSqlQueryGenerator>()
                 .AddTransient<RelationalEntityQueryableExpressionVisitor>()
+                .AddTransient<SqlTranslatingExpressionVisitor>()
+                .AddTransient<CompositePredicateExpressionVisitor>()
                 .AddTransient<RelationalProjectionExpressionVisitor>()
                 .AddTransient<IncludeExpressionVisitor>()
                 .AddTransient<CommandBuilder>();

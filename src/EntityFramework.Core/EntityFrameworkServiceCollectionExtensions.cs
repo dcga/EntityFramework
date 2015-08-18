@@ -130,7 +130,7 @@ namespace Microsoft.Framework.DependencyInjection
                 .AddScoped<ISubQueryMemberPushDownExpressionVisitor, SubQueryMemberPushDownExpressionVisitor>()
                 .AddScoped<IOrderingExpressionVisitorFactory, OrderingExpressionVisitorFactory>()
                 .AddScoped<IQuerySourceTracingExpressionVisitor, QuerySourceTracingExpressionVisitor>()
-                .AddScoped<IEntityTrackingInfoFinder, EntityTrackingInfoFinder>()
+                .AddScoped<IEntityResultFindingExpressionVisitor, EntityResultFindingExpressionVisitor>()
                 .AddScoped<IEntityTrackingInfoFactory, EntityTrackingInfoFactory>()
                 .AddScoped<ITaskBlockingExpressionVisitor, TaskBlockingExpressionVisitor>()
                 .AddScoped<IMemberAccessBindingExpressionVisitorFactory, MemberAccessBindingExpressionVisitorFactory>()

@@ -156,7 +156,6 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                                             _relationalMetadataExtensionProvider.For(p).ColumnName,
                                             p,
                                             joinedTableExpression))) - valueBufferOffset,
-                                _relationalMetadataExtensionProvider,
                                 querySource: null);
 
                     joinExpression.Predicate
@@ -218,7 +217,6 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                                     _relationalMetadataExtensionProvider.For(p).ColumnName,
                                     p,
                                     querySource),
-                                _relationalMetadataExtensionProvider,
                                 querySource: null);
 
                     var innerJoinSelectExpression

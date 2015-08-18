@@ -16,7 +16,6 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             [NotNull] IEntityType entityType,
             [NotNull] SelectExpression selectExpression,
             [NotNull] Func<IProperty, SelectExpression, int> projectionAdder,
-            [NotNull] IRelationalMetadataExtensionProvider relationalExtensions,
             [CanBeNull] IQuerySource querySource);
     }
 }

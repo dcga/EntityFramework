@@ -31,6 +31,8 @@ namespace Microsoft.Data.Entity.Query
             = new Dictionary<IQuerySource, RelationalQueryModelVisitor>();
 
         private readonly IIncludeExpressionVisitorFactory _includeExpressionVisitorFactory;
+        private readonly ISqlTranslatingExpressionVisitorFactory _sqlTranslatingExpressionVisitorFactory;
+        private readonly ICompositePredicateExpressionVisitorFactory _compositePredicateExpressionVisitorFactory;
 
         private RelationalQueryModelVisitor _parentQueryModelVisitor;
 
@@ -47,23 +49,31 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] INavigationRewritingExpressionVisitor navigationRewritingExpressionVisitor,
             [NotNull] ISubQueryMemberPushDownExpressionVisitor subQueryMemberPushDownExpressionVisitor,
             [NotNull] IQuerySourceTracingExpressionVisitor querySourceTracingExpressionVisitor,
+            [NotNull] IEntityResultFindingExpressionVisitor entityResultFindingExpressionVisitor,
             [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
             [NotNull] IResultOperatorHandler resultOperatorHandler,
             [NotNull] IEntityMaterializerSource entityMaterializerSource,
-            [NotNull] IIncludeExpressionVisitorFactory includeExpressionVisitorFactory)
+            [NotNull] IIncludeExpressionVisitorFactory includeExpressionVisitorFactory,
+            [NotNull] ISqlTranslatingExpressionVisitorFactory sqlTranslatingExpressionVisitorFactory,
+            [NotNull] ICompositePredicateExpressionVisitorFactory compositePredicateExpressionVisitorFactory)
             : base(
                   model,
                   queryOptimizer,
                   navigationRewritingExpressionVisitor,
                   subQueryMemberPushDownExpressionVisitor,
                   querySourceTracingExpressionVisitor,
+                  entityResultFindingExpressionVisitor,
                   queryAnnotationExtractor,
                   resultOperatorHandler,
                   entityMaterializerSource)
         {
             Check.NotNull(includeExpressionVisitorFactory, nameof(includeExpressionVisitorFactory));
+            Check.NotNull(sqlTranslatingExpressionVisitorFactory, nameof(sqlTranslatingExpressionVisitorFactory));
+            Check.NotNull(compositePredicateExpressionVisitorFactory, nameof(compositePredicateExpressionVisitorFactory));
 
             _includeExpressionVisitorFactory = includeExpressionVisitorFactory;
+            _sqlTranslatingExpressionVisitorFactory = sqlTranslatingExpressionVisitorFactory;
+            _compositePredicateExpressionVisitorFactory = compositePredicateExpressionVisitorFactory;
         }
 
         public virtual bool RequiresClientEval { get; set; }
@@ -165,7 +175,7 @@ namespace Microsoft.Data.Entity.Query
             base.VisitQueryModel(queryModel);
 
             var compositePredicateVisitor
-                = new CompositePredicateExpressionVisitor(
+                = _compositePredicateExpressionVisitorFactory.Create(
                     QueryCompilationContext
                         .GetCustomQueryAnnotations(RelationalQueryableExtensions.UseRelationalNullSemanticsMethodInfo)
                         .Any());
@@ -398,7 +408,7 @@ namespace Microsoft.Data.Entity.Query
                 if (selectExpression != null)
                 {
                     var filteringExpressionVisitor
-                        = new SqlTranslatingExpressionVisitor(this, targetSelectExpression: null);
+                        = _sqlTranslatingExpressionVisitorFactory.Create(this, targetSelectExpression: null);
 
                     var predicate
                         = filteringExpressionVisitor
@@ -548,8 +558,8 @@ namespace Microsoft.Data.Entity.Query
             if (!requiresClientFilter)
             {
                 var sqlTranslatingExpressionVisitor
-                    = new SqlTranslatingExpressionVisitor(
-                        this, selectExpression, whereClause.Predicate, _bindParentQueries);
+                    = _sqlTranslatingExpressionVisitorFactory
+                        .Create(this, selectExpression, whereClause.Predicate, _bindParentQueries);
 
                 var sqlPredicateExpression = sqlTranslatingExpressionVisitor.Visit(whereClause.Predicate);
 
@@ -592,8 +602,8 @@ namespace Microsoft.Data.Entity.Query
             if (!requiresClientOrderBy)
             {
                 var sqlTranslatingExpressionVisitor
-                    = new SqlTranslatingExpressionVisitor(
-                        this, selectExpression, bindParentQueries: _bindParentQueries);
+                    = _sqlTranslatingExpressionVisitorFactory
+                        .Create(this, selectExpression, bindParentQueries: _bindParentQueries);
 
                 var orderings = new List<Ordering>();
 

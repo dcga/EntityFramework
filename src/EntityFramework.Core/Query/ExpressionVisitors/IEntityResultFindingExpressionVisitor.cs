@@ -5,9 +5,9 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
 
-namespace Microsoft.Data.Entity.Query
+namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
-    public interface IEntityTrackingInfoFinder
+    public interface IEntityResultFindingExpressionVisitor
     {
         IReadOnlyCollection<EntityTrackingInfo> Find(
             [NotNull] QueryCompilationContext queryCompilationContext,

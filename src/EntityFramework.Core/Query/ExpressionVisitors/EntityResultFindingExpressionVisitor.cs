@@ -6,14 +6,13 @@ using System.Linq;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
-using Microsoft.Data.Entity.Query.ExpressionVisitors;
 using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
 
-namespace Microsoft.Data.Entity.Query
+namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
-    public class EntityTrackingInfoFinder : ExpressionVisitorBase, IEntityTrackingInfoFinder
+    public class EntityResultFindingExpressionVisitor : ExpressionVisitorBase, IEntityResultFindingExpressionVisitor
     {
         private readonly IModel _model;
         private readonly IEntityTrackingInfoFactory _entityTrackingInfoFactory;
@@ -23,7 +22,7 @@ namespace Microsoft.Data.Entity.Query
 
         private List<EntityTrackingInfo> _entityTrackingInfos;
 
-        public EntityTrackingInfoFinder(
+        public EntityResultFindingExpressionVisitor(
             [NotNull] IModel model,
             [NotNull] IEntityTrackingInfoFactory entityTrackingInfoFactory)
         {

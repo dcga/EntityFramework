@@ -27,6 +27,7 @@ namespace Microsoft.Data.Entity.Query
             public HandlerContext(
                 IResultOperatorHandler resultOperatorHandler,
                 IModel model,
+                [NotNull] ISqlTranslatingExpressionVisitorFactory sqlTranslatingExpressionVisitorFactory,
                 RelationalQueryModelVisitor queryModelVisitor,
                 ResultOperatorBase resultOperator,
                 QueryModel queryModel,
@@ -34,6 +35,7 @@ namespace Microsoft.Data.Entity.Query
             {
                 _resultOperatorHandler = resultOperatorHandler;
                 Model = model;
+                SqlTranslatingExpressionVisitorFactory = sqlTranslatingExpressionVisitorFactory;
                 QueryModelVisitor = queryModelVisitor;
                 ResultOperator = resultOperator;
                 QueryModel = queryModel;
@@ -41,6 +43,8 @@ namespace Microsoft.Data.Entity.Query
             }
 
             public IModel Model { get; }
+
+            public ISqlTranslatingExpressionVisitorFactory SqlTranslatingExpressionVisitorFactory { get; }
 
             public ResultOperatorBase ResultOperator { get; }
 
@@ -87,16 +91,20 @@ namespace Microsoft.Data.Entity.Query
             };
 
         private readonly IModel _model;
+        private readonly ISqlTranslatingExpressionVisitorFactory _sqlTranslatingExpressionVisitorFactory;
         private readonly ResultOperatorHandler _resultOperatorHandler;
 
         public RelationalResultOperatorHandler(
             [NotNull] IModel model,
+            [NotNull] ISqlTranslatingExpressionVisitorFactory sqlTranslatingExpressionVisitorFactory,
             [NotNull] ResultOperatorHandler resultOperatorHandler)
         {
             Check.NotNull(model, nameof(model));
+            Check.NotNull(sqlTranslatingExpressionVisitorFactory, nameof(sqlTranslatingExpressionVisitorFactory));
             Check.NotNull(resultOperatorHandler, nameof(resultOperatorHandler));
 
             _model = model;
+            _sqlTranslatingExpressionVisitorFactory = sqlTranslatingExpressionVisitorFactory;
             _resultOperatorHandler = resultOperatorHandler;
         }
 
@@ -120,6 +128,7 @@ namespace Microsoft.Data.Entity.Query
                 = new HandlerContext(
                     _resultOperatorHandler,
                     _model,
+                    _sqlTranslatingExpressionVisitorFactory,
                     relationalQueryModelVisitor,
                     resultOperator,
                     queryModel,
@@ -141,9 +150,10 @@ namespace Microsoft.Data.Entity.Query
         private static Expression HandleAll(HandlerContext handlerContext)
         {
             var filteringVisitor
-                = new SqlTranslatingExpressionVisitor(
-                    handlerContext.QueryModelVisitor,
-                    handlerContext.SelectExpression);
+                = handlerContext.SqlTranslatingExpressionVisitorFactory
+                    .Create(
+                        handlerContext.QueryModelVisitor,
+                        handlerContext.SelectExpression);
 
             var predicate
                 = filteringVisitor.Visit(

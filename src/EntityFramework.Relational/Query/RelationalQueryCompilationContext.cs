@@ -66,8 +66,6 @@ namespace Microsoft.Data.Entity.Query
             return relationalQueryModelVisitor;
         }
 
-
-
         public override IExpressionPrinter CreateExpressionPrinter()
         {
             return new RelationalExpressionPrinter();
@@ -89,7 +87,7 @@ namespace Microsoft.Data.Entity.Query
         {
             get { return _queryMethodProvider; }
             [param: NotNull]
-            set
+            protected set
             {
                 Check.NotNull(value, nameof(value));
 

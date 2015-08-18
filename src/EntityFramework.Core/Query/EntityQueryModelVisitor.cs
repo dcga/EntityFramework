@@ -40,6 +40,7 @@ namespace Microsoft.Data.Entity.Query
         private readonly INavigationRewritingExpressionVisitor _navigationRewritingExpressionVisitor;
         private readonly ISubQueryMemberPushDownExpressionVisitor _subQueryMemberPushDownExpressionVisitor;
         private readonly IQuerySourceTracingExpressionVisitor _querySourceTracingExpressionVisitor;
+        private readonly IEntityResultFindingExpressionVisitor _entityResultFindingExpressionVisitor;
         private readonly IQueryAnnotationExtractor _queryAnnotationExtractor;
         private readonly IResultOperatorHandler _resultOperatorHandler;
         private readonly IEntityMaterializerSource _entityMaterializerSource;
@@ -57,6 +58,7 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] INavigationRewritingExpressionVisitor navigationRewritingExpressionVisitor,
             [NotNull] ISubQueryMemberPushDownExpressionVisitor subQueryMemberPushDownExpressionVisitor,
             [NotNull] IQuerySourceTracingExpressionVisitor querySourceTracingExpressionVisitor,
+            [NotNull] IEntityResultFindingExpressionVisitor entityResultFindingExpressionVisitor,
             [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
             [NotNull] IResultOperatorHandler resultOperatorHandler,
             [NotNull] IEntityMaterializerSource entityMaterializerSource
@@ -67,6 +69,7 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(navigationRewritingExpressionVisitor, nameof(navigationRewritingExpressionVisitor));
             Check.NotNull(subQueryMemberPushDownExpressionVisitor, nameof(subQueryMemberPushDownExpressionVisitor));
             Check.NotNull(querySourceTracingExpressionVisitor, nameof(querySourceTracingExpressionVisitor));
+            Check.NotNull(entityResultFindingExpressionVisitor, nameof(entityResultFindingExpressionVisitor));
             Check.NotNull(queryAnnotationExtractor, nameof(queryAnnotationExtractor));
             Check.NotNull(resultOperatorHandler, nameof(resultOperatorHandler));
             Check.NotNull(entityMaterializerSource, nameof(entityMaterializerSource));
@@ -76,6 +79,7 @@ namespace Microsoft.Data.Entity.Query
             _navigationRewritingExpressionVisitor = navigationRewritingExpressionVisitor;
             _subQueryMemberPushDownExpressionVisitor = subQueryMemberPushDownExpressionVisitor;
             _querySourceTracingExpressionVisitor = querySourceTracingExpressionVisitor;
+            _entityResultFindingExpressionVisitor = entityResultFindingExpressionVisitor;
             _queryAnnotationExtractor = queryAnnotationExtractor;
             _resultOperatorHandler = resultOperatorHandler;
             _entityMaterializerSource = entityMaterializerSource;
@@ -376,9 +380,7 @@ namespace Microsoft.Data.Entity.Query
             }
 
             var entityTrackingInfos
-                = QueryCompilationContext
-                    .Services
-                    .EntityTrackingInfoFinder
+                = _entityResultFindingExpressionVisitor
                     .Find(QueryCompilationContext, queryModel.SelectClause.Selector);
 
             if (entityTrackingInfos.Any())
@@ -1001,7 +1003,7 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(memberType, nameof(memberType));
             Check.NotNull(expression, nameof(expression));
 
-            return QueryCompilationContext.Services.EntityMaterializerSource
+            return _entityMaterializerSource
                 .CreateReadValueExpression(expression, memberType, index);
         }
 
