@@ -19,6 +19,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
     {
         private readonly IMaterializerFactory _materializerFactory;
         private readonly ICommandBuilderFactory _commandBuilderFactory;
+        private readonly IRelationalSyncAsyncServices _relationalSyncAsyncServices;
         private readonly IRelationalMetadataExtensionProvider _relationalMetadataExtensionProvider;
         private readonly ISqlQueryGeneratorFactory _sqlQueryGeneratorFactory;
 
@@ -33,16 +34,19 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         public IncludeExpressionVisitor(
             [NotNull] IMaterializerFactory materializerFactory,
             [NotNull] ICommandBuilderFactory commandBuilderFactory,
+            [NotNull] IRelationalSyncAsyncServices relationalSyncAsyncServices,
             [NotNull] IRelationalMetadataExtensionProvider relationalMetadataExtensionProvider,
             [NotNull] ISqlQueryGeneratorFactory sqlQueryGeneratorFactory)
         {
             Check.NotNull(materializerFactory, nameof(materializerFactory));
             Check.NotNull(commandBuilderFactory, nameof(commandBuilderFactory));
+            Check.NotNull(relationalSyncAsyncServices, nameof(relationalSyncAsyncServices));
             Check.NotNull(relationalMetadataExtensionProvider, nameof(relationalMetadataExtensionProvider));
             Check.NotNull(sqlQueryGeneratorFactory, nameof(sqlQueryGeneratorFactory));
 
             _materializerFactory = materializerFactory;
             _commandBuilderFactory = commandBuilderFactory;
+            _relationalSyncAsyncServices = relationalSyncAsyncServices;
             _relationalMetadataExtensionProvider = relationalMetadataExtensionProvider;
             _sqlQueryGeneratorFactory = sqlQueryGeneratorFactory;
         }
@@ -75,7 +79,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                 _foundCreateEntityForQuerySource = true;
             }
 
-            if (expression.Method.MethodIsClosedFormOf(_queryCompilationContext.QueryMethodProvider.ShapedQueryMethod))
+            if (expression.Method.MethodIsClosedFormOf(_relationalSyncAsyncServices.QueryMethodProvider.ShapedQueryMethod))
             {
                 _foundCreateEntityForQuerySource = false;
 
@@ -85,14 +89,14 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                 {
                     return
                         Expression.Call(
-                            _queryCompilationContext.QueryMethodProvider.IncludeMethod
+                            _relationalSyncAsyncServices.QueryMethodProvider.IncludeMethod
                                 .MakeGenericMethod(expression.Method.GetGenericArguments()[0]),
                             Expression.Convert(expression.Arguments[0], typeof(RelationalQueryContext)),
                             expression,
                             Expression.Constant(_querySource),
                             Expression.Constant(_navigationPath),
                             Expression.NewArrayInit(
-                                _queryCompilationContext.QueryMethodProvider.IncludeRelatedValuesFactoryType,
+                                _relationalSyncAsyncServices.QueryMethodProvider.IncludeRelatedValuesFactoryType,
                                 CreateIncludeRelatedValuesStrategyFactories(_querySource, _navigationPath)),
                             Expression.Constant(_querySourceRequiresTracking));
                 }
@@ -173,7 +177,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     yield return
                         Expression.Lambda(
                             Expression.Call(
-                                _queryCompilationContext.QueryMethodProvider
+                                _relationalSyncAsyncServices.QueryMethodProvider
                                     .CreateReferenceIncludeRelatedValuesStrategyMethod,
                                 Expression.Convert(
                                     EntityQueryModelVisitor.QueryContextParameter,
@@ -245,10 +249,10 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     yield return
                         Expression.Lambda(
                             Expression.Call(
-                                _queryCompilationContext.QueryMethodProvider
+                                _relationalSyncAsyncServices.QueryMethodProvider
                                     .CreateCollectionIncludeRelatedValuesStrategyMethod,
                                 Expression.Call(
-                                    _queryCompilationContext.QueryMethodProvider.QueryMethod,
+                                    _relationalSyncAsyncServices.QueryMethodProvider.QueryMethod,
                                     EntityQueryModelVisitor.QueryContextParameter,
                                     Expression.Constant(
                                         _commandBuilderFactory.Create(

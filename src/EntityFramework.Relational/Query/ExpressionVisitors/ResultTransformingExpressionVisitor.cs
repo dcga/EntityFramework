@@ -13,17 +13,17 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
     public class ResultTransformingExpressionVisitor<TResult> : ExpressionVisitorBase
     {
         private readonly IQuerySource _outerQuerySource;
-        private readonly RelationalQueryCompilationContext _relationalQueryCompilationContext;
+        private readonly IRelationalSyncAsyncServices _relationalSyncAsyncServices;
 
         public ResultTransformingExpressionVisitor(
             [NotNull] IQuerySource outerQuerySource,
-            [NotNull] RelationalQueryCompilationContext relationalQueryCompilationContext)
+            [NotNull] IRelationalSyncAsyncServices relationalSyncAsyncServices)
         {
             Check.NotNull(outerQuerySource, nameof(outerQuerySource));
-            Check.NotNull(relationalQueryCompilationContext, nameof(relationalQueryCompilationContext));
+            Check.NotNull(relationalSyncAsyncServices, nameof(relationalSyncAsyncServices));
 
             _outerQuerySource = outerQuerySource;
-            _relationalQueryCompilationContext = relationalQueryCompilationContext;
+            _relationalSyncAsyncServices = relationalSyncAsyncServices;
         }
 
         protected override Expression VisitMethodCall(MethodCallExpression methodCallExpression)
@@ -49,28 +49,28 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             if (newArguments != methodCallExpression.Arguments)
             {
                 if (methodCallExpression.Method.MethodIsClosedFormOf(
-                    _relationalQueryCompilationContext.QueryMethodProvider.ShapedQueryMethod))
+                    _relationalSyncAsyncServices.QueryMethodProvider.ShapedQueryMethod))
                 {
                     return Expression.Call(
-                        _relationalQueryCompilationContext.QueryMethodProvider.ShapedQueryMethod
+                        _relationalSyncAsyncServices.QueryMethodProvider.ShapedQueryMethod
                             .MakeGenericMethod(typeof(ValueBuffer)),
                         newArguments);
                 }
 
                 if (methodCallExpression.Method.MethodIsClosedFormOf(
-                    _relationalQueryCompilationContext.LinqOperatorProvider.Select))
+                    _relationalSyncAsyncServices.LinqOperatorProvider.Select))
                 {
                     return ResultOperatorHandler.CallWithPossibleCancellationToken(
-                        _relationalQueryCompilationContext.QueryMethodProvider.GetResultMethod
+                        _relationalSyncAsyncServices.QueryMethodProvider.GetResultMethod
                             .MakeGenericMethod(typeof(TResult)),
                         newArguments[0]);
                 }
 
                 if (methodCallExpression.Method.MethodIsClosedFormOf(
-                    _relationalQueryCompilationContext.LinqOperatorProvider.SelectMany))
+                    _relationalSyncAsyncServices.LinqOperatorProvider.SelectMany))
                 {
                     return Expression.Call(
-                        _relationalQueryCompilationContext.LinqOperatorProvider.SelectMany
+                        _relationalSyncAsyncServices.LinqOperatorProvider.SelectMany
                             .MakeGenericMethod(typeof(QueryResultScope), typeof(ValueBuffer)),
                         newArguments);
                 }

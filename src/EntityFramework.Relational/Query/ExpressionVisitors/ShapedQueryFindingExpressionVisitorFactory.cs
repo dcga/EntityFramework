@@ -19,13 +19,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             _serviceProvider = serviceProvider;
         }
 
-        public virtual ShapedQueryFindingExpressionVisitor Create([NotNull] RelationalQueryCompilationContext relationalQueryCompilationContext)
-        {
-            var visitor = _serviceProvider.GetService<ShapedQueryFindingExpressionVisitor>();
-
-            visitor.Initialize(relationalQueryCompilationContext);
-
-            return visitor;
-        }
+        public virtual ShapedQueryFindingExpressionVisitor Create()
+            => _serviceProvider.GetService<ShapedQueryFindingExpressionVisitor>();
     }
 }

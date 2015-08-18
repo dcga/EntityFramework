@@ -49,6 +49,7 @@ namespace Microsoft.Data.Entity.Query
         private readonly IQueryAnnotationExtractor _queryAnnotationExtractor;
         private readonly IResultOperatorHandler _resultOperatorHandler;
         private readonly IEntityMaterializerSource _entityMaterializerSource;
+        private readonly ISyncAsyncServices _syncAsyncServices;
 
         private Expression _expression;
         private QueryCompilationContext _queryCompilationContext;
@@ -71,8 +72,8 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] IEntityQueryableExpressionVisitorFactory entityQueryableExpressionVisitorFactory,
             [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
             [NotNull] IResultOperatorHandler resultOperatorHandler,
-            [NotNull] IEntityMaterializerSource entityMaterializerSource
-            )
+            [NotNull] IEntityMaterializerSource entityMaterializerSource,
+            [NotNull] ISyncAsyncServices syncAsyncServices)
         {
             Check.NotNull(model, nameof(model));
             Check.NotNull(queryOptimizer, nameof(queryOptimizer));
@@ -88,6 +89,7 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(queryAnnotationExtractor, nameof(queryAnnotationExtractor));
             Check.NotNull(resultOperatorHandler, nameof(resultOperatorHandler));
             Check.NotNull(entityMaterializerSource, nameof(entityMaterializerSource));
+            Check.NotNull(syncAsyncServices, nameof(syncAsyncServices));
 
             _model = model;
             _queryOptimizer = queryOptimizer;
@@ -103,6 +105,7 @@ namespace Microsoft.Data.Entity.Query
             _queryAnnotationExtractor = queryAnnotationExtractor;
             _resultOperatorHandler = resultOperatorHandler;
             _entityMaterializerSource = entityMaterializerSource;
+            _syncAsyncServices = syncAsyncServices;
         }
 
         public virtual Expression Expression
@@ -135,8 +138,6 @@ namespace Microsoft.Data.Entity.Query
         {
             Check.NotNull(queryModel, nameof(queryModel));
 
-            QueryCompilationContext.Initialize(false);
-
             using (QueryCompilationContext.Logger.BeginScopeImpl(this))
             {
                 QueryCompilationContext.Logger.LogInformation(queryModel, Strings.LogCompilingQueryModel);
@@ -166,8 +167,6 @@ namespace Microsoft.Data.Entity.Query
         public virtual Func<QueryContext, IAsyncEnumerable<TResult>> CreateAsyncQueryExecutor<TResult>([NotNull] QueryModel queryModel)
         {
             Check.NotNull(queryModel, nameof(queryModel));
-
-            QueryCompilationContext.Initialize(true);
 
             using (QueryCompilationContext.Logger.BeginScopeImpl(this))
             {
@@ -199,7 +198,7 @@ namespace Microsoft.Data.Entity.Query
         {
             _expression
                 = Expression.Call(
-                    QueryCompilationContext.LinqOperatorProvider.InterceptExceptions
+                    _syncAsyncServices.LinqOperatorProvider.InterceptExceptions
                         .MakeGenericMethod(_expression.Type.GetSequenceType()),
                     Expression.Lambda(_expression),
                     QueryContextParameter);
@@ -234,7 +233,7 @@ namespace Microsoft.Data.Entity.Query
             {
                 _expression
                     = Expression.Call(
-                        QueryCompilationContext.LinqOperatorProvider.ToSequence
+                        _syncAsyncServices.LinqOperatorProvider.ToSequence
                             .MakeGenericMethod(_expression.Type),
                         _expression);
             }
@@ -423,7 +422,7 @@ namespace Microsoft.Data.Entity.Query
                         || resultItemTypeInfo.GetGenericTypeDefinition() == typeof(IAsyncGrouping<,>)))
                 {
                     trackingMethod
-                        = QueryCompilationContext.LinqOperatorProvider.TrackGroupedEntities
+                        = _syncAsyncServices.LinqOperatorProvider.TrackGroupedEntities
                             .MakeGenericMethod(
                                 resultItemType.GenericTypeArguments[0],
                                 resultItemType.GenericTypeArguments[1],
@@ -432,7 +431,7 @@ namespace Microsoft.Data.Entity.Query
                 else
                 {
                     trackingMethod
-                        = QueryCompilationContext.LinqOperatorProvider.TrackEntities
+                        = _syncAsyncServices.LinqOperatorProvider.TrackEntities
                             .MakeGenericMethod(
                                 resultItemType,
                                 queryModel.SelectClause.Selector.Type);
@@ -555,10 +554,10 @@ namespace Microsoft.Data.Entity.Query
 
             _expression
                 = Expression.Call(
-                    QueryCompilationContext.LinqOperatorProvider.SelectMany
+                    _syncAsyncServices.LinqOperatorProvider.SelectMany
                         .MakeGenericMethod(typeof(QueryResultScope), typeof(QueryResultScope)),
                     Expression.Call(
-                        QueryCompilationContext.LinqOperatorProvider.ToSequence
+                        _syncAsyncServices.LinqOperatorProvider.ToSequence
                             .MakeGenericMethod(typeof(QueryResultScope)),
                         QueryResultScopeParameter),
                     Expression.Lambda(_expression, QueryResultScopeParameter));
@@ -609,7 +608,7 @@ namespace Microsoft.Data.Entity.Query
 
             _expression
                 = Expression.Call(
-                    QueryCompilationContext.LinqOperatorProvider.SelectMany
+                    _syncAsyncServices.LinqOperatorProvider.SelectMany
                         .MakeGenericMethod(typeof(QueryResultScope), typeof(QueryResultScope)),
                     _expression,
                     Expression.Lambda(innerExpression, QueryResultScopeParameter));
@@ -676,7 +675,7 @@ namespace Microsoft.Data.Entity.Query
 
             _expression
                 = Expression.Call(
-                    QueryCompilationContext.LinqOperatorProvider.Join.MakeGenericMethod(
+                    _syncAsyncServices.LinqOperatorProvider.Join.MakeGenericMethod(
                         typeof(QueryResultScope),
                         innerSequenceType,
                         outerKeySelector.Type,
@@ -757,7 +756,7 @@ namespace Microsoft.Data.Entity.Query
 
             _expression
                 = Expression.Call(
-                    QueryCompilationContext.LinqOperatorProvider.GroupJoin.MakeGenericMethod(
+                    _syncAsyncServices.LinqOperatorProvider.GroupJoin.MakeGenericMethod(
                         typeof(QueryResultScope),
                         innerSequenceType,
                         outerKeySelector.Type,
@@ -772,7 +771,7 @@ namespace Microsoft.Data.Entity.Query
                                 groupJoinClause,
                                 innerElementScoped
                                     ? Expression.Call(
-                                        QueryCompilationContext.LinqOperatorProvider.Select
+                                        _syncAsyncServices.LinqOperatorProvider.Select
                                             .MakeGenericMethod(
                                                 innerSequenceType,
                                                 innerElementType),
@@ -819,7 +818,7 @@ namespace Microsoft.Data.Entity.Query
 
             _expression
                 = Expression.Call(
-                    QueryCompilationContext.LinqOperatorProvider.Where
+                    _syncAsyncServices.LinqOperatorProvider.Where
                         .MakeGenericMethod(typeof(QueryResultScope)),
                     _expression,
                     Expression.Lambda(predicate, QueryResultScopeParameter));
@@ -866,8 +865,8 @@ namespace Microsoft.Data.Entity.Query
                 _expression
                     = Expression.Call(
                         (index == 0
-                            ? QueryCompilationContext.LinqOperatorProvider.OrderBy
-                            : QueryCompilationContext.LinqOperatorProvider.ThenBy)
+                            ? _syncAsyncServices.LinqOperatorProvider.OrderBy
+                            : _syncAsyncServices.LinqOperatorProvider.ThenBy)
                             .MakeGenericMethod(elementType, expression.Type),
                         _expression,
                         Expression.Lambda(expression, parameterExpression),
@@ -895,7 +894,7 @@ namespace Microsoft.Data.Entity.Query
 
             _expression
                 = Expression.Call(
-                    QueryCompilationContext.LinqOperatorProvider.Select
+                    _syncAsyncServices.LinqOperatorProvider.Select
                         .MakeGenericMethod(typeof(QueryResultScope), selector.Type),
                     _expression,
                     Expression.Lambda(selector, QueryResultScopeParameter));
@@ -950,7 +949,7 @@ namespace Microsoft.Data.Entity.Query
 
             return
                 Expression.Call(
-                    QueryCompilationContext.LinqOperatorProvider.Select
+                    _syncAsyncServices.LinqOperatorProvider.Select
                         .MakeGenericMethod(elementType, typeof(QueryResultScope)),
                     expression,
                     Expression.Lambda(
@@ -965,7 +964,7 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(expression, nameof(expression));
             Check.NotNull(querySource, nameof(querySource));
 
-            return QueryCompilationContext.LinqOperatorProvider
+            return _syncAsyncServices.LinqOperatorProvider
                 .AdjustSequenceType(
                     ReplaceClauseReferences(
                         _entityQueryableExpressionVisitorFactory

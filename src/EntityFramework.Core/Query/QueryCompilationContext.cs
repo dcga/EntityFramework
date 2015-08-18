@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -19,6 +20,7 @@ namespace Microsoft.Data.Entity.Query
 {
     public abstract class QueryCompilationContext
     {
+        private readonly ISyncAsyncServices _syncAsyncServices;
         private readonly IRequiresMaterializationExpressionVisitorFactory _requiresMaterializationExpressionVisitorFactory;
         private readonly IEntityQueryModelVisitorFactory _entityQueryModelVisitorFactory;
 
@@ -30,42 +32,27 @@ namespace Microsoft.Data.Entity.Query
 
         protected QueryCompilationContext(
             [NotNull] ILoggerFactory loggerFactory,
+            [NotNull] ISyncAsyncServices syncAsyncServices,
             [NotNull] IEntityQueryModelVisitorFactory entityQueryModelVisitorFactory,
             [NotNull] IRequiresMaterializationExpressionVisitorFactory requiresMaterializationExpressionVisitorFactory)
         {
             Check.NotNull(loggerFactory, nameof(loggerFactory));
+            Check.NotNull(syncAsyncServices, nameof(syncAsyncServices));
             Check.NotNull(entityQueryModelVisitorFactory, nameof(entityQueryModelVisitorFactory));
             Check.NotNull(requiresMaterializationExpressionVisitorFactory, nameof(requiresMaterializationExpressionVisitorFactory));
 
             Logger = loggerFactory.CreateLogger<Database>();
+            _syncAsyncServices = syncAsyncServices;
             _entityQueryModelVisitorFactory = entityQueryModelVisitorFactory;
             _requiresMaterializationExpressionVisitorFactory = requiresMaterializationExpressionVisitorFactory;
         }
 
-        public virtual void Initialize(bool isAsync)
-        {
-            if (isAsync)
-            {
-                _linqOperatorProvider = new AsyncLinqOperatorProvider();
-            }
-            else
-            {
-                _linqOperatorProvider = new LinqOperatorProvider();
-            }
-        }
+        public virtual IDisposable Initialize(bool isAsync = false)
+            => new QueryCompilationScope(_syncAsyncServices.BeginScope(isAsync));
 
         public virtual ILogger Logger { get; }
-        public virtual ILinqOperatorProvider LinqOperatorProvider
-        {
-            get { return _linqOperatorProvider; }
-            [param: NotNull]
-            set
-            {
-                Check.NotNull(value, nameof(value));
 
-                _linqOperatorProvider = value;
-            }
-        }
+        public virtual ILinqOperatorProvider LinqOperatorProvider => _syncAsyncServices.LinqOperatorProvider;
 
         public virtual QuerySourceMapping QuerySourceMapping { get; } = new QuerySourceMapping();
 
@@ -155,6 +142,23 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(querySource, nameof(querySource));
 
             return _querySourcesRequiringMaterialization.Contains(querySource);
+        }
+
+        private class QueryCompilationScope : IDisposable
+        {
+            private readonly IReadOnlyCollection<IDisposable> _disposables;
+            public QueryCompilationScope(params IDisposable[] disposables)
+            {
+                _disposables = disposables;
+            }
+
+            public void Dispose()
+            {
+                foreach (var disposable in _disposables)
+                {
+                    disposable.Dispose();
+                }
+            }
         }
     }
 }

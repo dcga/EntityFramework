@@ -13,7 +13,6 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         ExpressionVisitor Create(
             [NotNull] IQuerySource outerQuerySource,
             [NotNull] IQuerySource innerQuerySource,
-            [NotNull] RelationalQueryCompilationContext relationalQueryCompilationContext,
             int readerOffset,
             [NotNull] MethodInfo operatorToFlatten);
     }

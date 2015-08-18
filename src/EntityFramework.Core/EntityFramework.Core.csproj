@@ -254,6 +254,7 @@
     <Compile Include="Query\IQueryExecutor.cs" />
     <Compile Include="Query\IQueryOptimizer.cs" />
     <Compile Include="Query\IQueryPreprocessor.cs" />
+    <Compile Include="Query\ISyncAsyncServices.cs" />
     <Compile Include="Query\QueryableHelpers.cs" />
     <Compile Include="Query\QueryAnnotationMethodAttribute.cs" />
     <Compile Include="Query\QueryCompiler.cs" />
@@ -304,6 +305,7 @@
     <Compile Include="Query\ResultOperators\QueryAnnotationResultOperator.cs" />
     <Compile Include="Query\ResultOperators\ThenIncludeExpressionNode.cs" />
     <Compile Include="Query\ExpressionVisitors\SubQueryMemberPushDownExpressionVisitor.cs" />
+    <Compile Include="Query\SyncAsyncServices.cs" />
     <Compile Include="Storage\DatabaseErrorLogState.cs" />
     <Compile Include="Storage\DatabaseProviderServices.cs" />
     <Compile Include="Storage\IDatabase.cs" />

@@ -25,13 +25,12 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         public virtual ExpressionVisitor Create(
             [NotNull] IQuerySource outerQuerySource,
             [NotNull] IQuerySource innerQuerySource,
-            [NotNull] RelationalQueryCompilationContext relationalQueryCompilationContext,
             int readerOffset,
             [NotNull] MethodInfo operatorToFlatten)
         {
             var visitor = _serviceProvider.GetService<QueryFlatteningExpressionVisitor>();
 
-            visitor.Initialize(outerQuerySource, innerQuerySource, relationalQueryCompilationContext, readerOffset, operatorToFlatten);
+            visitor.Initialize(outerQuerySource, innerQuerySource, readerOffset, operatorToFlatten);
 
             return visitor;
         }

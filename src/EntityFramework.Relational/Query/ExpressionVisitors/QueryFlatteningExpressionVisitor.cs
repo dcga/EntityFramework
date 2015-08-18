@@ -12,9 +12,10 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
     public class QueryFlatteningExpressionVisitor : ExpressionVisitorBase
     {
+        private readonly IRelationalSyncAsyncServices _relationalSyncAsyncServices;
+
         private IQuerySource _outerQuerySource;
         private IQuerySource _innerQuerySource;
-        private RelationalQueryCompilationContext _relationalQueryCompilationContext;
         private int _readerOffset;
         private MethodInfo _operatorToFlatten;
 
@@ -22,21 +23,25 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         private Expression _outerShaperExpression;
         private Expression _outerCommandBuilder;
 
+        public QueryFlatteningExpressionVisitor([NotNull] IRelationalSyncAsyncServices relationalSyncAsyncServices)
+        {
+            Check.NotNull(relationalSyncAsyncServices, nameof(relationalSyncAsyncServices));
+
+            _relationalSyncAsyncServices = relationalSyncAsyncServices;
+        }
+
         public virtual void Initialize(
             [NotNull] IQuerySource outerQuerySource,
             [NotNull] IQuerySource innerQuerySource,
-            [NotNull] RelationalQueryCompilationContext relationalQueryCompilationContext,
             int readerOffset,
             [NotNull] MethodInfo operatorToFlatten)
         {
             Check.NotNull(outerQuerySource, nameof(outerQuerySource));
             Check.NotNull(innerQuerySource, nameof(innerQuerySource));
-            Check.NotNull(relationalQueryCompilationContext, nameof(relationalQueryCompilationContext));
             Check.NotNull(operatorToFlatten, nameof(operatorToFlatten));
 
             _outerQuerySource = outerQuerySource;
             _innerQuerySource = innerQuerySource;
-            _relationalQueryCompilationContext = relationalQueryCompilationContext;
             _readerOffset = readerOffset;
             _operatorToFlatten = operatorToFlatten;
         }
@@ -55,7 +60,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     _outerCommandBuilder = methodCallExpression.Arguments[1];
                 }
                 else if (newExpression.Method.MethodIsClosedFormOf(
-                    _relationalQueryCompilationContext.QueryMethodProvider.ShapedQueryMethod))
+                    _relationalSyncAsyncServices.QueryMethodProvider.ShapedQueryMethod))
                 {
                     newExpression
                         = Expression.Call(
@@ -97,7 +102,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             else if (_outerShaperExpression != null
                      && _outerSelectManyExpression == null
                      && newExpression.Method.MethodIsClosedFormOf(
-                         _relationalQueryCompilationContext.LinqOperatorProvider.SelectMany))
+                         _relationalSyncAsyncServices.LinqOperatorProvider.SelectMany))
             {
                 _outerSelectManyExpression = newExpression;
             }
@@ -108,7 +113,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 
                 newExpression
                     = Expression.Call(
-                        _relationalQueryCompilationContext.LinqOperatorProvider.SelectMany
+                        _relationalSyncAsyncServices.LinqOperatorProvider.SelectMany
                             .MakeGenericMethod(
                                 typeof(QueryResultScope),
                                 typeof(QueryResultScope)),
@@ -119,11 +124,11 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                                 newExpression.Arguments[1],
                                 EntityQueryModelVisitor.QueryResultScopeParameter));
 
-                if (_operatorToFlatten == _relationalQueryCompilationContext.LinqOperatorProvider.GroupJoin)
+                if (_operatorToFlatten == _relationalSyncAsyncServices.LinqOperatorProvider.GroupJoin)
                 {
                     newExpression
                         = Expression.Call(
-                            _relationalQueryCompilationContext.QueryMethodProvider.GroupJoinMethod
+                            _relationalSyncAsyncServices.QueryMethodProvider.GroupJoinMethod
                                 .MakeGenericMethod(_innerQuerySource.ItemType),
                             newExpression,
                             oldExpression.Arguments[4]);

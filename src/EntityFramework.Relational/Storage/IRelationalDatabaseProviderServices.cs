@@ -6,6 +6,7 @@ using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Migrations.History;
 using Microsoft.Data.Entity.Migrations.Infrastructure;
 using Microsoft.Data.Entity.Migrations.Sql;
+using Microsoft.Data.Entity.Query;
 using Microsoft.Data.Entity.Query.Methods;
 using Microsoft.Data.Entity.Query.Sql;
 using Microsoft.Data.Entity.Update;
@@ -31,5 +32,6 @@ namespace Microsoft.Data.Entity.Storage
         IMemberTranslator CompositeMemberTranslator { get; }
         IParameterNameGeneratorFactory ParameterNameGeneratorFactory { get; }
         ISqlQueryGeneratorFactory SqlQueryGeneratorFactory { get; }
+        new IRelationalSyncAsyncServices SyncAsyncServices { get; }
     }
 }

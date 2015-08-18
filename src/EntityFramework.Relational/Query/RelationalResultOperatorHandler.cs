@@ -29,6 +29,7 @@ namespace Microsoft.Data.Entity.Query
                 IModel model,
                 IRelationalMetadataExtensionProvider relationalMetadataExtensionProvider,
                 ISqlTranslatingExpressionVisitorFactory sqlTranslatingExpressionVisitorFactory,
+                IRelationalSyncAsyncServices relationalSyncAsyncServices,
                 RelationalQueryModelVisitor queryModelVisitor,
                 ResultOperatorBase resultOperator,
                 QueryModel queryModel,
@@ -38,6 +39,7 @@ namespace Microsoft.Data.Entity.Query
                 Model = model;
                 RelationalMetadataExtensionProvider = relationalMetadataExtensionProvider;
                 SqlTranslatingExpressionVisitorFactory = sqlTranslatingExpressionVisitorFactory;
+                RelationalSyncAsyncServices = relationalSyncAsyncServices;
                 QueryModelVisitor = queryModelVisitor;
                 ResultOperator = resultOperator;
                 QueryModel = queryModel;
@@ -49,6 +51,8 @@ namespace Microsoft.Data.Entity.Query
             public IRelationalMetadataExtensionProvider RelationalMetadataExtensionProvider { get; }
 
             public ISqlTranslatingExpressionVisitorFactory SqlTranslatingExpressionVisitorFactory { get; }
+
+            public IRelationalSyncAsyncServices RelationalSyncAsyncServices { get; }
 
             public ResultOperatorBase ResultOperator { get; }
 
@@ -97,22 +101,26 @@ namespace Microsoft.Data.Entity.Query
         private readonly IModel _model;
         private readonly IRelationalMetadataExtensionProvider _relationalMetadataExtensionProvider;
         private readonly ISqlTranslatingExpressionVisitorFactory _sqlTranslatingExpressionVisitorFactory;
+        private readonly IRelationalSyncAsyncServices _relationalSyncAsyncServices;
         private readonly ResultOperatorHandler _resultOperatorHandler;
 
         public RelationalResultOperatorHandler(
             [NotNull] IModel model,
             [NotNull] IRelationalMetadataExtensionProvider relationalMetadataExtensionProvider,
             [NotNull] ISqlTranslatingExpressionVisitorFactory sqlTranslatingExpressionVisitorFactory,
+            [NotNull] IRelationalSyncAsyncServices relationalSyncAsyncServices,
             [NotNull] ResultOperatorHandler resultOperatorHandler)
         {
             Check.NotNull(model, nameof(model));
             Check.NotNull(relationalMetadataExtensionProvider, nameof(relationalMetadataExtensionProvider));
             Check.NotNull(sqlTranslatingExpressionVisitorFactory, nameof(sqlTranslatingExpressionVisitorFactory));
+            Check.NotNull(relationalSyncAsyncServices, nameof(relationalSyncAsyncServices));
             Check.NotNull(resultOperatorHandler, nameof(resultOperatorHandler));
 
             _model = model;
             _relationalMetadataExtensionProvider = relationalMetadataExtensionProvider;
             _sqlTranslatingExpressionVisitorFactory = sqlTranslatingExpressionVisitorFactory;
+            _relationalSyncAsyncServices = relationalSyncAsyncServices;
             _resultOperatorHandler = resultOperatorHandler;
         }
 
@@ -138,6 +146,7 @@ namespace Microsoft.Data.Entity.Query
                     _model,
                     _relationalMetadataExtensionProvider,
                     _sqlTranslatingExpressionVisitorFactory,
+                    _relationalSyncAsyncServices,
                     relationalQueryModelVisitor,
                     resultOperator,
                     queryModel,
@@ -376,7 +385,7 @@ namespace Microsoft.Data.Entity.Query
             }
 
             return Expression.Call(
-                handlerContext.QueryModelVisitor.QueryCompilationContext.LinqOperatorProvider.Cast
+                handlerContext.RelationalSyncAsyncServices.LinqOperatorProvider.Cast
                     .MakeGenericMethod(ofTypeResultOperator.SearchedItemType),
                 handlerContext.QueryModelVisitor.Expression);
         }
@@ -455,7 +464,7 @@ namespace Microsoft.Data.Entity.Query
             var visitor
                 = new ResultTransformingExpressionVisitor<TResult>(
                     querySource,
-                    handlerContext.QueryModelVisitor.QueryCompilationContext);
+                    handlerContext.RelationalSyncAsyncServices);
 
             return visitor.Visit(handlerContext.QueryModelVisitor.Expression);
         }

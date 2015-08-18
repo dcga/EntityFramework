@@ -23,8 +23,8 @@ namespace Microsoft.Data.Entity.Storage
         IQueryContextFactory QueryContextFactory { get; }
         IQueryCompilationContextFactory QueryCompilationContextFactory { get; }
         IEntityQueryModelVisitorFactory EntityQueryModelVisitorFactory { get; }
-
         ICompiledQueryCacheKeyGenerator CompiledQueryCacheKeyGenerator { get; }
+        ISyncAsyncServices SyncAsyncServices { get; }
         IResultOperatorHandler ResultOperatorHandler { get; }
         IEntityQueryableExpressionVisitorFactory EntityQueryableExpressionVisitorFactory { get; }
         IProjectionExpressionVisitorFactory ProjectionExpressionVisitorFactory { get; }

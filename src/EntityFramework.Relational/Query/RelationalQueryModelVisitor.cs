@@ -30,6 +30,7 @@ namespace Microsoft.Data.Entity.Query
         private readonly Dictionary<IQuerySource, RelationalQueryModelVisitor> _subQueryModelVisitorsBySource
             = new Dictionary<IQuerySource, RelationalQueryModelVisitor>();
 
+        private readonly IRelationalSyncAsyncServices _relationalSyncAsyncServices;
         private readonly IRelationalMetadataExtensionProvider _relationalMetadataExtensionProvider;
         private readonly IIncludeExpressionVisitorFactory _includeExpressionVisitorFactory;
         private readonly ISqlTranslatingExpressionVisitorFactory _sqlTranslatingExpressionVisitorFactory;
@@ -61,6 +62,7 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
             [NotNull] IResultOperatorHandler resultOperatorHandler,
             [NotNull] IEntityMaterializerSource entityMaterializerSource,
+            [NotNull] IRelationalSyncAsyncServices relationalSyncAsyncServices,
             [NotNull] IRelationalMetadataExtensionProvider relationalMetadataExtensionProvider,
             [NotNull] IIncludeExpressionVisitorFactory includeExpressionVisitorFactory,
             [NotNull] ISqlTranslatingExpressionVisitorFactory sqlTranslatingExpressionVisitorFactory,
@@ -81,7 +83,8 @@ namespace Microsoft.Data.Entity.Query
                   Check.NotNull(entityQueryableExpressionVisitorFactory, nameof(entityQueryableExpressionVisitorFactory)),
                   Check.NotNull(queryAnnotationExtractor, nameof(queryAnnotationExtractor)),
                   Check.NotNull(resultOperatorHandler, nameof(resultOperatorHandler)),
-                  Check.NotNull(entityMaterializerSource, nameof(entityMaterializerSource)))
+                  Check.NotNull(entityMaterializerSource, nameof(entityMaterializerSource)),
+                  Check.NotNull(relationalSyncAsyncServices, nameof(relationalSyncAsyncServices)))
         {
             Check.NotNull(relationalMetadataExtensionProvider, nameof(relationalMetadataExtensionProvider));
             Check.NotNull(includeExpressionVisitorFactory, nameof(includeExpressionVisitorFactory));
@@ -90,6 +93,7 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(queryFlatteningExpressionVisitorFactory, nameof(queryFlatteningExpressionVisitorFactory));
             Check.NotNull(shapedQueryFindingExpressionVisitorFactory, nameof(shapedQueryFindingExpressionVisitorFactory));
 
+            _relationalSyncAsyncServices = relationalSyncAsyncServices;
             _relationalMetadataExtensionProvider = relationalMetadataExtensionProvider;
             _includeExpressionVisitorFactory = includeExpressionVisitorFactory;
             _sqlTranslatingExpressionVisitorFactory = sqlTranslatingExpressionVisitorFactory;
@@ -323,9 +327,8 @@ namespace Microsoft.Data.Entity.Query
                             = _queryFlatteningExpressionVisitorFactory.Create(
                                 previousQuerySource,
                                 fromClause,
-                                QueryCompilationContext,
                                 readerOffset,
-                                QueryCompilationContext.LinqOperatorProvider.SelectMany)
+                                _relationalSyncAsyncServices.LinqOperatorProvider.SelectMany)
                                 .Visit(Expression);
 
                         RequiresClientSelectMany = false;
@@ -372,7 +375,7 @@ namespace Microsoft.Data.Entity.Query
                 queryModel,
                 index,
                 () => base.VisitJoinClause(joinClause, queryModel, index),
-                QueryCompilationContext.LinqOperatorProvider.Join);
+                _relationalSyncAsyncServices.LinqOperatorProvider.Join);
         }
 
         protected override Expression CompileJoinClauseInnerSequenceExpression(JoinClause joinClause, QueryModel queryModel)
@@ -395,7 +398,7 @@ namespace Microsoft.Data.Entity.Query
                 queryModel,
                 index,
                 () => base.VisitGroupJoinClause(groupJoinClause, queryModel, index),
-                QueryCompilationContext.LinqOperatorProvider.GroupJoin,
+                _relationalSyncAsyncServices.LinqOperatorProvider.GroupJoin,
                 outerJoin: true);
         }
 
@@ -464,7 +467,6 @@ namespace Microsoft.Data.Entity.Query
                             = _queryFlatteningExpressionVisitorFactory.Create(
                                 previousQuerySource,
                                 joinClause,
-                                QueryCompilationContext,
                                 previousSelectProjectionCount,
                                 operatorToFlatten)
                                 .Visit(Expression);
@@ -503,7 +505,8 @@ namespace Microsoft.Data.Entity.Query
                 _subqueriesBySource.Remove(querySource);
 
                 var shapedQueryMethodExpression
-                    = _shapedQueryFindingExpressionVisitorFactory.Create(QueryCompilationContext)
+                    = _shapedQueryFindingExpressionVisitorFactory
+                        .Create()
                         .Find(expression);
 
                 var shaperLambda = (LambdaExpression)shapedQueryMethodExpression.Arguments[2];
@@ -557,7 +560,7 @@ namespace Microsoft.Data.Entity.Query
                 }
 
                 return Expression.Call(
-                    QueryCompilationContext.QueryMethodProvider.ShapedQueryMethod
+                    _relationalSyncAsyncServices.QueryMethodProvider.ShapedQueryMethod
                         .MakeGenericMethod(shaperMethod.ReturnType),
                     shapedQueryMethodExpression.Arguments[0],
                     shapedQueryMethodExpression.Arguments[1],

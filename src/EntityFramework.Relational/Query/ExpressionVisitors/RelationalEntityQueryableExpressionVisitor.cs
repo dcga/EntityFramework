@@ -24,6 +24,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
     {
         private readonly IModel _model;
         private readonly IEntityKeyFactorySource _entityKeyFactorySource;
+        private readonly IRelationalSyncAsyncServices _relationalSyncAsyncServices;
         private readonly IMaterializerFactory _materializerFactory;
         private readonly ISqlQueryGeneratorFactory _sqlQueryGeneratorFactory;
         private readonly ICommandBuilderFactory _commandBuilderFactory;
@@ -49,6 +50,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         public RelationalEntityQueryableExpressionVisitor(
             [NotNull] IModel model,
             [NotNull] IEntityKeyFactorySource entityKeyFactorySource,
+            [NotNull] IRelationalSyncAsyncServices relationalSyncAsyncServices,
             [NotNull] IMaterializerFactory materializerFactory,
             [NotNull] ISqlQueryGeneratorFactory sqlQueryGeneratorFactory,
             [NotNull] ICommandBuilderFactory commandBuilderFactory,
@@ -56,6 +58,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         {
             Check.NotNull(model, nameof(model));
             Check.NotNull(entityKeyFactorySource, nameof(entityKeyFactorySource));
+            Check.NotNull(relationalSyncAsyncServices, nameof(relationalSyncAsyncServices));
             Check.NotNull(materializerFactory, nameof(materializerFactory));
             Check.NotNull(sqlQueryGeneratorFactory, nameof(sqlQueryGeneratorFactory));
             Check.NotNull(commandBuilderFactory, nameof(commandBuilderFactory));
@@ -63,6 +66,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 
             _model = model;
             _entityKeyFactorySource = entityKeyFactorySource;
+            _relationalSyncAsyncServices = relationalSyncAsyncServices;
             _materializerFactory = materializerFactory;
             _sqlQueryGeneratorFactory = sqlQueryGeneratorFactory;
             _commandBuilderFactory = commandBuilderFactory;
@@ -270,7 +274,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             }
 
             return Expression.Call(
-                relationalQueryCompilationContext.QueryMethodProvider.ShapedQueryMethod
+                _relationalSyncAsyncServices.QueryMethodProvider.ShapedQueryMethod
                     .MakeGenericMethod(queryMethodInfo.ReturnType),
                 EntityQueryModelVisitor.QueryContextParameter,
                 Expression.Constant(

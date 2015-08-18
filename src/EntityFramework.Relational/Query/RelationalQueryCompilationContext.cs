@@ -18,31 +18,17 @@ namespace Microsoft.Data.Entity.Query
         private readonly List<RelationalQueryModelVisitor> _relationalQueryModelVisitors
             = new List<RelationalQueryModelVisitor>();
 
-        private IQueryMethodProvider _queryMethodProvider;
-
         public RelationalQueryCompilationContext(
             [NotNull] ILoggerFactory loggerFactory,
+            [NotNull] IRelationalSyncAsyncServices relationalSyncAsyncServices,
             [NotNull] IEntityQueryModelVisitorFactory entityQueryModelVisitorFactory,
             [NotNull] IRequiresMaterializationExpressionVisitorFactory requiresMaterializationExpressionVisitorFactory)
             : base(
                 Check.NotNull(loggerFactory, nameof(loggerFactory)),
+                Check.NotNull(relationalSyncAsyncServices, nameof(relationalSyncAsyncServices)),
                 Check.NotNull(entityQueryModelVisitorFactory, nameof(entityQueryModelVisitorFactory)),
                 Check.NotNull(requiresMaterializationExpressionVisitorFactory, nameof(requiresMaterializationExpressionVisitorFactory)))
         {
-        }
-
-        public override void Initialize(bool isAsync)
-        {
-            base.Initialize(isAsync);
-
-            if (isAsync)
-            {
-                _queryMethodProvider = new AsyncQueryMethodProvider();
-            }
-            else
-            {
-                _queryMethodProvider = new QueryMethodProvider();
-            }
         }
 
         public override EntityQueryModelVisitor CreateQueryModelVisitor()
@@ -80,18 +66,6 @@ namespace Microsoft.Data.Entity.Query
                  where selectExpression != null
                  select selectExpression)
                     .First();
-        }
-
-        public virtual IQueryMethodProvider QueryMethodProvider
-        {
-            get { return _queryMethodProvider; }
-            [param: NotNull]
-            protected set
-            {
-                Check.NotNull(value, nameof(value));
-
-                _queryMethodProvider = value;
-            }
         }
     }
 }

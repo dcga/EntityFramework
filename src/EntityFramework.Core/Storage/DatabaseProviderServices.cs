@@ -33,6 +33,7 @@ namespace Microsoft.Data.Entity.Storage
         public virtual IValueGeneratorSelector ValueGeneratorSelector => GetService<ValueGeneratorSelector>();
         public virtual IModelValidator ModelValidator => GetService<LoggingModelValidator>();
         public virtual ICompiledQueryCacheKeyGenerator CompiledQueryCacheKeyGenerator => GetService<CompiledQueryCacheKeyGenerator>();
+        public virtual ISyncAsyncServices SyncAsyncServices => GetService<SyncAsyncServices>();
         public virtual IResultOperatorHandler ResultOperatorHandler => GetService<ResultOperatorHandler>();
         public virtual IProjectionExpressionVisitorFactory ProjectionExpressionVisitorFactory => GetService<ProjectionExpressionVisitorFactory>();
 

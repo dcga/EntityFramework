@@ -16,11 +16,13 @@ namespace Microsoft.Data.Entity.Query
 
         public InMemoryQueryCompilationContext(
             [NotNull] ILoggerFactory loggerFactory,
+            [NotNull] ISyncAsyncServices syncAsyncServices,
             [NotNull] IEntityQueryModelVisitorFactory entityQueryModelVisitorFactory,
             [NotNull] IRequiresMaterializationExpressionVisitorFactory requiresMaterializationExpressionVisitorFactory,
             [NotNull] IServiceProvider serviceProvider)
             : base(
                 Check.NotNull(loggerFactory, nameof(loggerFactory)),
+                Check.NotNull(syncAsyncServices, nameof(syncAsyncServices)),
                 Check.NotNull(entityQueryModelVisitorFactory, nameof(entityQueryModelVisitorFactory)),
                 Check.NotNull(requiresMaterializationExpressionVisitorFactory, nameof(requiresMaterializationExpressionVisitorFactory)))
         {

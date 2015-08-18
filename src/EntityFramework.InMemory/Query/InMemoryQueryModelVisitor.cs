@@ -35,7 +35,8 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
             [NotNull] IResultOperatorHandler resultOperatorHandler,
             [NotNull] IEntityMaterializerSource entityMaterializerSource,
-            [NotNull] IMaterializerFactory materializerFactory)
+            [NotNull] IMaterializerFactory materializerFactory,
+            [NotNull] ISyncAsyncServices syncAsyncServices)
             : base(
                   Check.NotNull(model, nameof(model)),
                   Check.NotNull(queryOptimizer, nameof(queryOptimizer)),
@@ -50,7 +51,8 @@ namespace Microsoft.Data.Entity.Query
                   Check.NotNull(entityQueryableExpressionVisitorFactory, nameof(entityQueryableExpressionVisitorFactory)),
                   Check.NotNull(queryAnnotationExtractor, nameof(queryAnnotationExtractor)),
                   Check.NotNull(resultOperatorHandler, nameof(resultOperatorHandler)),
-                  Check.NotNull(entityMaterializerSource, nameof(entityMaterializerSource)))
+                  Check.NotNull(entityMaterializerSource, nameof(entityMaterializerSource)),
+                  Check.NotNull(syncAsyncServices, nameof(syncAsyncServices)))
         {
             Check.NotNull(materializerFactory, nameof(materializerFactory));
 

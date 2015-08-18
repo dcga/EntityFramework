@@ -10,16 +10,15 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
     public class ShapedQueryFindingExpressionVisitor : ExpressionVisitorBase
     {
-        private RelationalQueryCompilationContext _relationalQueryCompilationContext;
+        private readonly IRelationalSyncAsyncServices _relationalSyncAsyncServices;
 
         private MethodCallExpression _shapedQueryMethodCall;
 
-        public virtual void Initialize(
-            [NotNull] RelationalQueryCompilationContext relationalQueryCompilationContext)
+        public ShapedQueryFindingExpressionVisitor([NotNull] IRelationalSyncAsyncServices relationalSyncAsyncServices)
         {
-            Check.NotNull(relationalQueryCompilationContext, nameof(relationalQueryCompilationContext));
+            Check.NotNull(relationalSyncAsyncServices, nameof(relationalSyncAsyncServices));
 
-            _relationalQueryCompilationContext = relationalQueryCompilationContext;
+            _relationalSyncAsyncServices = relationalSyncAsyncServices;
         }
 
         public virtual MethodCallExpression Find([NotNull] Expression expression)
@@ -36,7 +35,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             Check.NotNull(methodCallExpression, nameof(methodCallExpression));
 
             if (methodCallExpression.Method.MethodIsClosedFormOf(
-                _relationalQueryCompilationContext.QueryMethodProvider.ShapedQueryMethod))
+                _relationalSyncAsyncServices.QueryMethodProvider.ShapedQueryMethod))
             {
                 _shapedQueryMethodCall = methodCallExpression;
             }

@@ -41,6 +41,7 @@ namespace Microsoft.Data.Entity.Storage
         public virtual ICommandBatchPreparer CommandBatchPreparer => GetService<CommandBatchPreparer>();
         public virtual ISqlStatementExecutor SqlStatementExecutor => GetService<SqlStatementExecutor>();
         public virtual IParameterNameGeneratorFactory ParameterNameGeneratorFactory => GetService<ParameterNameGeneratorFactory>();
+        public virtual new IRelationalSyncAsyncServices SyncAsyncServices => GetService<RelationalSyncAsyncServices>();
 
         public abstract IMethodCallTranslator CompositeMethodCallTranslator { get; }
         public abstract IMemberTranslator CompositeMemberTranslator { get; }
