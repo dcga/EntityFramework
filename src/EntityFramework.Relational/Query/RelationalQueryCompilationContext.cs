@@ -21,13 +21,9 @@ namespace Microsoft.Data.Entity.Query
 
         public RelationalQueryCompilationContext(
             [NotNull] QueryCompilationContextServices services,
-            [NotNull] ILoggerFactory loggerFactory,
-            [NotNull] RelationalQueryCompilationContextServices relationalService)
+            [NotNull] ILoggerFactory loggerFactory)
             : base(services, loggerFactory)
         {
-            Check.NotNull(relationalService, nameof(relationalService));
-
-            RelationalServices = relationalService;
         }
 
         public override void Initialize(bool isAsync)
@@ -43,8 +39,6 @@ namespace Microsoft.Data.Entity.Query
                 _queryMethodProvider = new QueryMethodProvider();
             }
         }
-
-        public virtual RelationalQueryCompilationContextServices RelationalServices { get; }
 
         public override EntityQueryModelVisitor CreateQueryModelVisitor()
         {

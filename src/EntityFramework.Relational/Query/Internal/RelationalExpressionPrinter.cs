@@ -33,7 +33,7 @@ namespace Microsoft.Data.Entity.Query.Internal
                     stringBuilder.AppendLine("SelectExpression: ");
                     stringBuilder.IncrementIndent();
 
-                    var sqlGenerator = commandBuilder.SqlGeneratorFactory();
+                    var sqlGenerator = commandBuilder.SqlGeneratorFunc();
 
                     var sql = sqlGenerator.GenerateSql(new Dictionary<string, object>());
                     var lines = sql.Split(new[] { Environment.NewLine }, StringSplitOptions.None);

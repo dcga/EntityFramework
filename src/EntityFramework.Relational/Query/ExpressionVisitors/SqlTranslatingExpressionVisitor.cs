@@ -7,6 +7,7 @@ using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Query.Expressions;
+using Microsoft.Data.Entity.Query.Methods;
 using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
@@ -19,12 +20,30 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
     public class SqlTranslatingExpressionVisitor : ThrowingExpressionVisitor
     {
+        private readonly IRelationalMetadataExtensionProvider _relationalMetadataExtensionProvider;
+        private readonly IMethodCallTranslator _methodCallTranslator;
+        private readonly IMemberTranslator _memberTranslator;
+
         private RelationalQueryModelVisitor _queryModelVisitor;
         private SelectExpression _targetSelectExpression;
         private Expression _topLevelPredicate;
 
         private bool _bindParentQueries;
         private bool _inProjection;
+
+        public SqlTranslatingExpressionVisitor(
+            [NotNull] IRelationalMetadataExtensionProvider relationalMetadataExtensionProvider,
+            [NotNull] IMethodCallTranslator methodCallTranslator,
+            [NotNull] IMemberTranslator memberTranslator)
+        {
+            Check.NotNull(relationalMetadataExtensionProvider, nameof(relationalMetadataExtensionProvider));
+            Check.NotNull(methodCallTranslator, nameof(methodCallTranslator));
+            Check.NotNull(memberTranslator, nameof(memberTranslator));
+
+            _relationalMetadataExtensionProvider = relationalMetadataExtensionProvider;
+            _methodCallTranslator = methodCallTranslator;
+            _memberTranslator = memberTranslator;
+        }
 
         public virtual void Initialize(
             [NotNull] RelationalQueryModelVisitor queryModelVisitor,
@@ -51,64 +70,64 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             switch (binaryExpression.NodeType)
             {
                 case ExpressionType.Coalesce:
-                {
-                    var left = Visit(binaryExpression.Left);
-                    var right = Visit(binaryExpression.Right);
+                    {
+                        var left = Visit(binaryExpression.Left);
+                        var right = Visit(binaryExpression.Right);
 
-                    return new AliasExpression(binaryExpression.Update(left, binaryExpression.Conversion, right));
-                }
+                        return new AliasExpression(binaryExpression.Update(left, binaryExpression.Conversion, right));
+                    }
 
                 case ExpressionType.Equal:
                 case ExpressionType.NotEqual:
-                {
-                    var structuralComparisonExpression
-                        = UnfoldStructuralComparison(
-                            binaryExpression.NodeType,
-                            ProcessComparisonExpression(binaryExpression));
+                    {
+                        var structuralComparisonExpression
+                            = UnfoldStructuralComparison(
+                                binaryExpression.NodeType,
+                                ProcessComparisonExpression(binaryExpression));
 
-                    return structuralComparisonExpression;
-                }
+                        return structuralComparisonExpression;
+                    }
 
                 case ExpressionType.GreaterThan:
                 case ExpressionType.GreaterThanOrEqual:
                 case ExpressionType.LessThan:
                 case ExpressionType.LessThanOrEqual:
-                {
-                    return ProcessComparisonExpression(binaryExpression);
-                }
-
-                case ExpressionType.AndAlso:
-                {
-                    var left = Visit(binaryExpression.Left);
-                    var right = Visit(binaryExpression.Right);
-
-                    if (binaryExpression == _topLevelPredicate)
                     {
-                        if (left != null
-                            && right != null)
-                        {
-                            return Expression.AndAlso(left, right);
-                        }
-
-                        if (left != null)
-                        {
-                            ClientEvalPredicate = binaryExpression.Right;
-                            return left;
-                        }
-
-                        if (right != null)
-                        {
-                            ClientEvalPredicate = binaryExpression.Left;
-                            return right;
-                        }
-
-                        return null;
+                        return ProcessComparisonExpression(binaryExpression);
                     }
 
-                    return left != null && right != null
-                        ? Expression.AndAlso(left, right)
-                        : null;
-                }
+                case ExpressionType.AndAlso:
+                    {
+                        var left = Visit(binaryExpression.Left);
+                        var right = Visit(binaryExpression.Right);
+
+                        if (binaryExpression == _topLevelPredicate)
+                        {
+                            if (left != null
+                                && right != null)
+                            {
+                                return Expression.AndAlso(left, right);
+                            }
+
+                            if (left != null)
+                            {
+                                ClientEvalPredicate = binaryExpression.Right;
+                                return left;
+                            }
+
+                            if (right != null)
+                            {
+                                ClientEvalPredicate = binaryExpression.Left;
+                                return right;
+                            }
+
+                            return null;
+                        }
+
+                        return left != null && right != null
+                            ? Expression.AndAlso(left, right)
+                            : null;
+                    }
 
                 case ExpressionType.OrElse:
                 case ExpressionType.Add:
@@ -116,15 +135,15 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                 case ExpressionType.Multiply:
                 case ExpressionType.Divide:
                 case ExpressionType.Modulo:
-                {
-                    var leftExpression = Visit(binaryExpression.Left);
-                    var rightExpression = Visit(binaryExpression.Right);
+                    {
+                        var leftExpression = Visit(binaryExpression.Left);
+                        var rightExpression = Visit(binaryExpression.Right);
 
-                    return leftExpression != null
-                           && rightExpression != null
-                        ? Expression.MakeBinary(binaryExpression.NodeType, leftExpression, rightExpression)
-                        : null;
-                }
+                        return leftExpression != null
+                               && rightExpression != null
+                            ? Expression.MakeBinary(binaryExpression.NodeType, leftExpression, rightExpression)
+                            : null;
+                    }
             }
 
             return null;
@@ -246,11 +265,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                             : Expression.Call(methodCallExpression.Method, arguments);
 
                     var translatedExpression =
-                        _queryModelVisitor
-                            .QueryCompilationContext
-                            .RelationalServices
-                            .CompositeMethodCallTranslator
-                            .Translate(boundExpression);
+                        _methodCallTranslator.Translate(boundExpression);
 
                     if (translatedExpression != null)
                     {
@@ -291,12 +306,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                             ? Expression.Property(newExpression, memberExpression.Member.Name)
                             : memberExpression;
 
-                    var translatedExpression
-                        = _queryModelVisitor
-                            .QueryCompilationContext
-                            .RelationalServices
-                            .CompositeMemberTranslator
-                            .Translate(newMemberExpression);
+                    var translatedExpression = _memberTranslator.Translate(newMemberExpression);
 
                     if (translatedExpression != null)
                     {
@@ -347,11 +357,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                 && selectExpression != _targetSelectExpression)
             {
                 selectExpression?.AddToProjection(
-                    _queryModelVisitor
-                        .QueryCompilationContext
-                        .RelationalServices
-                        .RelationalExtensions
-                        .For(property).ColumnName,
+                    _relationalMetadataExtensionProvider.For(property).ColumnName,
                     property,
                     querySource);
 
@@ -366,11 +372,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         {
             return new AliasExpression(
                 new ColumnExpression(
-                    _queryModelVisitor
-                        .QueryCompilationContext
-                        .RelationalServices
-                        .RelationalExtensions
-                        .For(property).ColumnName,
+                    _relationalMetadataExtensionProvider.For(property).ColumnName,
                     property,
                     selectExpression.GetTableForQuerySource(querySource)));
         }
@@ -380,22 +382,22 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             switch (expression.NodeType)
             {
                 case ExpressionType.Not:
-                {
-                    var operand = Visit(expression.Operand);
-
-                    return Expression.Not(operand);
-                }
-                case ExpressionType.Convert:
-                {
-                    var operand = Visit(expression.Operand);
-
-                    if (operand != null)
                     {
-                        return Expression.Convert(operand, expression.Type);
-                    }
+                        var operand = Visit(expression.Operand);
 
-                    break;
-                }
+                        return Expression.Not(operand);
+                    }
+                case ExpressionType.Convert:
+                    {
+                        var operand = Visit(expression.Operand);
+
+                        if (operand != null)
+                        {
+                            return Expression.Convert(operand, expression.Type);
+                        }
+
+                        break;
+                    }
             }
 
             return null;

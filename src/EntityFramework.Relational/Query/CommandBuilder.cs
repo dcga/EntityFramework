@@ -16,7 +16,7 @@ namespace Microsoft.Data.Entity.Query
     {
         private readonly IRelationalValueBufferFactoryFactory _valueBufferFactoryFactory;
 
-        private Func<ISqlQueryGenerator> _sqlGeneratorFactory;
+        private Func<ISqlQueryGenerator> _sqlGeneratorFunc;
         private IRelationalValueBufferFactory _valueBufferFactory;
 
         public CommandBuilder([NotNull] IRelationalValueBufferFactoryFactory valueBufferFactoryFactory)
@@ -26,17 +26,16 @@ namespace Microsoft.Data.Entity.Query
             _valueBufferFactoryFactory = valueBufferFactoryFactory;
         }
 
-        public virtual void Initialize(
-            [NotNull] Func<ISqlQueryGenerator> sqlGeneratorFactory)
+        public virtual void Initialize([NotNull] Func<ISqlQueryGenerator> sqlGeneratorFunc)
         {
-            Check.NotNull(sqlGeneratorFactory, nameof(sqlGeneratorFactory));
+            Check.NotNull(sqlGeneratorFunc, nameof(sqlGeneratorFunc));
 
-            _sqlGeneratorFactory = sqlGeneratorFactory;
+            _sqlGeneratorFunc = sqlGeneratorFunc;
         }
 
         public virtual IRelationalValueBufferFactory ValueBufferFactory => _valueBufferFactory;
 
-        public virtual Func<ISqlQueryGenerator> SqlGeneratorFactory => _sqlGeneratorFactory;
+        public virtual Func<ISqlQueryGenerator> SqlGeneratorFunc => _sqlGeneratorFunc;
 
         public virtual DbCommand Build(
             [NotNull] IRelationalConnection connection,
@@ -58,7 +57,7 @@ namespace Microsoft.Data.Entity.Query
                 command.CommandTimeout = (int)connection.CommandTimeout;
             }
 
-            var sqlQueryGenerator = _sqlGeneratorFactory();
+            var sqlQueryGenerator = _sqlGeneratorFunc();
 
             command.CommandText = sqlQueryGenerator.GenerateSql(parameterValues);
 
@@ -81,7 +80,7 @@ namespace Microsoft.Data.Entity.Query
             LazyInitializer
                 .EnsureInitialized(
                     ref _valueBufferFactory,
-                    () => _sqlGeneratorFactory()
+                    () => _sqlGeneratorFunc()
                         .CreateValueBufferFactory(_valueBufferFactoryFactory, dataReader));
         }
     }

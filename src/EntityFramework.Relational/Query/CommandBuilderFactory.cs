@@ -20,11 +20,11 @@ namespace Microsoft.Data.Entity.Query
             _serviceProvider = serviceProvider;
         }
 
-        public virtual CommandBuilder Create([NotNull] Func<ISqlQueryGenerator> sqlGeneratorFactory)
+        public virtual CommandBuilder Create([NotNull] Func<ISqlQueryGenerator> sqlGeneratorFunc)
         {
             var builder = _serviceProvider.GetService<CommandBuilder>();
 
-            builder.Initialize(sqlGeneratorFactory);
+            builder.Initialize(sqlGeneratorFunc);
 
             return builder;
         }

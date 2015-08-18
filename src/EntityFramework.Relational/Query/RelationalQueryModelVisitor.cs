@@ -30,9 +30,12 @@ namespace Microsoft.Data.Entity.Query
         private readonly Dictionary<IQuerySource, RelationalQueryModelVisitor> _subQueryModelVisitorsBySource
             = new Dictionary<IQuerySource, RelationalQueryModelVisitor>();
 
+        private readonly IRelationalMetadataExtensionProvider _relationalMetadataExtensionProvider;
         private readonly IIncludeExpressionVisitorFactory _includeExpressionVisitorFactory;
         private readonly ISqlTranslatingExpressionVisitorFactory _sqlTranslatingExpressionVisitorFactory;
         private readonly ICompositePredicateExpressionVisitorFactory _compositePredicateExpressionVisitorFactory;
+        private readonly IQueryFlatteningExpressionVisitorFactory _queryFlatteningExpressionVisitorFactory;
+        private readonly IShapedQueryFindingExpressionVisitorFactory _shapedQueryFindingExpressionVisitorFactory;
 
         private RelationalQueryModelVisitor _parentQueryModelVisitor;
 
@@ -53,9 +56,12 @@ namespace Microsoft.Data.Entity.Query
             [NotNull] IQueryAnnotationExtractor queryAnnotationExtractor,
             [NotNull] IResultOperatorHandler resultOperatorHandler,
             [NotNull] IEntityMaterializerSource entityMaterializerSource,
+            [NotNull] IRelationalMetadataExtensionProvider relationalMetadataExtensionProvider,
             [NotNull] IIncludeExpressionVisitorFactory includeExpressionVisitorFactory,
             [NotNull] ISqlTranslatingExpressionVisitorFactory sqlTranslatingExpressionVisitorFactory,
-            [NotNull] ICompositePredicateExpressionVisitorFactory compositePredicateExpressionVisitorFactory)
+            [NotNull] ICompositePredicateExpressionVisitorFactory compositePredicateExpressionVisitorFactory,
+            [NotNull] IQueryFlatteningExpressionVisitorFactory queryFlatteningExpressionVisitorFactory,
+            [NotNull] IShapedQueryFindingExpressionVisitorFactory shapedQueryFindingExpressionVisitorFactory)
             : base(
                   model,
                   queryOptimizer,
@@ -67,13 +73,19 @@ namespace Microsoft.Data.Entity.Query
                   resultOperatorHandler,
                   entityMaterializerSource)
         {
+            Check.NotNull(relationalMetadataExtensionProvider, nameof(relationalMetadataExtensionProvider));
             Check.NotNull(includeExpressionVisitorFactory, nameof(includeExpressionVisitorFactory));
             Check.NotNull(sqlTranslatingExpressionVisitorFactory, nameof(sqlTranslatingExpressionVisitorFactory));
             Check.NotNull(compositePredicateExpressionVisitorFactory, nameof(compositePredicateExpressionVisitorFactory));
+            Check.NotNull(queryFlatteningExpressionVisitorFactory, nameof(queryFlatteningExpressionVisitorFactory));
+            Check.NotNull(shapedQueryFindingExpressionVisitorFactory, nameof(shapedQueryFindingExpressionVisitorFactory));
 
+            _relationalMetadataExtensionProvider = relationalMetadataExtensionProvider;
             _includeExpressionVisitorFactory = includeExpressionVisitorFactory;
             _sqlTranslatingExpressionVisitorFactory = sqlTranslatingExpressionVisitorFactory;
             _compositePredicateExpressionVisitorFactory = compositePredicateExpressionVisitorFactory;
+            _queryFlatteningExpressionVisitorFactory = queryFlatteningExpressionVisitorFactory;
+            _shapedQueryFindingExpressionVisitorFactory = shapedQueryFindingExpressionVisitorFactory;
         }
 
         public virtual bool RequiresClientEval { get; set; }
@@ -298,7 +310,7 @@ namespace Microsoft.Data.Entity.Query
                         _queriesBySource.Remove(fromClause);
 
                         Expression
-                            = new QueryFlatteningExpressionVisitor(
+                            = _queryFlatteningExpressionVisitorFactory.Create(
                                 previousQuerySource,
                                 fromClause,
                                 QueryCompilationContext,
@@ -439,7 +451,7 @@ namespace Microsoft.Data.Entity.Query
                         joinExpression.Predicate = predicate;
 
                         Expression
-                            = new QueryFlatteningExpressionVisitor(
+                            = _queryFlatteningExpressionVisitorFactory.Create(
                                 previousQuerySource,
                                 joinClause,
                                 QueryCompilationContext,
@@ -481,7 +493,7 @@ namespace Microsoft.Data.Entity.Query
                 _subqueriesBySource.Remove(querySource);
 
                 var shapedQueryMethodExpression
-                    = new ShapedQueryFindingExpressionVisitor(QueryCompilationContext)
+                    = _shapedQueryFindingExpressionVisitorFactory.Create(QueryCompilationContext)
                         .Find(expression);
 
                 var shaperLambda = (LambdaExpression)shapedQueryMethodExpression.Arguments[2];
@@ -744,10 +756,7 @@ namespace Microsoft.Data.Entity.Query
 
                         selectExpression
                             .AddToProjection(
-                                QueryCompilationContext
-                                    .RelationalServices
-                                    .RelationalExtensions
-                                    .For(property).ColumnName,
+                                _relationalMetadataExtensionProvider.For(property).ColumnName,
                                 property,
                                 querySource);
                     }
@@ -762,10 +771,7 @@ namespace Microsoft.Data.Entity.Query
                     = ParentQueryModelVisitor?.TryGetQuery(querySource);
 
                 selectExpression?.AddToProjection(
-                    QueryCompilationContext
-                        .RelationalServices
-                        .RelationalExtensions
-                        .For(property).ColumnName,
+                    _relationalMetadataExtensionProvider.For(property).ColumnName,
                     property,
                     querySource);
             }

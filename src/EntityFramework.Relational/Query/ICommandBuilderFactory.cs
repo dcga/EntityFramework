@@ -9,6 +9,6 @@ namespace Microsoft.Data.Entity.Query
 {
     public interface ICommandBuilderFactory
     {
-        CommandBuilder Create([NotNull] Func<ISqlQueryGenerator> sqlGeneratorFactory);
+        CommandBuilder Create([NotNull] Func<ISqlQueryGenerator> sqlGeneratorFunc);
     }
 }
