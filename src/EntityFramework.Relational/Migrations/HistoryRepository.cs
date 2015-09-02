@@ -21,7 +21,7 @@ namespace Microsoft.Data.Entity.Migrations
     // TODO: Leverage update pipeline for GetInsertScript & GetDeleteScript
     public abstract class HistoryRepository : IHistoryRepository
     {
-        public const string DefaultTableName = "__MigrationHistory";
+        public const string DefaultTableName = "__EFMigrationsHistory";
 
         private readonly IRelationalDatabaseCreator _databaseCreator;
         private readonly ISqlStatementExecutor _executor;
@@ -81,7 +81,7 @@ namespace Microsoft.Data.Entity.Migrations
                 () => annotations.For(entityType.Value.FindProperty(nameof(HistoryRow.ProductVersion))).ColumnName);
         }
 
-        protected IUpdateSqlGenerator Sql { get; }
+        protected virtual IUpdateSqlGenerator Sql { get; }
         protected virtual string TableName { get; }
         protected virtual string TableSchema { get; }
         protected virtual string MigrationIdColumnName => _migrationIdColumnName.Value;
@@ -90,25 +90,26 @@ namespace Microsoft.Data.Entity.Migrations
         protected abstract string ExistsSql { get; }
 
         public virtual bool Exists()
-            => _databaseCreator.Exists() && Exists(_executor.ExecuteScalar(_connection, null, ExistsSql));
+            => _databaseCreator.Exists() && InterpretExistsResult(_executor.ExecuteScalar(_connection, ExistsSql));
 
-        protected abstract bool Exists(object value);
+        /// <returns>true if the table exists; otherwise, false.</returns>
+        protected abstract bool InterpretExistsResult([NotNull] object value);
 
         public abstract string GetCreateIfNotExistsScript();
 
         public virtual string GetCreateScript()
         {
             var operations = _modelDiffer.GetDifferences(null, _model.Value);
-            var batches = _migrationsSqlGenerator.Generate(operations, _model.Value);
-            if (batches.Count != 1 || batches[0].SuppressTransaction)
+            var commands = _migrationsSqlGenerator.Generate(operations, _model.Value);
+            if (commands.Count != 1)
             {
                 throw new InvalidOperationException(Strings.InvalidCreateScript);
             }
 
-            return batches[0].Sql;
+            return commands[0].CommandText;
         }
 
-        protected virtual void ConfigureTable(EntityTypeBuilder<HistoryRow> history)
+        protected virtual void ConfigureTable([NotNull] EntityTypeBuilder<HistoryRow> history)
         {
             history.ToTable(DefaultTableName);
             history.Key(h => h.MigrationId);
@@ -125,7 +126,7 @@ namespace Microsoft.Data.Entity.Migrations
                 _connection.Open();
                 try
                 {
-                    using (var reader = _executor.ExecuteReader(_connection, null, GetAppliedMigrationsSql))
+                    using (var reader = _executor.ExecuteReader(_connection, GetAppliedMigrationsSql))
                     {
                         while (reader.Read())
                         {
@@ -170,7 +171,7 @@ namespace Microsoft.Data.Entity.Migrations
                 .Append(Sql.EscapeLiteral(row.MigrationId))
                 .Append("', '")
                 .Append(Sql.EscapeLiteral(row.ProductVersion))
-                .Append("');")
+                .AppendLine("');")
                 .ToString();
         }
 
@@ -184,7 +185,7 @@ namespace Microsoft.Data.Entity.Migrations
                 .Append(Sql.DelimitIdentifier(MigrationIdColumnName))
                 .Append(" = '")
                 .Append(Sql.EscapeLiteral(migrationId))
-                .Append("';")
+                .AppendLine("';")
                 .ToString();
         }
 

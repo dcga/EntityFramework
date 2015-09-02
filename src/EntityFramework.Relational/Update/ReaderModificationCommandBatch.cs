@@ -3,16 +3,15 @@
 
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Data.Common;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Relational.Internal;
 using Microsoft.Data.Entity.Storage;
+using Microsoft.Data.Entity.Storage.Commands;
 using Microsoft.Data.Entity.Utilities;
 using Microsoft.Framework.Logging;
 
@@ -21,7 +20,7 @@ namespace Microsoft.Data.Entity.Update
     public abstract class ReaderModificationCommandBatch : ModificationCommandBatch
     {
         private readonly List<ModificationCommand> _modificationCommands = new List<ModificationCommand>();
-        protected StringBuilder CachedCommandText { get; set; }
+        protected virtual StringBuilder CachedCommandText { get; [param: NotNull] set; }
         protected int LastCachedCommandIndex;
 
         protected ReaderModificationCommandBatch(
@@ -101,51 +100,47 @@ namespace Microsoft.Data.Entity.Update
 
         protected virtual DbCommand CreateStoreCommand(
             [NotNull] string commandText,
-            [NotNull] DbTransaction transaction,
+            [NotNull] IRelationalConnection connection,
             [NotNull] IRelationalTypeMapper typeMapper,
             int? commandTimeout)
         {
-            var command = transaction.Connection.CreateCommand();
-            command.CommandType = CommandType.Text;
-            command.CommandText = commandText;
-            command.Transaction = transaction;
+            var commandBuilder = new RelationalCommandBuilder();
+
+            commandBuilder.Append(commandText);
+
+            foreach (var columnModification in ModificationCommands.SelectMany(t => t.ColumnModifications))
+            {
+                PopulateParameters(commandBuilder.RelationalParameterList, columnModification);
+            }
+
+            var command = commandBuilder.RelationalCommand.CreateDbCommand(connection, typeMapper);
 
             if (commandTimeout != null)
             {
                 command.CommandTimeout = (int)commandTimeout;
             }
 
-            foreach (var columnModification in ModificationCommands.SelectMany(t => t.ColumnModifications))
-            {
-                PopulateParameters(command, columnModification, typeMapper);
-            }
-
             return command;
         }
 
-        protected virtual void PopulateParameters(DbCommand command, ColumnModification columnModification, IRelationalTypeMapper typeMapper)
+        protected virtual void PopulateParameters(
+            [NotNull] RelationalParameterList parameterList,
+            [NotNull] ColumnModification columnModification)
         {
-            var parameterName = columnModification.ParameterName;
-            var originalParameterName = columnModification.OriginalParameterName;
-
-            if (parameterName != null
-                || originalParameterName != null)
+            if (columnModification.ParameterName != null)
             {
-                var property = columnModification.Property;
+                parameterList.GetOrAdd(
+                    columnModification.ParameterName,
+                    columnModification.Value,
+                    columnModification.Property);
+            }
 
-                var typeMapping = typeMapper.MapPropertyType(property);
-
-                if (parameterName != null)
-                {
-                    command.Parameters.Add(
-                        typeMapping.CreateParameter(command, parameterName, columnModification.Value, property.IsNullable));
-                }
-
-                if (originalParameterName != null)
-                {
-                    command.Parameters.Add(
-                        typeMapping.CreateParameter(command, originalParameterName, columnModification.OriginalValue, property.IsNullable));
-                }
+            if (columnModification.OriginalParameterName != null)
+            {
+                parameterList.GetOrAdd(
+                    columnModification.OriginalParameterName,
+                    columnModification.OriginalValue,
+                    columnModification.Property);
             }
         }
 
@@ -162,7 +157,7 @@ namespace Microsoft.Data.Entity.Update
 
             var commandText = GetCommandText();
 
-            using (var storeCommand = CreateStoreCommand(commandText, transaction.DbTransaction, typeMapper, transaction.Connection?.CommandTimeout))
+            using (var storeCommand = CreateStoreCommand(commandText, transaction.Connection, typeMapper, transaction.Connection?.CommandTimeout))
             {
                 if (logger.IsEnabled(LogLevel.Verbose))
                 {
@@ -201,7 +196,7 @@ namespace Microsoft.Data.Entity.Update
 
             var commandText = GetCommandText();
 
-            using (var storeCommand = CreateStoreCommand(commandText, transaction.DbTransaction, typeMapper, transaction.Connection?.CommandTimeout))
+            using (var storeCommand = CreateStoreCommand(commandText, transaction.Connection, typeMapper, transaction.Connection?.CommandTimeout))
             {
                 if (logger.IsEnabled(LogLevel.Verbose))
                 {
@@ -226,11 +221,11 @@ namespace Microsoft.Data.Entity.Update
             }
         }
 
-        protected abstract void Consume(DbDataReader reader, DbContext context);
+        protected abstract void Consume([NotNull] DbDataReader reader, [NotNull] DbContext context);
 
         protected abstract Task ConsumeAsync(
-            DbDataReader reader,
-            DbContext context,
+            [NotNull] DbDataReader reader,
+            [NotNull] DbContext context,
             CancellationToken cancellationToken = default(CancellationToken));
     }
 }

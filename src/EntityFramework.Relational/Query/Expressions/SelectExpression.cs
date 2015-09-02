@@ -9,6 +9,7 @@ using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Query.Sql;
+using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses;
 
@@ -44,9 +45,10 @@ namespace Microsoft.Data.Entity.Query.Expressions
             : base(null, Check.NotEmpty(alias, nameof(alias)))
         {
         }
+
         public override Type Type => _projection.Count == 1
-          ? _projection[0].Type
-          : base.Type;
+            ? _projection[0].Type
+            : base.Type;
 
         public virtual SelectExpression Clone([NotNull] string alias)
         {
@@ -54,14 +56,14 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
             var selectExpression
                 = new SelectExpression(alias)
-                {
-                    _limit = _limit,
-                    _offset = _offset,
-                    _isDistinct = _isDistinct,
-                    _subqueryDepth = _subqueryDepth,
-                    _projectStar = _projectStar,
-                    Predicate = Predicate
-                };
+                    {
+                        _limit = _limit,
+                        _offset = _offset,
+                        _isDistinct = _isDistinct,
+                        _subqueryDepth = _subqueryDepth,
+                        _projectStar = _projectStar,
+                        Predicate = Predicate
+                    };
 
             selectExpression._projection.AddRange(_projection);
 
@@ -241,7 +243,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
             subquery.AddTables(_tables);
             subquery.AddToOrderBy(_orderBy);
             subquery.Predicate = Predicate;
-            
+
             subquery._limit = _limit;
             subquery._offset = _offset;
             subquery._isDistinct = _isDistinct;
@@ -251,7 +253,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
             _limit = null;
             _offset = null;
             _isDistinct = false;
-            
+
             Predicate = null;
             ClearTables();
             ClearProjection();
@@ -306,6 +308,11 @@ namespace Microsoft.Data.Entity.Query.Expressions
                 return AddToProjection(aliasExpression);
             }
 
+            if (expression is SelectExpression)
+            {
+                ClearProjection();
+            }
+
             _projection.Add(expression);
 
             _projectStar = false;
@@ -313,7 +320,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
             return _projection.Count - 1;
         }
 
-        public virtual int AddToProjection([NotNull] AliasExpression aliasExpression) 
+        public virtual int AddToProjection([NotNull] AliasExpression aliasExpression)
             => AddAliasToProjection(aliasExpression.Alias, aliasExpression.Expression);
 
         public virtual int AddAliasToProjection([CanBeNull] string alias, [NotNull] Expression expression)
@@ -553,9 +560,9 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
                     _projection.Add(
                         new AliasExpression(aliasExpression.Alias, expression)
-                        {
-                            SourceMember = aliasExpression.SourceMember
-                        });
+                            {
+                                SourceMember = aliasExpression.SourceMember
+                            });
                 }
 
                 _projectStar = false;
@@ -618,7 +625,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
             return AddOuterJoin(tableExpression, Enumerable.Empty<AliasExpression>());
         }
-        
+
         public virtual JoinExpressionBase AddOuterJoin(
             [NotNull] TableExpressionBase tableExpression,
             [NotNull] IEnumerable<Expression> projection)
@@ -690,7 +697,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
                 ? specificVisitor.VisitSelect(this)
                 : base.Accept(visitor);
         }
-        
+
         protected override Expression VisitChildren(ExpressionVisitor visitor)
         {
             foreach (var expression in Projection)
@@ -713,8 +720,17 @@ namespace Microsoft.Data.Entity.Query.Expressions
             return this;
         }
 
-        public override string ToString() 
-            => new DefaultQuerySqlGenerator(this, null).GenerateSql(new Dictionary<string, object>());
+        // TODO: Use generator from DI
+        public override string ToString()
+            => new DefaultQuerySqlGenerator(this, new NullTypeMapper())
+                .GenerateSql(new Dictionary<string, object>()).CommandText;
+
+        private class NullTypeMapper : IRelationalTypeMapper
+        {
+            public RelationalTypeMapping MapPropertyType(IProperty property) => new RelationalTypeMapping("?");
+
+            public RelationalTypeMapping GetDefaultMapping(Type clrType) => new RelationalTypeMapping("?");
+        }
 
         // TODO: Make polymorphic
         public virtual Expression UpdateColumnExpression(
@@ -738,9 +754,9 @@ namespace Microsoft.Data.Entity.Query.Expressions
                     = new AliasExpression(
                         aliasExpression.Alias,
                         UpdateColumnExpression(aliasExpression.Expression, tableExpression))
-                    {
-                        SourceMember = aliasExpression.SourceMember
-                    };
+                        {
+                            SourceMember = aliasExpression.SourceMember
+                        };
 
                 return newAliasExpression;
             }

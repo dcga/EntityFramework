@@ -15,7 +15,8 @@ namespace Microsoft.Data.Entity.Metadata.Internal
     public class EntityMaterializerSource : IEntityMaterializerSource
     {
         private static readonly MethodInfo _readValue
-            = typeof(ValueBuffer).GetTypeInfo().DeclaredProperties.Single(p => p.GetIndexParameters().Any()).GetMethod;
+            = typeof(ValueBuffer).GetTypeInfo().DeclaredProperties
+                .Single(p => p.GetIndexParameters().Any()).GetMethod;
 
         private readonly IMemberMapper _memberMapper;
 
@@ -24,30 +25,11 @@ namespace Microsoft.Data.Entity.Metadata.Internal
             _memberMapper = memberMapper;
         }
 
-        public virtual Expression CreateReadValueExpression(Expression valueBuffer, Type type, int index)
-        {
-            Expression expression = Expression.Call(valueBuffer, _readValue, Expression.Constant(index));
+        public virtual Expression CreateReadValueExpression(Expression valueBuffer, Type type, int index) 
+            => Expression.Convert(CreateReadValueCallExpression(valueBuffer, index), type);
 
-            if (type.IsNullableType())
-            {
-                var underlyingType = type.UnwrapNullableType();
-                if (underlyingType.GetTypeInfo().IsEnum)
-                {
-                    return Expression.Condition(
-                        Expression.ReferenceEqual(
-                            expression,
-                            Expression.Constant(null)),
-                        Expression.Constant(null, type),
-                        Expression.Convert(
-                            Expression.Convert(
-                                expression,
-                                underlyingType.UnwrapEnumType()),
-                            type));
-                }
-            }
-
-            return Expression.Convert(expression, type);
-        }
+        public virtual Expression CreateReadValueCallExpression(Expression valueBuffer, int index) 
+            => Expression.Call(valueBuffer, _readValue, Expression.Constant(index));
 
         public virtual Expression CreateMaterializeExpression(
             IEntityType entityType,

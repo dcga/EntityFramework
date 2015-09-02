@@ -6,6 +6,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Migrations;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Framework.DependencyInjection;
@@ -17,11 +18,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
         where TFixture : MigrationsFixtureBase, new()
     {
         private readonly TFixture _fixture;
+        private string _sql;
 
         public MigrationsTestBase(TFixture fixture)
         {
             _fixture = fixture;
         }
+
+        protected string Sql => _sql;
 
         [Fact]
         public void Can_apply_all_migrations()
@@ -91,6 +95,57 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
+        [Fact]
+        public virtual void Can_generate_up_scripts()
+        {
+            using (var db = _fixture.CreateContext())
+            {
+                var migrator = db.GetService().GetRequiredService<IMigrator>();
+
+                SetSql(migrator.GenerateScript());
+            }
+        }
+
+        [Fact]
+        public virtual void Can_generate_idempotent_up_scripts()
+        {
+            using (var db = _fixture.CreateContext())
+            {
+                var migrator = db.GetService().GetRequiredService<IMigrator>();
+
+                SetSql(migrator.GenerateScript(idempotent: true));
+            }
+        }
+
+        [Fact]
+        public virtual void Can_generate_down_scripts()
+        {
+            using (var db = _fixture.CreateContext())
+            {
+                var migrator = db.GetService().GetRequiredService<IMigrator>();
+
+                SetSql(
+                    migrator.GenerateScript(
+                        fromMigration: "Migration2",
+                        toMigration: Migration.InitialDatabase));
+            }
+        }
+
+        [Fact]
+        public virtual void Can_generate_idempotent_down_scripts()
+        {
+            using (var db = _fixture.CreateContext())
+            {
+                var migrator = db.GetService().GetRequiredService<IMigrator>();
+
+                SetSql(
+                    migrator.GenerateScript(
+                        fromMigration: "Migration2",
+                        toMigration: Migration.InitialDatabase,
+                        idempotent: true));
+            }
+        }
+
         /// <remarks>
         ///     Creating databases and executing DDL is slow. This oddly-structured test allows us to get the most ammount of
         ///     coverage using the least ammount of database operations.
@@ -125,11 +180,11 @@ namespace Microsoft.Data.Entity.FunctionalTests
             buildMigration(migrationBuilder);
             var operations = migrationBuilder.Operations.ToList();
 
-            var batches = generator.Generate(operations, model: null);
+            var commands = generator.Generate(operations, model: null);
 
             using (var transaction = await connection.BeginTransactionAsync())
             {
-                await executor.ExecuteNonQueryAsync(connection, transaction.DbTransaction, batches);
+                await executor.ExecuteNonQueryAsync(connection, commands);
                 transaction.Commit();
             }
         }
@@ -140,9 +195,9 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 name: "CreatedTable",
                 columns: x => new
                 {
-                    Id = x.Column<int>(isNullable: false),
-                    ColumnWithDefaultToDrop = x.Column<int>(isNullable: true, defaultValue: 0),
-                    ColumnWithDefaultToAlter = x.Column<int>(isNullable: true, defaultValue: 1)
+                    Id = x.Column<int>(nullable: false),
+                    ColumnWithDefaultToDrop = x.Column<int>(nullable: true, defaultValue: 0),
+                    ColumnWithDefaultToAlter = x.Column<int>(nullable: true, defaultValue: 1)
                 },
                 constraints: x =>
                 {
@@ -171,7 +226,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             migrationBuilder.AlterColumn<int>(
                 name: "ColumnWithDefaultToAlter",
                 table: "CreatedTable",
-                isNullable: true);
+                nullable: true);
         }
 
         protected virtual Task AssertSecondMigrationAsync(DbConnection connection)
@@ -184,5 +239,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         protected virtual void AssertSecondMigration(DbConnection connection)
         {
         }
+
+        private void SetSql(string value) => _sql = value.Replace(ProductInfo.GetVersion(), "7.0.0-test");
     }
 }

@@ -18,7 +18,7 @@ using Microsoft.Framework.Logging;
 
 namespace Microsoft.Data.Entity.SqlServer.Design.ReverseEngineering
 {
-    public class SqlServerMetadataModelProvider : ReverseEngineeringMetadataModelProvider
+    public class SqlServerMetadataModelProvider : RelationalMetadataModelProvider
     {
         private static readonly List<string> DataTypesForNumericPrecisionAndScale = new List<string> { "decimal", "numeric" };
         private static readonly List<string> DataTypesForDateTimePrecisionAndScale = new List<string> { "datetime2" };
@@ -40,18 +40,21 @@ namespace Microsoft.Data.Entity.SqlServer.Design.ReverseEngineering
         private readonly Dictionary<string, EntityType> _tableIdToEntityType = new Dictionary<string, EntityType>();
         private readonly Dictionary<string, Property> _columnIdToProperty = new Dictionary<string, Property>();
 
-        public SqlServerMetadataModelProvider([NotNull] ILogger logger, [NotNull] ModelUtilities modelUtilities)
+        public SqlServerMetadataModelProvider(
+            [NotNull] ILogger logger,
+            [NotNull] ModelUtilities modelUtilities,
+            [NotNull] IRelationalMetadataExtensionProvider extensionsProvider,
+            [NotNull] SqlServerLiteralUtilities sqlServerLiteralUtilities)
             : base(logger, modelUtilities)
         {
-            _sqlServerLiteralUtilities = new SqlServerLiteralUtilities(logger);
+            Check.NotNull(extensionsProvider, nameof(extensionsProvider));
+            Check.NotNull(sqlServerLiteralUtilities, nameof(sqlServerLiteralUtilities));
+
+            ExtensionsProvider = extensionsProvider;
+            _sqlServerLiteralUtilities = sqlServerLiteralUtilities;
         }
 
-        protected override IRelationalMetadataExtensionProvider ExtensionsProvider => new SqlServerMetadataExtensionProvider();
-
-        public override DbContextCodeGeneratorHelper DbContextCodeGeneratorHelper(DbContextGeneratorModel model)
-        {
-            return new SqlServerDbContextCodeGeneratorHelper(model, ExtensionsProvider);
-        }
+        protected override IRelationalMetadataExtensionProvider ExtensionsProvider { get; }
 
         public override IModel ConstructRelationalModel([NotNull] string connectionString)
         {
@@ -212,7 +215,7 @@ namespace Microsoft.Data.Entity.SqlServer.Design.ReverseEngineering
                         Strings.CannotFindTableForColumn(tc.Id, tc.TableId));
                     continue;
                 }
-                
+
                 // If we come across a column with a SQL Server type which we can't map we will ignore it.
                 // Note: foreign key properties appear just like any other property in the relational model.
                 Type clrPropertyType;

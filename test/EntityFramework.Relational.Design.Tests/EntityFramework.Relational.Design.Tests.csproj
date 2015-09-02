@@ -33,10 +33,7 @@
   <ItemGroup>
     <Compile Include="ApiConsistencyTest.cs" />
     <Compile Include="NullLogger.cs" />
-    <Compile Include="ReverseEngineering\NullDatabaseMetadataModelProvider.cs" />
-    <Compile Include="ReverseEngineering\NullFileService.cs" />
-    <Compile Include="ReverseEngineering\ReverseEngineeringGeneratorTests.cs" />
-    <None Include="App.config" />
+    <Compile Include="ReverseEngineering\ReverseEngineeringConfigurationTests.cs" />
     <None Include="project.json" />
   </ItemGroup>
   <ItemGroup>

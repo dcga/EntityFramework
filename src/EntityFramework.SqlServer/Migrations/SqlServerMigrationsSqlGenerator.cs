@@ -48,9 +48,9 @@ namespace Microsoft.Data.Entity.Migrations
         }
 
         protected override void Generate(
-            [NotNull] AlterColumnOperation operation,
-            [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder)
+            AlterColumnOperation operation,
+            IModel model,
+            SqlBatchBuilder builder)
         {
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
@@ -91,9 +91,9 @@ namespace Microsoft.Data.Entity.Migrations
         }
 
         protected override void Generate(
-            [NotNull] RenameIndexOperation operation,
-            [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder)
+            RenameIndexOperation operation,
+            IModel model,
+            SqlBatchBuilder builder)
         {
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
@@ -149,9 +149,9 @@ namespace Microsoft.Data.Entity.Migrations
         }
 
         protected override void Generate(
-            [NotNull] RenameTableOperation operation,
-            [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder)
+            RenameTableOperation operation,
+            IModel model,
+            SqlBatchBuilder builder)
         {
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
@@ -186,6 +186,28 @@ namespace Microsoft.Data.Entity.Migrations
             }
         }
 
+        protected override void Generate(CreateIndexOperation operation, IModel model, SqlBatchBuilder builder)
+        {
+            base.Generate(operation, model, builder);
+
+            var clustered = operation[SqlServerAnnotationNames.Prefix + SqlServerAnnotationNames.Clustered] as bool?;
+            if (operation.IsUnique && clustered != true)
+            {
+                builder.Append(" WHERE ");
+                for (var i = 0; i < operation.Columns.Length; i++)
+                {
+                    if (i != 0)
+                    {
+                        builder.Append(" AND ");
+                    }
+
+                    builder
+                        .Append(base.Sql.DelimitIdentifier(operation.Columns[i]))
+                        .Append(" IS NOT NULL");
+                }
+            }
+        }
+
         protected override void Generate(EnsureSchemaOperation operation, IModel model, SqlBatchBuilder builder)
         {
             Check.NotNull(operation, nameof(operation));
@@ -215,6 +237,7 @@ namespace Microsoft.Data.Entity.Migrations
             builder
                 .Append("CREATE DATABASE ")
                 .Append(Sql.DelimitIdentifier(operation.Name))
+                .AppendLine(Sql.BatchCommandSeparator)
                 .EndBatch()
                 .Append("IF SERVERPROPERTY('EngineEdition') <> 5 EXEC(N'ALTER DATABASE ")
                 .Append(Sql.DelimitIdentifier(operation.Name))
@@ -233,15 +256,16 @@ namespace Microsoft.Data.Entity.Migrations
                 .Append("IF SERVERPROPERTY('EngineEdition') <> 5 EXEC(N'ALTER DATABASE ")
                 .Append(Sql.DelimitIdentifier(operation.Name))
                 .Append(" SET SINGLE_USER WITH ROLLBACK IMMEDIATE')")
+                .AppendLine(Sql.BatchCommandSeparator)
                 .EndBatch()
                 .Append("DROP DATABASE ")
                 .Append(Sql.DelimitIdentifier(operation.Name));
         }
 
         protected override void Generate(
-            [NotNull] DropIndexOperation operation,
-            [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder)
+            DropIndexOperation operation,
+            IModel model,
+            SqlBatchBuilder builder)
         {
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
@@ -254,9 +278,9 @@ namespace Microsoft.Data.Entity.Migrations
         }
 
         protected override void Generate(
-            [NotNull] DropColumnOperation operation,
-            [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder)
+            DropColumnOperation operation,
+            IModel model,
+            SqlBatchBuilder builder)
         {
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
@@ -266,9 +290,9 @@ namespace Microsoft.Data.Entity.Migrations
         }
 
         protected override void Generate(
-            [NotNull] RenameColumnOperation operation,
-            [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder)
+            RenameColumnOperation operation,
+            IModel model,
+            SqlBatchBuilder builder)
         {
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
@@ -322,19 +346,19 @@ namespace Microsoft.Data.Entity.Migrations
         }
 
         protected virtual void ColumnDefinition(
-            string schema,
-            string table,
-            string name,
-            Type clrType,
-            string type,
+            [CanBeNull] string schema,
+            [CanBeNull] string table,
+            [NotNull] string name,
+            [NotNull] Type clrType,
+            [CanBeNull] string type,
             bool nullable,
-            object defaultValue,
-            string defaultValueSql,
-            string computedColumnSql,
+            [CanBeNull] object defaultValue,
+            [CanBeNull] string defaultValueSql,
+            [CanBeNull] string computedColumnSql,
             bool identity,
-            IAnnotatable annotatable,
-            IModel model,
-            SqlBatchBuilder builder)
+            [NotNull] IAnnotatable annotatable,
+            [CanBeNull] IModel model,
+            [NotNull] SqlBatchBuilder builder)
         {
             Check.NotEmpty(name, nameof(name));
             Check.NotNull(clrType, nameof(clrType));

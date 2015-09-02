@@ -9,6 +9,7 @@ using Microsoft.Data.Entity.Commands.Utilities;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Migrations;
+using Microsoft.Data.Entity.Migrations.Internal;
 using Microsoft.Data.Entity.Migrations.Operations;
 using Xunit;
 
@@ -48,8 +49,7 @@ namespace MyNamespace
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.Sql(
-                ""-- TEST"")
+            migrationBuilder.Sql(""-- TEST"")
                 .Annotation(""Some:EnumValue"", RegexOptions.Multiline);
         }
 
@@ -79,13 +79,9 @@ using System.Text.RegularExpressions;
 namespace MyNamespace
 {
     [DbContext(typeof(CodeCompilationTest.MyContext))]
+    [Migration(""20150511161616_MyMigration"")]
     partial class MyMigration
     {
-        public override string Id
-        {
-            get { return ""20150511161616_MyMigration""; }
-        }
-
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
             modelBuilder
@@ -123,7 +119,7 @@ namespace MyNamespace
 
             var migration = (Migration)Activator.CreateInstance(migrationType);
 
-            Assert.Equal("20150511161616_MyMigration", migration.Id);
+            Assert.Equal("20150511161616_MyMigration", migration.GetId());
 
             Assert.Equal(1, migration.UpOperations.Count);
             Assert.Empty(migration.DownOperations);

@@ -139,7 +139,7 @@ namespace Microsoft.Data.Entity.SqlServer.FunctionalTests
             var selectExpression = new SelectExpression();
 
             return new CommandBuilder(
-                () => new DefaultQuerySqlGenerator(selectExpression, new SqlServerTypeMapper()), new UntypedValueBufferFactoryFactory());
+                () => new DefaultQuerySqlGenerator(selectExpression, new SqlServerTypeMapper()), new UntypedRelationalValueBufferFactoryFactory());
         }
 
         [Fact]
@@ -338,8 +338,8 @@ namespace Microsoft.Data.Entity.SqlServer.FunctionalTests
             var text = source.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
 
             var matchQuery = from word in text
-                where word.Contains(searchTerm)
-                select word;
+                             where word.Contains(searchTerm)
+                             select word;
 
             return matchQuery.Count();
         }
@@ -348,10 +348,10 @@ namespace Microsoft.Data.Entity.SqlServer.FunctionalTests
 
         public class TestSqlServerModificationCommandBatch : SqlServerModificationCommandBatch
         {
-            protected override DbCommand CreateStoreCommand(string commandText, DbTransaction transaction, IRelationalTypeMapper typeMapper, int? commandTimeout)
+            protected override DbCommand CreateStoreCommand(string commandText, IRelationalConnection connection, IRelationalTypeMapper typeMapper, int? commandTimeout)
             {
                 GlobalCommandTimeout = commandTimeout;
-                return base.CreateStoreCommand(commandText, transaction, typeMapper, commandTimeout);
+                return base.CreateStoreCommand(commandText, connection, typeMapper, commandTimeout);
             }
 
             public TestSqlServerModificationCommandBatch(

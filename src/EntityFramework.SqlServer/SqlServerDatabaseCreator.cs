@@ -6,21 +6,18 @@ using System.Data.SqlClient;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Migrations;
 using Microsoft.Data.Entity.Migrations.Operations;
 using Microsoft.Data.Entity.Storage;
-using Microsoft.Data.Entity.Utilities;
+using Microsoft.Data.Entity.Storage.Commands;
 
 namespace Microsoft.Data.Entity.SqlServer
 {
     public class SqlServerDatabaseCreator : RelationalDatabaseCreator
     {
         private readonly ISqlServerConnection _connection;
-        private readonly IMigrationsModelDiffer _modelDiffer;
         private readonly IMigrationsSqlGenerator _sqlGenerator;
-        private readonly ISqlStatementExecutor _statementExecutor;
 
         public SqlServerDatabaseCreator(
             [NotNull] ISqlServerConnection connection,
@@ -28,24 +25,17 @@ namespace Microsoft.Data.Entity.SqlServer
             [NotNull] IMigrationsSqlGenerator sqlGenerator,
             [NotNull] ISqlStatementExecutor statementExecutor,
             [NotNull] IModel model)
-            : base(model)
+            : base(model, connection, modelDiffer, sqlGenerator, statementExecutor)
         {
-            Check.NotNull(connection, nameof(connection));
-            Check.NotNull(modelDiffer, nameof(modelDiffer));
-            Check.NotNull(sqlGenerator, nameof(sqlGenerator));
-            Check.NotNull(statementExecutor, nameof(statementExecutor));
-
             _connection = connection;
-            _modelDiffer = modelDiffer;
             _sqlGenerator = sqlGenerator;
-            _statementExecutor = statementExecutor;
         }
 
         public override void Create()
         {
             using (var masterConnection = _connection.CreateMasterConnection())
             {
-                _statementExecutor.ExecuteNonQuery(masterConnection, null, CreateCreateOperations());
+                SqlStatementExecutor.ExecuteNonQuery(masterConnection, CreateCreateOperations());
                 ClearPool();
             }
 
@@ -56,42 +46,25 @@ namespace Microsoft.Data.Entity.SqlServer
         {
             using (var masterConnection = _connection.CreateMasterConnection())
             {
-                await _statementExecutor
-                    .ExecuteNonQueryAsync(masterConnection, null, CreateCreateOperations(), cancellationToken);
+                await SqlStatementExecutor
+                    .ExecuteNonQueryAsync(masterConnection, CreateCreateOperations(), cancellationToken);
                 ClearPool();
             }
 
             await ExistsAsync(retryOnNotExists: true, cancellationToken: cancellationToken);
         }
 
-        public override void CreateTables()
-            => _statementExecutor.ExecuteNonQuery(
-                _connection,
-                _connection.DbTransaction,
-                CreateSchemaCommands());
-
-        public override async Task CreateTablesAsync(CancellationToken cancellationToken = default(CancellationToken))
-            => await _statementExecutor
-                .ExecuteNonQueryAsync(
-                    _connection,
-                    _connection.DbTransaction,
-                    CreateSchemaCommands(),
-                    cancellationToken);
-
         public override bool HasTables()
-            => (int)_statementExecutor.ExecuteScalar(_connection, _connection.DbTransaction, CreateHasTablesCommand()) != 0;
+            => (int)SqlStatementExecutor.ExecuteScalar(_connection, CreateHasTablesCommand()) != 0;
 
         public override async Task<bool> HasTablesAsync(CancellationToken cancellationToken = default(CancellationToken))
-            => (int)(await _statementExecutor
-                .ExecuteScalarAsync(_connection, _connection.DbTransaction, CreateHasTablesCommand(), cancellationToken)) != 0;
-
-        private IEnumerable<SqlBatch> CreateSchemaCommands()
-            => _sqlGenerator.Generate(_modelDiffer.GetDifferences(null, Model), Model);
+            => (int)(await SqlStatementExecutor
+                .ExecuteScalarAsync(_connection, CreateHasTablesCommand(), cancellationToken)) != 0;
 
         private string CreateHasTablesCommand()
             => "IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE') SELECT 1 ELSE SELECT 0";
 
-        private IEnumerable<SqlBatch> CreateCreateOperations()
+        private IEnumerable<RelationalCommand> CreateCreateOperations()
             => _sqlGenerator.Generate(new[] { new CreateDatabaseOperation { Name = _connection.DbConnection.Database } });
 
         public override bool Exists()
@@ -190,7 +163,8 @@ namespace Microsoft.Data.Entity.SqlServer
 
             using (var masterConnection = _connection.CreateMasterConnection())
             {
-                _statementExecutor.ExecuteNonQuery(masterConnection, null, CreateDropCommands());
+                SqlStatementExecutor
+                    .ExecuteNonQuery(masterConnection, CreateDropCommands());
             }
         }
 
@@ -200,12 +174,11 @@ namespace Microsoft.Data.Entity.SqlServer
 
             using (var masterConnection = _connection.CreateMasterConnection())
             {
-                await _statementExecutor
-                    .ExecuteNonQueryAsync(masterConnection, null, CreateDropCommands(), cancellationToken);
+                await SqlStatementExecutor.ExecuteNonQueryAsync(masterConnection, CreateDropCommands(), cancellationToken);
             }
         }
 
-        private IEnumerable<SqlBatch> CreateDropCommands()
+        private IEnumerable<RelationalCommand> CreateDropCommands()
         {
             var operations = new MigrationOperation[]
             {

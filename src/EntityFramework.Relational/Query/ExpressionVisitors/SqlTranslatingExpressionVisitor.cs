@@ -11,6 +11,7 @@ using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses;
 using Remotion.Linq.Clauses.Expressions;
 using Remotion.Linq.Clauses.ResultOperators;
+using Remotion.Linq.Clauses.StreamedData;
 using Remotion.Linq.Parsing;
 
 // ReSharper disable AssignNullToNotNullAttribute
@@ -43,6 +44,22 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         }
 
         public virtual Expression ClientEvalPredicate { get; private set; }
+
+        public override Expression Visit(Expression expression)
+        {
+            var translatedExpression
+                = _queryModelVisitor
+                    .QueryCompilationContext
+                    .CompositeExpressionFragmentTranslator
+                    .Translate(expression);
+
+            if (translatedExpression != null && translatedExpression != expression)
+            {
+                return Visit(translatedExpression);
+            }
+
+            return base.Visit(expression);
+        }
 
         protected override Expression VisitBinary(BinaryExpression binaryExpression)
         {
@@ -122,7 +139,12 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 
                     return leftExpression != null
                            && rightExpression != null
-                        ? Expression.MakeBinary(binaryExpression.NodeType, leftExpression, rightExpression)
+                        ? Expression.MakeBinary(
+                            binaryExpression.NodeType, 
+                            leftExpression, 
+                            rightExpression, 
+                            binaryExpression.IsLiftedToNull, 
+                            binaryExpression.Method)
                         : null;
                 }
             }
@@ -130,17 +152,19 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
             return null;
         }
 
-        protected override Expression VisitConditional(ConditionalExpression expression)
+        protected override Expression VisitConditional(ConditionalExpression conditionalExpression)
         {
-            var test = Visit(expression.Test);
-            var ifTrue = Visit(expression.IfTrue);
-            var ifFalse = Visit(expression.IfFalse);
+            Check.NotNull(conditionalExpression, nameof(conditionalExpression));
+
+            var test = Visit(conditionalExpression.Test);
+            var ifTrue = Visit(conditionalExpression.IfTrue);
+            var ifFalse = Visit(conditionalExpression.IfFalse);
 
             if (test != null
                 && ifTrue != null
                 && ifFalse != null)
             {
-                return expression.Update(test, ifTrue, ifFalse);
+                return conditionalExpression.Update(test, ifTrue, ifFalse);
             }
 
             return null;
@@ -376,23 +400,25 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     property,
                     selectExpression.GetTableForQuerySource(querySource)));
 
-        protected override Expression VisitUnary(UnaryExpression expression)
+        protected override Expression VisitUnary(UnaryExpression unaryExpression)
         {
-            switch (expression.NodeType)
+            Check.NotNull(unaryExpression, nameof(unaryExpression));
+
+            switch (unaryExpression.NodeType)
             {
                 case ExpressionType.Not:
                 {
-                    var operand = Visit(expression.Operand);
+                    var operand = Visit(unaryExpression.Operand);
 
                     return Expression.Not(operand);
                 }
                 case ExpressionType.Convert:
                 {
-                    var operand = Visit(expression.Operand);
+                    var operand = Visit(unaryExpression.Operand);
 
                     if (operand != null)
                     {
-                        return Expression.Convert(operand, expression.Type);
+                        return Expression.Convert(operand, unaryExpression.Type);
                     }
 
                     break;
@@ -466,14 +492,21 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                     }
                 }
             }
-            else if (!_inProjection)
+            else if (!(subQueryModel.GetOutputDataInfo() is StreamedSequenceInfo))
             {
+                if (_inProjection
+                    && !(subQueryModel.GetOutputDataInfo() is StreamedScalarValueInfo))
+                {
+                    return null;
+                }
+
                 var querySourceReferenceExpression
                     = subQueryModel.SelectClause.Selector as QuerySourceReferenceExpression;
 
                 if (querySourceReferenceExpression == null
-                    || !_queryModelVisitor.QueryCompilationContext
-                        .QuerySourceRequiresMaterialization(querySourceReferenceExpression.ReferencedQuerySource))
+                    || (_inProjection 
+                        || !_queryModelVisitor.QueryCompilationContext
+                        .QuerySourceRequiresMaterialization(querySourceReferenceExpression.ReferencedQuerySource)))
                 {
                     var queryModelVisitor
                         = (RelationalQueryModelVisitor)_queryModelVisitor.QueryCompilationContext
@@ -483,7 +516,8 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 
                     if (queryModelVisitor.Queries.Count == 1
                         && !queryModelVisitor.RequiresClientFilter
-                        && !queryModelVisitor.RequiresClientProjection)
+                        && !queryModelVisitor.RequiresClientProjection
+                        && !queryModelVisitor.RequiresClientResultOperator)
                     {
                         var selectExpression = queryModelVisitor.Queries.First();
 
@@ -559,8 +593,31 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                 : null;
         }
 
+        protected override Expression VisitExtension(Expression expression)
+        {
+            var stringCompare = expression as StringCompareExpression;
+            if (stringCompare != null)
+            {
+                var newLeft = Visit(stringCompare.Left);
+                var newRight = Visit(stringCompare.Right);
+
+                if (newLeft == null || newRight == null)
+                {
+                    return null;
+                }
+
+                return newLeft != stringCompare.Left || newRight != stringCompare.Right
+                    ? new StringCompareExpression(stringCompare.Operator, newLeft, newRight)
+                    : expression;
+            }
+
+            return base.VisitExtension(expression);
+        }
+
         protected override Expression VisitQuerySourceReference(QuerySourceReferenceExpression querySourceReferenceExpression)
         {
+            Check.NotNull(querySourceReferenceExpression, nameof(querySourceReferenceExpression));
+
             var selector
                 = ((querySourceReferenceExpression.ReferencedQuerySource as FromClauseBase)
                     ?.FromExpression as SubQueryExpression)

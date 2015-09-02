@@ -88,7 +88,7 @@ namespace Microsoft.Data.Entity.Commands.Migrations
                 }
 
                 builder.AppendLine(",")
-                    .Append("isNullable: ")
+                    .Append("nullable: ")
                     .Append(_code.Literal(operation.IsNullable));
 
                 if (operation.DefaultValueSql != null)
@@ -303,7 +303,7 @@ namespace Microsoft.Data.Entity.Commands.Migrations
                 }
 
                 builder.AppendLine(",")
-                    .Append("isNullable: ")
+                    .Append("nullable: ")
                     .Append(_code.Literal(operation.IsNullable));
 
                 if (operation.DefaultValueSql != null)
@@ -383,7 +383,7 @@ namespace Microsoft.Data.Entity.Commands.Migrations
                 {
                     builder
                         .AppendLine(",")
-                        .Append("isCyclic: true");
+                        .Append("cyclic: true");
                 }
 
                 builder.Append(")");
@@ -428,7 +428,7 @@ namespace Microsoft.Data.Entity.Commands.Migrations
                 {
                     builder
                         .AppendLine(",")
-                        .Append("isUnique: true");
+                        .Append("unique: true");
                 }
 
                 builder.Append(")");
@@ -520,7 +520,7 @@ namespace Microsoft.Data.Entity.Commands.Migrations
                 {
                     builder
                         .AppendLine(",")
-                        .Append("isCyclic: true");
+                        .Append("cyclic: true");
                 }
 
                 builder.Append(")");
@@ -587,7 +587,7 @@ namespace Microsoft.Data.Entity.Commands.Migrations
                                 .Append(", ");
                         }
 
-                        builder.Append("isNullable: ")
+                        builder.Append("nullable: ")
                             .Append(_code.Literal(column.IsNullable));
 
                         if (column.DefaultValueSql != null)
@@ -1129,25 +1129,13 @@ namespace Microsoft.Data.Entity.Commands.Migrations
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
 
-            builder.AppendLine(".Sql(");
+            builder
+                .Append(".Sql(")
+                .Append(_code.Literal(operation.Sql))
+                .Append(")");
 
             using (builder.Indent())
             {
-                if (operation.SuppressTransaction)
-                {
-                    builder.Append("sql: ");
-                }
-
-                builder.Append(_code.Literal(operation.Sql));
-
-                if (operation.SuppressTransaction)
-                {
-                    builder
-                        .AppendLine(",")
-                        .Append("suppressTransaction: true");
-                }
-
-                builder.Append(")");
                 Annotations(operation.Annotations, builder);
             }
         }

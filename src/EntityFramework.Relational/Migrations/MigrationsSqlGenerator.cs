@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Infrastructure;
@@ -10,12 +11,13 @@ using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Migrations.Operations;
 using Microsoft.Data.Entity.Relational.Internal;
 using Microsoft.Data.Entity.Storage;
+using Microsoft.Data.Entity.Storage.Commands;
 using Microsoft.Data.Entity.Update;
 using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Migrations
 {
-    public abstract class MigrationsSqlGenerator : IMigrationsSqlGenerator
+    public class MigrationsSqlGenerator : IMigrationsSqlGenerator
     {
         private static readonly IReadOnlyDictionary<Type, Action<MigrationsSqlGenerator, MigrationOperation, IModel, SqlBatchBuilder>> _generateActions =
             new Dictionary<Type, Action<MigrationsSqlGenerator, MigrationOperation, IModel, SqlBatchBuilder>>
@@ -49,7 +51,7 @@ namespace Microsoft.Data.Entity.Migrations
         private readonly IRelationalTypeMapper _typeMapper;
         private readonly IRelationalMetadataExtensionProvider _annotations;
 
-        protected MigrationsSqlGenerator(
+        public MigrationsSqlGenerator(
             [NotNull] IUpdateSqlGenerator sql,
             [NotNull] IRelationalTypeMapper typeMapper,
             [NotNull] IRelationalMetadataExtensionProvider annotations)
@@ -65,7 +67,7 @@ namespace Microsoft.Data.Entity.Migrations
 
         protected virtual IUpdateSqlGenerator Sql { get; }
 
-        public virtual IReadOnlyList<SqlBatch> Generate(
+        public virtual IReadOnlyList<RelationalCommand> Generate(
             IReadOnlyList<MigrationOperation> operations,
             IModel model = null)
         {
@@ -75,12 +77,12 @@ namespace Microsoft.Data.Entity.Migrations
             foreach (var operation in operations)
             {
                 Generate(operation, model, builder);
-                builder.AppendLine(Sql.BatchCommandSeparator);
+                builder
+                    .AppendLine(Sql.BatchCommandSeparator)
+                    .EndBatch();
             }
 
-            builder.EndBatch();
-
-            return builder.SqlBatches;
+            return builder.RelationalCommands;
         }
 
         protected virtual void Generate(
@@ -161,15 +163,21 @@ namespace Microsoft.Data.Entity.Migrations
             UniqueConstraint(operation, model, builder);
         }
 
-        protected abstract void Generate(
+        protected virtual void Generate(
             [NotNull] AlterColumnOperation operation,
             [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder);
+            [NotNull] SqlBatchBuilder builder)
+        {
+            throw new NotImplementedException();
+        }
 
-        protected abstract void Generate(
+        protected virtual void Generate(
             [NotNull] RenameIndexOperation operation,
             [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder);
+            [NotNull] SqlBatchBuilder builder)
+        {
+            throw new NotImplementedException();
+        }
 
         protected virtual void Generate(
             [NotNull] AlterSequenceOperation operation,
@@ -186,10 +194,13 @@ namespace Microsoft.Data.Entity.Migrations
             SequenceOptions(operation, model, builder);
         }
 
-        protected abstract void Generate(
+        protected virtual void Generate(
             [NotNull] RenameTableOperation operation,
             [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder);
+            [NotNull] SqlBatchBuilder builder)
+        {
+            throw new NotImplementedException();
+        }
 
         protected virtual void Generate(
             [NotNull] CreateIndexOperation operation,
@@ -218,10 +229,13 @@ namespace Microsoft.Data.Entity.Migrations
                 .Append(")");
         }
 
-        protected abstract void Generate(
+        protected virtual void Generate(
             [NotNull] EnsureSchemaOperation operation,
             [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder);
+            [NotNull] SqlBatchBuilder builder)
+        {
+            throw new NotImplementedException();
+        }
 
         protected virtual void Generate(
             [NotNull] CreateSequenceOperation operation,
@@ -328,10 +342,13 @@ namespace Microsoft.Data.Entity.Migrations
                 .Append(Sql.DelimitIdentifier(operation.Name));
         }
 
-        protected abstract void Generate(
+        protected virtual void Generate(
             [NotNull] DropIndexOperation operation,
             [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder);
+            [NotNull] SqlBatchBuilder builder)
+        {
+            throw new NotImplementedException();
+        }
 
         protected virtual void Generate(
             [NotNull] DropPrimaryKeyOperation operation,
@@ -402,15 +419,21 @@ namespace Microsoft.Data.Entity.Migrations
                 .Append(Sql.DelimitIdentifier(operation.Name));
         }
 
-        protected abstract void Generate(
+        protected virtual void Generate(
             [NotNull] RenameColumnOperation operation,
             [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder);
+            [NotNull] SqlBatchBuilder builder)
+        {
+            throw new NotImplementedException();
+        }
 
-        protected abstract void Generate(
+        protected virtual void Generate(
             [NotNull] RenameSequenceOperation operation,
             [CanBeNull] IModel model,
-            [NotNull] SqlBatchBuilder builder);
+            [NotNull] SqlBatchBuilder builder)
+        {
+            throw new NotImplementedException();
+        }
 
         protected virtual void Generate(
             [NotNull] RestartSequenceOperation operation,
@@ -435,7 +458,7 @@ namespace Microsoft.Data.Entity.Migrations
             Check.NotNull(operation, nameof(operation));
             Check.NotNull(builder, nameof(builder));
 
-            builder.Append(operation.Sql, operation.SuppressTransaction);
+            builder.Append(operation.Sql);
         }
 
         protected virtual void SequenceOptions(
@@ -573,6 +596,8 @@ namespace Microsoft.Data.Entity.Migrations
             [CanBeNull] string defaultValueSql,
             [NotNull] SqlBatchBuilder builder)
         {
+            Check.NotNull(builder, nameof(builder));
+
             if (defaultValueSql != null)
             {
                 builder
@@ -704,6 +729,11 @@ namespace Microsoft.Data.Entity.Migrations
                     break;
                 case ReferentialAction.SetDefault:
                     builder.Append("SET DEFAULT");
+                    break;
+                default:
+                    Debug.Assert(
+                        referentialAction == ReferentialAction.NoAction,
+                        "Unexpected value: " + referentialAction);
                     break;
             }
         }

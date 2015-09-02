@@ -51,6 +51,9 @@ namespace Microsoft.Data.Entity.Migrations
 
         protected override void Generate(CreateTableOperation operation, IModel model, SqlBatchBuilder builder)
         {
+            Check.NotNull(operation, nameof(operation));
+            Check.NotNull(builder, nameof(builder));
+
             // Lifts a primary key definition into the typename.
             // This handles the quirks of creating integer primary keys using autoincrement, not default rowid behavior.
             if (operation.PrimaryKey?.Columns.Length == 1)

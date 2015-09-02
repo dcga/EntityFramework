@@ -24,7 +24,7 @@ namespace Microsoft.Data.Entity.Migrations
             var sql = CreateHistoryRepository().GetCreateScript();
 
             Assert.Equal(
-                "CREATE TABLE \"__MigrationHistory\" (" + EOL +
+                "CREATE TABLE \"__EFMigrationsHistory\" (" + EOL +
                 "    \"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK_HistoryRow\" PRIMARY KEY," + EOL +
                 "    \"ProductVersion\" TEXT NOT NULL" + EOL +
                 ");" + EOL,
@@ -37,7 +37,7 @@ namespace Microsoft.Data.Entity.Migrations
             var sql = CreateHistoryRepository().GetCreateIfNotExistsScript();
 
             Assert.Equal(
-                "CREATE TABLE IF NOT EXISTS \"__MigrationHistory\" (" + EOL +
+                "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (" + EOL +
                 "    \"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK_HistoryRow\" PRIMARY KEY," + EOL +
                 "    \"ProductVersion\" TEXT NOT NULL" + EOL +
                 ");" + EOL,
@@ -50,8 +50,8 @@ namespace Microsoft.Data.Entity.Migrations
             var sql = CreateHistoryRepository().GetDeleteScript("Migration1");
 
             Assert.Equal(
-                "DELETE FROM \"__MigrationHistory\"" + EOL +
-                "WHERE \"MigrationId\" = 'Migration1';",
+                "DELETE FROM \"__EFMigrationsHistory\"" + EOL +
+                "WHERE \"MigrationId\" = 'Migration1';" + EOL,
                 sql);
         }
 
@@ -62,8 +62,8 @@ namespace Microsoft.Data.Entity.Migrations
                 new HistoryRow("Migration1", "7.0.0"));
 
             Assert.Equal(
-                "INSERT INTO \"__MigrationHistory\" (\"MigrationId\", \"ProductVersion\")" + EOL +
-                "VALUES ('Migration1', '7.0.0');",
+                "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\")" + EOL +
+                "VALUES ('Migration1', '7.0.0');" + EOL,
                 sql);
         }
 
