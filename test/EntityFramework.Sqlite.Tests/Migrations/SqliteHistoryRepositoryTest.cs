@@ -3,12 +3,15 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.Data.Entity.Infrastructure.Internal;
+using Microsoft.Data.Entity.Internal;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Migrations.Internal;
-using Microsoft.Data.Entity.Sqlite;
-using Microsoft.Data.Entity.Sqlite.Metadata;
 using Microsoft.Data.Entity.Storage;
-using Microsoft.Data.Entity.Update;
+using Microsoft.Data.Entity.Storage.Internal;
+using Microsoft.Data.Entity.TestUtilities;
 using Moq;
 using Xunit;
 
@@ -25,7 +28,7 @@ namespace Microsoft.Data.Entity.Migrations
 
             Assert.Equal(
                 "CREATE TABLE \"__EFMigrationsHistory\" (" + EOL +
-                "    \"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK_HistoryRow\" PRIMARY KEY," + EOL +
+                "    \"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY," + EOL +
                 "    \"ProductVersion\" TEXT NOT NULL" + EOL +
                 ");" + EOL,
                 sql);
@@ -38,7 +41,7 @@ namespace Microsoft.Data.Entity.Migrations
 
             Assert.Equal(
                 "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (" + EOL +
-                "    \"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK_HistoryRow\" PRIMARY KEY," + EOL +
+                "    \"MigrationId\" TEXT NOT NULL CONSTRAINT \"PK___EFMigrationsHistory\" PRIMARY KEY," + EOL +
                 "    \"ProductVersion\" TEXT NOT NULL" + EOL +
                 ");" + EOL,
                 sql);
@@ -73,7 +76,7 @@ namespace Microsoft.Data.Entity.Migrations
             var repository = CreateHistoryRepository();
             var ex = Assert.Throws<NotSupportedException>(() => repository.GetBeginIfNotExistsScript("Migration1"));
 
-            Assert.Equal(Strings.MigrationScriptGenerationNotSupported, ex.Message);
+            Assert.Equal(SqliteStrings.MigrationScriptGenerationNotSupported, ex.Message);
         }
 
         [Fact]
@@ -82,7 +85,7 @@ namespace Microsoft.Data.Entity.Migrations
             var repository = CreateHistoryRepository();
             var ex = Assert.Throws<NotSupportedException>(() => repository.GetBeginIfExistsScript("Migration1"));
 
-            Assert.Equal(Strings.MigrationScriptGenerationNotSupported, ex.Message);
+            Assert.Equal(SqliteStrings.MigrationScriptGenerationNotSupported, ex.Message);
         }
 
         [Fact]
@@ -91,17 +94,18 @@ namespace Microsoft.Data.Entity.Migrations
             var repository = CreateHistoryRepository();
             var ex = Assert.Throws<NotSupportedException>(() => repository.GetEndIfScript());
 
-            Assert.Equal(Strings.MigrationScriptGenerationNotSupported, ex.Message);
+            Assert.Equal(SqliteStrings.MigrationScriptGenerationNotSupported, ex.Message);
         }
 
         private static IHistoryRepository CreateHistoryRepository()
         {
-            var annotationsProvider = new SqliteMetadataExtensionProvider();
-            var updateSqlGenerator = new SqliteUpdateSqlGenerator();
+            var annotationsProvider = new SqliteAnnotationProvider();
+            var sqlGenerator = new SqliteSqlGenerationHelper();
+            var typeMapper = new SqliteTypeMapper();
 
             return new SqliteHistoryRepository(
                 Mock.Of<IRelationalDatabaseCreator>(),
-                Mock.Of<ISqlStatementExecutor>(),
+                Mock.Of<IRawSqlCommandBuilder>(),
                 Mock.Of<IRelationalConnection>(),
                 new DbContextOptions<DbContext>(
                     new Dictionary<Type, IDbContextOptionsExtension>
@@ -109,14 +113,19 @@ namespace Microsoft.Data.Entity.Migrations
                         { typeof(SqliteOptionsExtension), new SqliteOptionsExtension() }
                     }),
                 new MigrationsModelDiffer(
+                    new SqliteTypeMapper(),
                     annotationsProvider,
                     new SqliteMigrationsAnnotationProvider()),
                 new SqliteMigrationsSqlGenerator(
-                    updateSqlGenerator,
-                    new SqliteTypeMapper(),
+                    new RelationalCommandBuilderFactory(
+                        new FakeSensitiveDataLogger<RelationalCommandBuilderFactory>(),
+                        new DiagnosticListener("Fake"),
+                        typeMapper),
+                    new SqliteSqlGenerationHelper(),
+                    typeMapper,
                     annotationsProvider),
                 annotationsProvider,
-                updateSqlGenerator);
+                sqlGenerator);
         }
 
         private class Context : DbContext

@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.Data.Entity.ChangeTracking;
+using Microsoft.Data.Entity.FunctionalTests.TestUtilities.Xunit;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
@@ -23,7 +24,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             TestStore = Fixture.CreateTestStore();
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Principal, false)]
         [InlineData((int)ChangeMechanism.Principal, true)]
         [InlineData((int)ChangeMechanism.Dependent, false)]
@@ -32,9 +33,9 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Save_optional_many_to_one_dependents(ChangeMechanism changeMechanism, bool useExistingEntities)
         {
-            var new2a = new Optional2 { Id = Fixture.IntSentinel };
-            var new2b = new Optional2 { Id = Fixture.IntSentinel };
-            var new1 = new Optional1 { Id = Fixture.IntSentinel };
+            var new2a = new Optional2();
+            var new2b = new Optional2();
+            var new1 = new Optional1();
 
             if (useExistingEntities)
             {
@@ -111,7 +112,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Principal, false)]
         [InlineData((int)ChangeMechanism.Principal, true)]
         [InlineData((int)ChangeMechanism.Dependent, false)]
@@ -120,10 +121,10 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Save_required_many_to_one_dependents(ChangeMechanism changeMechanism, bool useExistingEntities)
         {
-            var newRoot = new Root { Id = Fixture.IntSentinel };
-            var new1 = new Required1 { Id = Fixture.IntSentinel, ParentId = Fixture.IntSentinel, Parent = newRoot };
-            var new2a = new Required2 { Id = Fixture.IntSentinel, ParentId = Fixture.IntSentinel, Parent = new1 };
-            var new2b = new Required2 { Id = Fixture.IntSentinel, ParentId = Fixture.IntSentinel, Parent = new1 };
+            var newRoot = new Root();
+            var new1 = new Required1 { Parent = newRoot };
+            var new2a = new Required2 { Parent = new1 };
+            var new2b = new Required2 { Parent = new1 };
 
             if (useExistingEntities)
             {
@@ -200,7 +201,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Principal)]
         [InlineData((int)ChangeMechanism.Dependent)]
         [InlineData((int)ChangeMechanism.FK)]
@@ -259,11 +260,16 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Principal)]
         [InlineData((int)ChangeMechanism.Dependent)]
+        [InlineData((int)ChangeMechanism.FK)]
         public virtual void Save_removed_required_many_to_one_dependents(ChangeMechanism changeMechanism)
         {
+            int removed1Id;
+            int removed2Id;
+            List<int> removed1ChildrenIds;
+
             using (var context = CreateContext())
             {
                 var root = LoadFullGraph(context);
@@ -271,6 +277,10 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 var childCollection = root.RequiredChildren.First().Children;
                 var removed2 = childCollection.First();
                 var removed1 = root.RequiredChildren.Skip(1).First();
+
+                removed1Id = removed1.Id;
+                removed2Id = removed2.Id;
+                removed1ChildrenIds = removed1.Children.Select(e => e.Id).ToList();
 
                 switch (changeMechanism)
                 {
@@ -282,16 +292,33 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         childCollection.Remove(removed2);
                         root.RequiredChildren.Remove(removed1);
                         break;
+                    case ChangeMechanism.FK:
+                        context.Entry(removed2).GetInfrastructure()[context.Entry(removed2).Property(e => e.ParentId).Metadata] = null;
+                        context.Entry(removed1).GetInfrastructure()[context.Entry(removed1).Property(e => e.ParentId).Metadata] = null;
+                        break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                AssertNavigations(root);
+
+                Assert.Equal(1, root.RequiredChildren.Count);
+                Assert.DoesNotContain(removed1Id, root.RequiredChildren.Select(e => e.Id));
+
+                Assert.Empty(context.Required1s.Where(e => e.Id == removed1Id));
+                Assert.Empty(context.Required2s.Where(e => e.Id == removed2Id));
+                Assert.Empty(context.Required2s.Where(e => removed1ChildrenIds.Contains(e.Id)));
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
@@ -300,8 +327,8 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Save_changed_optional_one_to_one(ChangeMechanism changeMechanism, bool useExistingEntities)
         {
-            var new2 = new OptionalSingle2 { Id = Fixture.IntSentinel };
-            var new1 = new OptionalSingle1 { Id = Fixture.IntSentinel, Single = new2 };
+            var new2 = new OptionalSingle2();
+            var new1 = new OptionalSingle1 { Single = new2 };
 
             if (useExistingEntities)
             {
@@ -377,106 +404,97 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
-        [InlineData((int)ChangeMechanism.Dependent, false)]
-        [InlineData((int)ChangeMechanism.Dependent, true)]
-        [InlineData((int)ChangeMechanism.Principal, false)]
-        [InlineData((int)ChangeMechanism.Principal, true)]
-        [InlineData((int)ChangeMechanism.FK, false)]
-        [InlineData((int)ChangeMechanism.FK, true)]
-        public virtual void Save_required_one_to_one_changed_by_reference(ChangeMechanism changeMechanism, bool useExistingEntities)
+        [ConditionalTheory]
+        [InlineData((int)ChangeMechanism.Dependent)]
+        [InlineData((int)ChangeMechanism.Principal)]
+        [InlineData((int)ChangeMechanism.FK)]
+        public virtual void Save_required_one_to_one_changed_by_reference(ChangeMechanism changeMechanism)
         {
-            var new2 = new RequiredSingle2 { Id = Fixture.IntSentinel };
-            var new1 = new RequiredSingle1 { Id = Fixture.IntSentinel, Single = new2 };
-            var newRoot = new Root { Id = Fixture.IntSentinel, RequiredSingle = new1 };
+            // This test is a bit strange because the relationships are PK<->PK, which means
+            // that an existing entity has to be deleted and then a new entity created that has
+            // the same key as the existing entry. In other words it is a new incarnation of the same
+            // entity. EF7 can't track two different instances of the same entity, so this has to be
+            // done in two steps.
 
-            if (useExistingEntities)
-            {
-                using (var context = CreateContext())
-                {
-                    context.AddRange(newRoot, new1, new2);
-                    context.SaveChanges();
-                }
-            }
-
-            Root root;
+            Root oldRoot;
             RequiredSingle1 old1;
             RequiredSingle2 old2;
             using (var context = CreateContext())
             {
-                root = LoadFullGraph(context, e => e.Id != newRoot.Id);
+                oldRoot = LoadFullGraph(context);
 
-                old1 = root.RequiredSingle;
-                old2 = root.RequiredSingle.Single;
+                old1 = oldRoot.RequiredSingle;
+                old2 = oldRoot.RequiredSingle.Single;
+            }
 
-                if (useExistingEntities)
-                {
-                    new1 = context.RequiredSingle1s.Single(e => e.Id == new1.Id);
-                    new2 = context.RequiredSingle2s.Single(e => e.Id == new2.Id);
-                }
-                else
-                {
-                    context.AddRange(new1, new2);
-                }
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                root.RequiredSingle = null;
+
+                context.SaveChanges();
+            }
+
+            var new2 = new RequiredSingle2();
+            var new1 = new RequiredSingle1 { Single = new2 };
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
 
                 switch (changeMechanism)
                 {
                     case ChangeMechanism.Dependent:
+                        context.Add(new1);
                         new1.Root = root;
                         break;
                     case ChangeMechanism.Principal:
                         root.RequiredSingle = new1;
                         break;
                     case ChangeMechanism.FK:
+                        context.Add(new1);
                         new1.Id = root.Id;
                         break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
 
-                //Assert.Equal(root.Id, new1.Id);
-                //Assert.Equal(new1.Id, new2.Id);
-                //Assert.Same(root, new1.Root);
-                //Assert.Same(new1, new2.Back);
+                Assert.Equal(root.Id, new1.Id);
+                Assert.Equal(new1.Id, new2.Id);
+                Assert.Same(root, new1.Root);
+                Assert.Same(new1, new2.Back);
 
-                //Assert.Null(old1.Root);
-                //Assert.Same(old1, old2.Back);
-                //Assert.Null(old1.Id);
-                //Assert.Equal(old1.Id, old2.Id);
+                Assert.Same(oldRoot, old1.Root);
+                Assert.Same(old1, old2.Back);
+                Assert.Equal(oldRoot.Id, old1.Id);
+                Assert.Equal(old1.Id, old2.Id);
             }
 
-            //using (var context = CreateContext())
-            //{
-            //    var loadedRoot = LoadFullGraph(context);
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context);
 
-            //    AssertKeys(root, loadedRoot);
-            //    AssertNavigations(loadedRoot);
-
-            //    var loaded1 = context.RequiredSingle1s.Single(e => e.Id == old1.Id);
-            //    var loaded2 = context.RequiredSingle2s.Single(e => e.Id == old2.Id);
-
-            //    Assert.Null(loaded1.Root);
-            //    Assert.Same(loaded1, loaded2.Back);
-            //    Assert.Null(loaded1.Id);
-            //    Assert.Equal(loaded1.Id, loaded2.Id);
-            //}
+                AssertKeys(oldRoot, loadedRoot);
+                AssertNavigations(loadedRoot);
+            }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
         [InlineData((int)ChangeMechanism.Principal, true)]
-        [InlineData((int)ChangeMechanism.FK, false)]
-        [InlineData((int)ChangeMechanism.FK, true)]
+        // TODO: Not working yet
+        //[InlineData((int)ChangeMechanism.FK, false)]
+        //[InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Save_required_non_PK_one_to_one_changed_by_reference(ChangeMechanism changeMechanism, bool useExistingEntities)
         {
-            var new2 = new RequiredNonPkSingle2 { Id = Fixture.IntSentinel, BackId = Fixture.IntSentinel };
-            var new1 = new RequiredNonPkSingle1 { Id = Fixture.IntSentinel, RootId = Fixture.IntSentinel, Single = new2 };
-            var newRoot = new Root { Id = Fixture.IntSentinel, RequiredNonPkSingle = new1 };
+            var new2 = new RequiredNonPkSingle2();
+            var new1 = new RequiredNonPkSingle1 { Single = new2 };
+            var newRoot = new Root { RequiredNonPkSingle = new1 };
 
             if (useExistingEntities)
             {
@@ -504,7 +522,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 }
                 else
                 {
-                    context.AddRange(new1, new2);
+                    context.AddRange(newRoot, new1, new2);
                 }
 
                 switch (changeMechanism)
@@ -516,44 +534,37 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         root.RequiredNonPkSingle = new1;
                         break;
                     case ChangeMechanism.FK:
-                        new1.Id = root.Id;
+                        new1.RootId = root.Id;
                         break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
 
-                //Assert.Equal(root.Id, new1.RootId);
-                //Assert.Equal(new1.Id, new2.BackId);
-                //Assert.Same(root, new1.Root);
-                //Assert.Same(new1, new2.Back);
+                Assert.Equal(root.Id, new1.RootId);
+                Assert.Equal(new1.Id, new2.BackId);
+                Assert.Same(root, new1.Root);
+                Assert.Same(new1, new2.Back);
 
-                //Assert.Null(old1.Root);
-                //Assert.Same(old1, old2.Back);
-                //Assert.Null(old1.RootId);
-                //Assert.Equal(old1.Id, old2.BackId);
+                Assert.Null(old1.Root);
+                Assert.Null(old2.Back);
+                Assert.Equal(old1.Id, old2.BackId);
             }
 
-            //using (var context = CreateContext())
-            //{
-            //    var loadedRoot = LoadFullGraph(context);
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context, e => e.Id == root.Id);
 
-            //    AssertKeys(root, loadedRoot);
-            //    AssertNavigations(loadedRoot);
+                AssertKeys(root, loadedRoot);
+                AssertNavigations(loadedRoot);
 
-            //    var loaded1 = context.RequiredNonPkSingle1s.Single(e => e.Id == old1.Id);
-            //    var loaded2 = context.RequiredNonPkSingle2s.Single(e => e.Id == old2.Id);
-
-            //    Assert.Null(loaded1.Root);
-            //    Assert.Same(loaded1, loaded2.Back);
-            //    Assert.Null(loaded1.RootId);
-            //    Assert.Equal(loaded1.Id, loaded2.BackId);
-            //}
+                Assert.False(context.RequiredNonPkSingle1s.Any(e => e.Id == old1.Id));
+                Assert.False(context.RequiredNonPkSingle2s.Any(e => e.Id == old2.Id));
+            }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent)]
         [InlineData((int)ChangeMechanism.Principal)]
         [InlineData((int)ChangeMechanism.FK)]
@@ -609,19 +620,25 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent)]
         [InlineData((int)ChangeMechanism.Principal)]
         public virtual void Sever_required_one_to_one(ChangeMechanism changeMechanism)
         {
+            Root root;
+            RequiredSingle1 old1;
+            RequiredSingle2 old2;
             using (var context = CreateContext())
             {
-                var root = LoadFullGraph(context);
+                root = LoadFullGraph(context);
+
+                old1 = root.RequiredSingle;
+                old2 = root.RequiredSingle.Single;
 
                 switch (changeMechanism)
                 {
                     case ChangeMechanism.Dependent:
-                        root.RequiredSingle.Root = null;
+                        old1.Root = null;
                         break;
                     case ChangeMechanism.Principal:
                         root.RequiredSingle = null;
@@ -630,24 +647,44 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
+
+                Assert.Null(old1.Root);
+                Assert.Null(old2.Back);
+                Assert.Equal(old1.Id, old2.Id);
+            }
+
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context);
+
+                AssertKeys(root, loadedRoot);
+                AssertPossiblyNullNavigations(loadedRoot);
+
+                Assert.False(context.RequiredSingle1s.Any(e => e.Id == old1.Id));
+                Assert.False(context.RequiredSingle2s.Any(e => e.Id == old2.Id));
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent)]
         [InlineData((int)ChangeMechanism.Principal)]
         public virtual void Sever_required_non_PK_one_to_one(ChangeMechanism changeMechanism)
         {
+            Root root;
+            RequiredNonPkSingle1 old1;
+            RequiredNonPkSingle2 old2;
             using (var context = CreateContext())
             {
-                var root = LoadFullGraph(context);
+                root = LoadFullGraph(context);
+
+                old1 = root.RequiredNonPkSingle;
+                old2 = root.RequiredNonPkSingle.Single;
 
                 switch (changeMechanism)
                 {
                     case ChangeMechanism.Dependent:
-                        root.RequiredNonPkSingle.Root = null;
+                        old1.Root = null;
                         break;
                     case ChangeMechanism.Principal:
                         root.RequiredNonPkSingle = null;
@@ -656,12 +693,26 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
+
+                Assert.Null(old1.Root);
+                Assert.Null(old2.Back);
+                Assert.Equal(old1.Id, old2.BackId);
+            }
+
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context);
+
+                AssertKeys(root, loadedRoot);
+                AssertPossiblyNullNavigations(loadedRoot);
+
+                Assert.False(context.RequiredNonPkSingle1s.Any(e => e.Id == old1.Id));
+                Assert.False(context.RequiredNonPkSingle2s.Any(e => e.Id == old2.Id));
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
@@ -670,7 +721,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Reparent_optional_one_to_one(ChangeMechanism changeMechanism, bool useExistingRoot)
         {
-            var newRoot = new Root { Id = Fixture.IntSentinel };
+            var newRoot = new Root();
 
             if (useExistingRoot)
             {
@@ -736,7 +787,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
@@ -745,7 +796,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Reparent_required_one_to_one(ChangeMechanism changeMechanism, bool useExistingRoot)
         {
-            var newRoot = new Root { Id = Fixture.IntSentinel };
+            var newRoot = new Root();
 
             if (useExistingRoot)
             {
@@ -780,12 +831,12 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 newRoot.RequiredSingle = root.RequiredSingle;
 
                 Assert.Equal(
-                    Strings.KeyReadOnly("Id", typeof(RequiredSingle1).Name),
+                    CoreStrings.KeyReadOnly("Id", typeof(RequiredSingle1).Name),
                     Assert.Throws<NotSupportedException>(() => context.SaveChanges()).Message);
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
@@ -794,7 +845,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Reparent_required_non_PK_one_to_one(ChangeMechanism changeMechanism, bool useExistingRoot)
         {
-            var newRoot = new Root { Id = Fixture.IntSentinel };
+            var newRoot = new Root();
 
             if (useExistingRoot)
             {
@@ -860,7 +911,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Principal, false)]
         [InlineData((int)ChangeMechanism.Principal, true)]
         [InlineData((int)ChangeMechanism.Dependent, false)]
@@ -869,9 +920,9 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Save_optional_many_to_one_dependents_with_alternate_key(ChangeMechanism changeMechanism, bool useExistingEntities)
         {
-            var new2a = new OptionalAk2 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid() };
-            var new2b = new OptionalAk2 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid() };
-            var new1 = new OptionalAk1 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid() };
+            var new2a = new OptionalAk2 { AlternateId = Guid.NewGuid() };
+            var new2b = new OptionalAk2 { AlternateId = Guid.NewGuid() };
+            var new1 = new OptionalAk1 { AlternateId = Guid.NewGuid() };
 
             if (useExistingEntities)
             {
@@ -948,7 +999,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Principal, false)]
         [InlineData((int)ChangeMechanism.Principal, true)]
         [InlineData((int)ChangeMechanism.Dependent, false)]
@@ -957,10 +1008,10 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Save_required_many_to_one_dependents_with_alternate_key(ChangeMechanism changeMechanism, bool useExistingEntities)
         {
-            var newRoot = new Root { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid() };
-            var new1 = new RequiredAk1 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid(), Parent = newRoot };
-            var new2a = new RequiredAk2 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid(), Parent = new1 };
-            var new2b = new RequiredAk2 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid(), Parent = new1 };
+            var newRoot = new Root { AlternateId = Guid.NewGuid() };
+            var new1 = new RequiredAk1 { AlternateId = Guid.NewGuid(), Parent = newRoot };
+            var new2a = new RequiredAk2 { AlternateId = Guid.NewGuid(), Parent = new1 };
+            var new2b = new RequiredAk2 { AlternateId = Guid.NewGuid(), Parent = new1 };
 
             if (useExistingEntities)
             {
@@ -1037,7 +1088,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Principal)]
         [InlineData((int)ChangeMechanism.Dependent)]
         [InlineData((int)ChangeMechanism.FK)]
@@ -1096,18 +1147,22 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Principal)]
         [InlineData((int)ChangeMechanism.Dependent)]
         public virtual void Save_removed_required_many_to_one_dependents_with_alternate_key(ChangeMechanism changeMechanism)
         {
+            Root root;
+            RequiredAk2 removed2;
+            RequiredAk1 removed1;
+
             using (var context = CreateContext())
             {
-                var root = LoadFullGraph(context);
+                root = LoadFullGraph(context);
 
                 var childCollection = root.RequiredChildrenAk.First().Children;
-                var removed2 = childCollection.First();
-                var removed1 = root.RequiredChildrenAk.Skip(1).First();
+                removed2 = childCollection.First();
+                removed1 = root.RequiredChildrenAk.Skip(1).First();
 
                 switch (changeMechanism)
                 {
@@ -1123,12 +1178,34 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
+
+                Assert.DoesNotContain(removed1, root.RequiredChildrenAk);
+                Assert.DoesNotContain(removed2, childCollection);
+
+                Assert.Null(removed1.Parent);
+                Assert.Null(removed2.Parent);
+            }
+
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context);
+
+                AssertKeys(root, loadedRoot);
+                AssertNavigations(loadedRoot);
+
+                Assert.False(context.RequiredAk1s.Any(e => e.Id == removed1.Id));
+                Assert.False(context.RequiredAk2s.Any(e => e.Id == removed2.Id));
+
+                Assert.Equal(1, loadedRoot.RequiredChildrenAk.Count);
+                Assert.Equal(1, loadedRoot.RequiredChildrenAk.First().Children.Count);
+
+                Assert.Equal(2, loadedRoot.OptionalChildrenAk.Count);
+                Assert.Equal(2, loadedRoot.OptionalChildrenAk.First().Children.Count);
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
@@ -1137,8 +1214,8 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Save_changed_optional_one_to_one_with_alternate_key(ChangeMechanism changeMechanism, bool useExistingEntities)
         {
-            var new2 = new OptionalSingleAk2 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid() };
-            var new1 = new OptionalSingleAk1 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid(), Single = new2 };
+            var new2 = new OptionalSingleAk2 { AlternateId = Guid.NewGuid() };
+            var new1 = new OptionalSingleAk1 { AlternateId = Guid.NewGuid(), Single = new2 };
 
             if (useExistingEntities)
             {
@@ -1214,19 +1291,17 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
         [InlineData((int)ChangeMechanism.Principal, true)]
-        [InlineData((int)ChangeMechanism.FK, false)]
-        [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Save_required_one_to_one_changed_by_reference_with_alternate_key(
             ChangeMechanism changeMechanism, bool useExistingEntities)
         {
-            var new2 = new RequiredSingleAk2 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid() };
-            var new1 = new RequiredSingleAk1 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid(), Single = new2 };
-            var newRoot = new Root { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid(), RequiredSingleAk = new1 };
+            var new2 = new RequiredSingleAk2 { AlternateId = Guid.NewGuid() };
+            var new1 = new RequiredSingleAk1 { AlternateId = Guid.NewGuid(), Single = new2 };
+            var newRoot = new Root { AlternateId = Guid.NewGuid(), RequiredSingleAk = new1 };
 
             if (useExistingEntities)
             {
@@ -1254,7 +1329,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 }
                 else
                 {
-                    context.AddRange(new1, new2);
+                    context.AddRange(newRoot, new1, new2);
                 }
 
                 switch (changeMechanism)
@@ -1265,57 +1340,48 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     case ChangeMechanism.Principal:
                         root.RequiredSingleAk = new1;
                         break;
-                    case ChangeMechanism.FK:
-                        new1.AlternateId = root.AlternateId;
-                        break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
 
-                //Assert.Equal(root.AlternateId, new1.AlternateId);
-                //Assert.Equal(new1.AlternateId, new2.AlternateId);
-                //Assert.Same(root, new1.Root);
-                //Assert.Same(new1, new2.Back);
+                Assert.Equal(root.AlternateId, new1.RootId);
+                Assert.Equal(new1.AlternateId, new2.BackId);
+                Assert.Same(root, new1.Root);
+                Assert.Same(new1, new2.Back);
 
-                //Assert.Null(old1.Root);
-                //Assert.Same(old1, old2.Back);
-                //Assert.Null(old1.AlternateId);
-                //Assert.Equal(old1.AlternateId, old2.AlternateId);
+                Assert.Null(old1.Root);
+                Assert.Null(old2.Back);
+                Assert.Equal(old1.AlternateId, old2.BackId);
             }
 
-            //using (var context = CreateContext())
-            //{
-            //    var loadedRoot = LoadFullGraph(context);
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context, e => e.Id != newRoot.Id);
 
-            //    AssertKeys(root, loadedRoot);
-            //    AssertNavigations(loadedRoot);
+                AssertKeys(root, loadedRoot);
+                AssertNavigations(loadedRoot);
 
-            //    var loaded1 = context.RequiredSingleAk1s.Single(e => e.Id == old1.Id);
-            //    var loaded2 = context.RequiredSingleAk2s.Single(e => e.Id == old2.Id);
-
-            //    Assert.Null(loaded1.Root);
-            //    Assert.Same(loaded1, loaded2.Back);
-            //    Assert.Null(loaded1.AlternateId);
-            //    Assert.Equal(loaded1.AlternateId, loaded2.AlternateId);
-            //}
+                Assert.False(context.RequiredSingleAk1s.Any(e => e.Id == old1.Id));
+                Assert.False(context.RequiredSingleAk2s.Any(e => e.Id == old2.Id));
+            }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
         [InlineData((int)ChangeMechanism.Principal, true)]
-        [InlineData((int)ChangeMechanism.FK, false)]
-        [InlineData((int)ChangeMechanism.FK, true)]
+        // TODO: Not working yet
+        //[InlineData((int)ChangeMechanism.FK, false)]
+        //[InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Save_required_non_PK_one_to_one_changed_by_reference_with_alternate_key(
             ChangeMechanism changeMechanism, bool useExistingEntities)
         {
-            var new2 = new RequiredNonPkSingleAk2 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid() };
-            var new1 = new RequiredNonPkSingleAk1 { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid(), Single = new2 };
-            var newRoot = new Root { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid(), RequiredNonPkSingleAk = new1 };
+            var new2 = new RequiredNonPkSingleAk2 { AlternateId = Guid.NewGuid() };
+            var new1 = new RequiredNonPkSingleAk1 { AlternateId = Guid.NewGuid(), Single = new2 };
+            var newRoot = new Root { AlternateId = Guid.NewGuid(), RequiredNonPkSingleAk = new1 };
 
             if (useExistingEntities)
             {
@@ -1355,44 +1421,37 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         root.RequiredNonPkSingleAk = new1;
                         break;
                     case ChangeMechanism.FK:
-                        new1.AlternateId = root.AlternateId;
+                        new1.RootId = root.AlternateId;
                         break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
 
-                //Assert.Equal(root.AlternateId, new1.RootId);
-                //Assert.Equal(new1.AlternateId, new2.BackId);
-                //Assert.Same(root, new1.Root);
-                //Assert.Same(new1, new2.Back);
+                Assert.Equal(root.AlternateId, new1.RootId);
+                Assert.Equal(new1.AlternateId, new2.BackId);
+                Assert.Same(root, new1.Root);
+                Assert.Same(new1, new2.Back);
 
-                //Assert.Null(old1.Root);
-                //Assert.Same(old1, old2.Back);
-                //Assert.Null(old1.RootId);
-                //Assert.Equal(old1.AlternateId, old2.BackId);
+                Assert.Null(old1.Root);
+                Assert.Null(old2.Back);
+                Assert.Equal(old1.AlternateId, old2.BackId);
             }
 
-            //using (var context = CreateContext())
-            //{
-            //    var loadedRoot = LoadFullGraph(context);
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context, e => e.Id != newRoot.Id);
 
-            //    AssertKeys(root, loadedRoot);
-            //    AssertNavigations(loadedRoot);
+                AssertKeys(root, loadedRoot);
+                AssertNavigations(loadedRoot);
 
-            //    var loaded1 = context.RequiredNonPkSingleAk1s.Single(e => e.Id == old1.Id);
-            //    var loaded2 = context.RequiredNonPkSingleAk2s.Single(e => e.Id == old2.Id);
-
-            //    Assert.Null(loaded1.Root);
-            //    Assert.Same(loaded1, loaded2.Back);
-            //    Assert.Null(loaded1.RootId);
-            //    Assert.Equal(loaded1.AlternateId, loaded2.BackId);
-            //}
+                Assert.False(context.RequiredNonPkSingleAk1s.Any(e => e.Id == old1.Id));
+                Assert.False(context.RequiredNonPkSingleAk2s.Any(e => e.Id == old2.Id));
+            }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent)]
         [InlineData((int)ChangeMechanism.Principal)]
         [InlineData((int)ChangeMechanism.FK)]
@@ -1448,19 +1507,25 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent)]
         [InlineData((int)ChangeMechanism.Principal)]
         public virtual void Sever_required_one_to_one_with_alternate_key(ChangeMechanism changeMechanism)
         {
+            Root root;
+            RequiredSingleAk1 old1;
+            RequiredSingleAk2 old2;
             using (var context = CreateContext())
             {
-                var root = LoadFullGraph(context);
+                root = LoadFullGraph(context);
+
+                old1 = root.RequiredSingleAk;
+                old2 = root.RequiredSingleAk.Single;
 
                 switch (changeMechanism)
                 {
                     case ChangeMechanism.Dependent:
-                        root.RequiredSingleAk.Root = null;
+                        old1.Root = null;
                         break;
                     case ChangeMechanism.Principal:
                         root.RequiredSingleAk = null;
@@ -1469,24 +1534,44 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
+
+                Assert.Null(old1.Root);
+                Assert.Null(old2.Back);
+                Assert.Equal(old1.AlternateId, old2.BackId);
+            }
+
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context);
+
+                AssertKeys(root, loadedRoot);
+                AssertPossiblyNullNavigations(loadedRoot);
+
+                Assert.False(context.RequiredSingleAk1s.Any(e => e.Id == old1.Id));
+                Assert.False(context.RequiredSingleAk2s.Any(e => e.Id == old2.Id));
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent)]
         [InlineData((int)ChangeMechanism.Principal)]
         public virtual void Sever_required_non_PK_one_to_one_with_alternate_key(ChangeMechanism changeMechanism)
         {
+            Root root;
+            RequiredNonPkSingleAk1 old1;
+            RequiredNonPkSingleAk2 old2;
             using (var context = CreateContext())
             {
-                var root = LoadFullGraph(context);
+                root = LoadFullGraph(context);
+
+                old1 = root.RequiredNonPkSingleAk;
+                old2 = root.RequiredNonPkSingleAk.Single;
 
                 switch (changeMechanism)
                 {
                     case ChangeMechanism.Dependent:
-                        root.RequiredNonPkSingleAk.Root = null;
+                        old1.Root = null;
                         break;
                     case ChangeMechanism.Principal:
                         root.RequiredNonPkSingleAk = null;
@@ -1495,12 +1580,26 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                // TODO: Conceptual nulls (Issue #323)
-                //context.SaveChanges();
+                context.SaveChanges();
+
+                Assert.Null(old1.Root);
+                Assert.Null(old2.Back);
+                Assert.Equal(old1.AlternateId, old2.BackId);
+            }
+
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context);
+
+                AssertKeys(root, loadedRoot);
+                AssertPossiblyNullNavigations(loadedRoot);
+
+                Assert.False(context.RequiredNonPkSingleAk1s.Any(e => e.Id == old1.Id));
+                Assert.False(context.RequiredNonPkSingleAk2s.Any(e => e.Id == old2.Id));
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
@@ -1509,7 +1608,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Reparent_optional_one_to_one_with_alternate_key(ChangeMechanism changeMechanism, bool useExistingRoot)
         {
-            var newRoot = new Root { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid() };
+            var newRoot = new Root { AlternateId = Guid.NewGuid() };
 
             if (useExistingRoot)
             {
@@ -1575,7 +1674,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
@@ -1584,7 +1683,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Reparent_required_one_to_one_with_alternate_key(ChangeMechanism changeMechanism, bool useExistingRoot)
         {
-            var newRoot = new Root { Id = Fixture.IntSentinel };
+            var newRoot = new Root { AlternateId = Guid.NewGuid() };
 
             if (useExistingRoot)
             {
@@ -1595,36 +1694,62 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 }
             }
 
+            Root root;
+            RequiredSingleAk1 old1;
+            RequiredSingleAk2 old2;
             using (var context = CreateContext())
             {
-                var root = LoadFullGraph(context, e => e.Id != newRoot.Id);
+                root = LoadFullGraph(context, e => e.Id != newRoot.Id);
 
                 context.Entry(newRoot).State = useExistingRoot ? EntityState.Unchanged : EntityState.Added;
+
+                old1 = root.RequiredSingleAk;
+                old2 = root.RequiredSingleAk.Single;
 
                 switch (changeMechanism)
                 {
                     case ChangeMechanism.Dependent:
-                        root.RequiredSingleAk.Root = newRoot;
+                        old1.Root = newRoot;
                         break;
                     case ChangeMechanism.Principal:
-                        newRoot.RequiredSingleAk = root.RequiredSingleAk;
+                        newRoot.RequiredSingleAk = old1;
                         break;
                     case ChangeMechanism.FK:
-                        root.RequiredSingleAk.AlternateId = newRoot.AlternateId;
+                        old1.RootId = newRoot.AlternateId;
                         break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(changeMechanism));
                 }
 
-                newRoot.RequiredSingleAk = root.RequiredSingleAk;
+                context.SaveChanges();
 
-                Assert.Equal(
-                    Strings.KeyReadOnly("AlternateId", typeof(RequiredSingleAk1).Name),
-                    Assert.Throws<NotSupportedException>(() => context.SaveChanges()).Message);
+                Assert.Null(root.RequiredSingleAk);
+
+                Assert.Same(newRoot, old1.Root);
+                Assert.Same(old1, old2.Back);
+                Assert.Equal(newRoot.AlternateId, old1.RootId);
+                Assert.Equal(old1.AlternateId, old2.BackId);
+            }
+
+            using (var context = CreateContext())
+            {
+                var loadedRoot = LoadFullGraph(context, e => e.Id == root.Id);
+
+                AssertKeys(root, loadedRoot);
+                AssertPossiblyNullNavigations(loadedRoot);
+
+                newRoot = context.Roots.Single(e => e.Id == newRoot.Id);
+                var loaded1 = context.RequiredSingleAk1s.Single(e => e.Id == old1.Id);
+                var loaded2 = context.RequiredSingleAk2s.Single(e => e.Id == old2.Id);
+
+                Assert.Same(newRoot, loaded1.Root);
+                Assert.Same(loaded1, loaded2.Back);
+                Assert.Equal(newRoot.AlternateId, loaded1.RootId);
+                Assert.Equal(loaded1.AlternateId, loaded2.BackId);
             }
         }
 
-        [Theory]
+        [ConditionalTheory]
         [InlineData((int)ChangeMechanism.Dependent, false)]
         [InlineData((int)ChangeMechanism.Dependent, true)]
         [InlineData((int)ChangeMechanism.Principal, false)]
@@ -1633,7 +1758,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         [InlineData((int)ChangeMechanism.FK, true)]
         public virtual void Reparent_required_non_PK_one_to_one_with_alternate_key(ChangeMechanism changeMechanism, bool useExistingRoot)
         {
-            var newRoot = new Root { Id = Fixture.IntSentinel, AlternateId = Guid.NewGuid() };
+            var newRoot = new Root { AlternateId = Guid.NewGuid() };
 
             if (useExistingRoot)
             {
@@ -1699,6 +1824,896 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
+        [ConditionalFact]
+        public virtual void Required_many_to_one_dependents_are_cascade_deleted()
+        {
+            int removedId;
+            List<int> orphanedIds;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(2, root.RequiredChildren.Count);
+
+                var removed = root.RequiredChildren.First();
+
+                removedId = removed.Id;
+                var cascadeRemoved = removed.Children.ToList();
+                orphanedIds = cascadeRemoved.Select(e => e.Id).ToList();
+
+                Assert.Equal(2, orphanedIds.Count);
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.True(cascadeRemoved.All(e => context.Entry(e).State == EntityState.Detached));
+
+                Assert.Equal(1, root.RequiredChildren.Count);
+                Assert.DoesNotContain(removedId, root.RequiredChildren.Select(e => e.Id));
+
+                Assert.Empty(context.Required1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.Required2s.Where(e => orphanedIds.Contains(e.Id)));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(1, root.RequiredChildren.Count);
+                Assert.DoesNotContain(removedId, root.RequiredChildren.Select(e => e.Id));
+
+                Assert.Empty(context.Required1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.Required2s.Where(e => orphanedIds.Contains(e.Id)));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Optional_many_to_one_dependents_are_orphaned()
+        {
+            int removedId;
+            List<int> orphanedIds;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(2, root.OptionalChildren.Count);
+
+                var removed = root.OptionalChildren.First();
+
+                removedId = removed.Id;
+                var orphaned = removed.Children.ToList();
+                orphanedIds = orphaned.Select(e => e.Id).ToList();
+
+                Assert.Equal(2, orphanedIds.Count);
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.True(orphaned.All(e => context.Entry(e).State == EntityState.Unchanged));
+
+                Assert.Equal(1, root.OptionalChildren.Count);
+                Assert.DoesNotContain(removedId, root.OptionalChildren.Select(e => e.Id));
+
+                Assert.Empty(context.Optional1s.Where(e => e.Id == removedId));
+                Assert.Equal(orphanedIds.Count, context.Optional2s.Count(e => orphanedIds.Contains(e.Id)));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(1, root.OptionalChildren.Count);
+                Assert.DoesNotContain(removedId, root.OptionalChildren.Select(e => e.Id));
+
+                Assert.Empty(context.Optional1s.Where(e => e.Id == removedId));
+                Assert.Equal(orphanedIds.Count, context.Optional2s.Count(e => orphanedIds.Contains(e.Id)));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Optional_one_to_one_are_orphaned()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                var removed = root.OptionalSingle;
+
+                removedId = removed.Id;
+                var orphaned = removed.Single;
+                orphanedId = orphaned.Id;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.Equal(EntityState.Unchanged, context.Entry(orphaned).State);
+
+                Assert.Null(root.OptionalSingle);
+
+                Assert.Empty(context.OptionalSingle1s.Where(e => e.Id == removedId));
+                Assert.Equal(1, context.OptionalSingle2s.Count(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.OptionalSingle);
+
+                Assert.Empty(context.OptionalSingle1s.Where(e => e.Id == removedId));
+                Assert.Equal(1, context.OptionalSingle2s.Count(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_one_to_one_are_cascade_deleted()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                var removed = root.RequiredSingle;
+
+                removedId = removed.Id;
+                var orphaned = removed.Single;
+                orphanedId = orphaned.Id;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.Equal(EntityState.Detached, context.Entry(orphaned).State);
+
+                Assert.Null(root.RequiredSingle);
+
+                Assert.Empty(context.RequiredSingle1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredSingle2s.Where(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.RequiredSingle);
+
+                Assert.Empty(context.RequiredSingle1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredSingle2s.Where(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_non_PK_one_to_one_are_cascade_deleted()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                var removed = root.RequiredNonPkSingle;
+
+                removedId = removed.Id;
+                var orphaned = removed.Single;
+                orphanedId = orphaned.Id;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.Equal(EntityState.Detached, context.Entry(orphaned).State);
+
+                Assert.Null(root.RequiredNonPkSingle);
+
+                Assert.Empty(context.RequiredNonPkSingle1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredNonPkSingle2s.Where(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.RequiredNonPkSingle);
+
+                Assert.Empty(context.RequiredNonPkSingle1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredNonPkSingle2s.Where(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Optional_many_to_one_dependents_with_alternate_key_are_orphaned()
+        {
+            int removedId;
+            List<int> orphanedIds;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(2, root.OptionalChildrenAk.Count);
+
+                var removed = root.OptionalChildrenAk.First();
+
+                removedId = removed.Id;
+                var orphaned = removed.Children.ToList();
+                orphanedIds = orphaned.Select(e => e.Id).ToList();
+
+                Assert.Equal(2, orphanedIds.Count);
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.True(orphaned.All(e => context.Entry(e).State == EntityState.Unchanged));
+
+                Assert.Equal(1, root.OptionalChildrenAk.Count);
+                Assert.DoesNotContain(removedId, root.OptionalChildrenAk.Select(e => e.Id));
+
+                Assert.Empty(context.OptionalAk1s.Where(e => e.Id == removedId));
+                Assert.Equal(orphanedIds.Count, context.OptionalAk2s.Count(e => orphanedIds.Contains(e.Id)));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(1, root.OptionalChildrenAk.Count);
+                Assert.DoesNotContain(removedId, root.OptionalChildrenAk.Select(e => e.Id));
+
+                Assert.Empty(context.OptionalAk1s.Where(e => e.Id == removedId));
+                Assert.Equal(orphanedIds.Count, context.OptionalAk2s.Count(e => orphanedIds.Contains(e.Id)));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_many_to_one_dependents_with_alternate_key_are_cascade_deleted()
+        {
+            int removedId;
+            List<int> orphanedIds;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(2, root.RequiredChildrenAk.Count);
+
+                var removed = root.RequiredChildrenAk.First();
+
+                removedId = removed.Id;
+                var cascadeRemoved = removed.Children.ToList();
+                orphanedIds = cascadeRemoved.Select(e => e.Id).ToList();
+
+                Assert.Equal(2, orphanedIds.Count);
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.True(cascadeRemoved.All(e => context.Entry(e).State == EntityState.Detached));
+
+                Assert.Equal(1, root.RequiredChildrenAk.Count);
+                Assert.DoesNotContain(removedId, root.RequiredChildrenAk.Select(e => e.Id));
+
+                Assert.Empty(context.RequiredAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredAk2s.Where(e => orphanedIds.Contains(e.Id)));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(1, root.RequiredChildrenAk.Count);
+                Assert.DoesNotContain(removedId, root.RequiredChildrenAk.Select(e => e.Id));
+
+                Assert.Empty(context.RequiredAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredAk2s.Where(e => orphanedIds.Contains(e.Id)));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Optional_one_to_one_with_alternate_key_are_orphaned()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                var removed = root.OptionalSingleAk;
+
+                removedId = removed.Id;
+                var orphaned = removed.Single;
+                orphanedId = orphaned.Id;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.Equal(EntityState.Unchanged, context.Entry(orphaned).State);
+
+                Assert.Null(root.OptionalSingleAk);
+
+                Assert.Empty(context.OptionalSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Equal(1, context.OptionalSingleAk2s.Count(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.OptionalSingleAk);
+
+                Assert.Empty(context.OptionalSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Equal(1, context.OptionalSingleAk2s.Count(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_one_to_one_with_alternate_key_are_cascade_deleted()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                var removed = root.RequiredSingleAk;
+
+                removedId = removed.Id;
+                var orphaned = removed.Single;
+                orphanedId = orphaned.Id;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.Equal(EntityState.Detached, context.Entry(orphaned).State);
+
+                Assert.Null(root.RequiredSingleAk);
+
+                Assert.Empty(context.RequiredSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredSingleAk2s.Where(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.RequiredSingleAk);
+
+                Assert.Empty(context.RequiredSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredSingleAk2s.Where(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_non_PK_one_to_one_with_alternate_key_are_cascade_deleted()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                var removed = root.RequiredNonPkSingleAk;
+
+                removedId = removed.Id;
+                var orphaned = removed.Single;
+                orphanedId = orphaned.Id;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+                Assert.Equal(EntityState.Detached, context.Entry(orphaned).State);
+
+                Assert.Null(root.RequiredNonPkSingleAk);
+
+                Assert.Empty(context.RequiredNonPkSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredNonPkSingleAk2s.Where(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.RequiredNonPkSingleAk);
+
+                Assert.Empty(context.RequiredNonPkSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredNonPkSingleAk2s.Where(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_many_to_one_dependents_are_cascade_deleted_in_store()
+        {
+            int removedId;
+            List<int> orphanedIds;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).RequiredChildren.First();
+
+                removedId = removed.Id;
+                orphanedIds = removed.Children.Select(e => e.Id).ToList();
+
+                Assert.Equal(2, orphanedIds.Count);
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.RequiredChildren).Single();
+
+                var removed = root.RequiredChildren.Single(e => e.Id == removedId);
+
+                Assert.Equal(2, orphanedIds.Count);
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Equal(1, root.RequiredChildren.Count);
+                Assert.DoesNotContain(removedId, root.RequiredChildren.Select(e => e.Id));
+
+                Assert.Empty(context.Required1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.Required2s.Where(e => orphanedIds.Contains(e.Id)));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(1, root.RequiredChildren.Count);
+                Assert.DoesNotContain(removedId, root.RequiredChildren.Select(e => e.Id));
+
+                Assert.Empty(context.Required1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.Required2s.Where(e => orphanedIds.Contains(e.Id)));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_one_to_one_are_cascade_deleted_in_store()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).RequiredSingle;
+
+                removedId = removed.Id;
+                orphanedId = removed.Single.Id;
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.RequiredSingle).Single();
+
+                var removed = root.RequiredSingle;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Null(root.RequiredSingle);
+
+                Assert.Empty(context.RequiredSingle1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredSingle2s.Where(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.RequiredSingle);
+
+                Assert.Empty(context.RequiredSingle1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredSingle2s.Where(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_non_PK_one_to_one_are_cascade_deleted_in_store()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).RequiredNonPkSingle;
+
+                removedId = removed.Id;
+                orphanedId = removed.Single.Id;
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.RequiredNonPkSingle).Single();
+
+                var removed = root.RequiredNonPkSingle;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Null(root.RequiredNonPkSingle);
+
+                Assert.Empty(context.RequiredNonPkSingle1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredNonPkSingle2s.Where(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.RequiredNonPkSingle);
+
+                Assert.Empty(context.RequiredNonPkSingle1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredNonPkSingle2s.Where(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_many_to_one_dependents_with_alternate_key_are_cascade_deleted_in_store()
+        {
+            int removedId;
+            List<int> orphanedIds;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).RequiredChildrenAk.First();
+
+                removedId = removed.Id;
+                orphanedIds = removed.Children.Select(e => e.Id).ToList();
+
+                Assert.Equal(2, orphanedIds.Count);
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.RequiredChildrenAk).Single();
+
+                var removed = root.RequiredChildrenAk.Single(e => e.Id == removedId);
+
+                Assert.Equal(2, orphanedIds.Count);
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Equal(1, root.RequiredChildrenAk.Count);
+                Assert.DoesNotContain(removedId, root.RequiredChildrenAk.Select(e => e.Id));
+
+                Assert.Empty(context.RequiredAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredAk2s.Where(e => orphanedIds.Contains(e.Id)));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(1, root.RequiredChildrenAk.Count);
+                Assert.DoesNotContain(removedId, root.RequiredChildrenAk.Select(e => e.Id));
+
+                Assert.Empty(context.RequiredAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredAk2s.Where(e => orphanedIds.Contains(e.Id)));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_one_to_one_with_alternate_key_are_cascade_deleted_in_store()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).RequiredSingleAk;
+
+                removedId = removed.Id;
+                orphanedId = removed.Single.Id;
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.RequiredSingleAk).Single();
+
+                var removed = root.RequiredSingleAk;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Null(root.RequiredSingleAk);
+
+                Assert.Empty(context.RequiredSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredSingleAk2s.Where(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.RequiredSingleAk);
+
+                Assert.Empty(context.RequiredSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredSingleAk2s.Where(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Required_non_PK_one_to_one_with_alternate_key_are_cascade_deleted_in_store()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).RequiredNonPkSingleAk;
+
+                removedId = removed.Id;
+                orphanedId = removed.Single.Id;
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.RequiredNonPkSingleAk).Single();
+
+                var removed = root.RequiredNonPkSingleAk;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Null(root.RequiredNonPkSingleAk);
+
+                Assert.Empty(context.RequiredNonPkSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredNonPkSingleAk2s.Where(e => e.Id == orphanedId));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.RequiredNonPkSingleAk);
+
+                Assert.Empty(context.RequiredNonPkSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Empty(context.RequiredNonPkSingleAk2s.Where(e => e.Id == orphanedId));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Optional_many_to_one_dependents_are_orphaned_in_store()
+        {
+            int removedId;
+            List<int> orphanedIds;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).OptionalChildren.First();
+
+                removedId = removed.Id;
+                orphanedIds = removed.Children.Select(e => e.Id).ToList();
+
+                Assert.Equal(2, orphanedIds.Count);
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.OptionalChildren).Single();
+
+                var removed = root.OptionalChildren.First(e => e.Id == removedId);
+
+                Assert.Equal(2, orphanedIds.Count);
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Equal(1, root.OptionalChildren.Count);
+                Assert.DoesNotContain(removedId, root.OptionalChildren.Select(e => e.Id));
+
+                Assert.Empty(context.Optional1s.Where(e => e.Id == removedId));
+
+                var orphaned = context.Optional2s.Where(e => orphanedIds.Contains(e.Id)).ToList();
+                Assert.Equal(orphanedIds.Count, orphaned.Count);
+                Assert.True(orphaned.All(e => e.ParentId == null));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(1, root.OptionalChildren.Count);
+                Assert.DoesNotContain(removedId, root.OptionalChildren.Select(e => e.Id));
+
+                Assert.Empty(context.Optional1s.Where(e => e.Id == removedId));
+
+                var orphaned = context.Optional2s.Where(e => orphanedIds.Contains(e.Id)).ToList();
+                Assert.Equal(orphanedIds.Count, orphaned.Count);
+                Assert.True(orphaned.All(e => e.ParentId == null));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Optional_one_to_one_are_orphaned_in_store()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).OptionalSingle;
+
+                removedId = removed.Id;
+                orphanedId = removed.Single.Id;
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.OptionalSingle).Single();
+
+                var removed = root.OptionalSingle;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Null(root.OptionalSingle);
+
+                Assert.Empty(context.OptionalSingle1s.Where(e => e.Id == removedId));
+                Assert.Null(context.OptionalSingle2s.Single(e => e.Id == orphanedId).BackId);
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.OptionalSingle);
+
+                Assert.Empty(context.OptionalSingle1s.Where(e => e.Id == removedId));
+                Assert.Null(context.OptionalSingle2s.Single(e => e.Id == orphanedId).BackId);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Optional_many_to_one_dependents_with_alternate_key_are_orphaned_in_store()
+        {
+            int removedId;
+            List<int> orphanedIds;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).OptionalChildrenAk.First();
+
+                removedId = removed.Id;
+                orphanedIds = removed.Children.Select(e => e.Id).ToList();
+
+                Assert.Equal(2, orphanedIds.Count);
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.OptionalChildrenAk).Single();
+
+                var removed = root.OptionalChildrenAk.First(e => e.Id == removedId);
+
+                Assert.Equal(2, orphanedIds.Count);
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Equal(1, root.OptionalChildrenAk.Count);
+                Assert.DoesNotContain(removedId, root.OptionalChildrenAk.Select(e => e.Id));
+
+                Assert.Empty(context.OptionalAk1s.Where(e => e.Id == removedId));
+
+                var orphaned = context.OptionalAk2s.Where(e => orphanedIds.Contains(e.Id)).ToList();
+                Assert.Equal(orphanedIds.Count, orphaned.Count);
+                Assert.True(orphaned.All(e => e.ParentId == null));
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Equal(1, root.OptionalChildrenAk.Count);
+                Assert.DoesNotContain(removedId, root.OptionalChildrenAk.Select(e => e.Id));
+
+                Assert.Empty(context.OptionalAk1s.Where(e => e.Id == removedId));
+
+                var orphaned = context.OptionalAk2s.Where(e => orphanedIds.Contains(e.Id)).ToList();
+                Assert.Equal(orphanedIds.Count, orphaned.Count);
+                Assert.True(orphaned.All(e => e.ParentId == null));
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Optional_one_to_one_with_alternate_key_are_orphaned_in_store()
+        {
+            int removedId;
+            int orphanedId;
+
+            using (var context = CreateContext())
+            {
+                var removed = LoadFullGraph(context).OptionalSingleAk;
+
+                removedId = removed.Id;
+                orphanedId = removed.Single.Id;
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = context.Roots.Include(e => e.OptionalSingleAk).Single();
+
+                var removed = root.OptionalSingleAk;
+
+                context.Remove(removed);
+
+                context.SaveChanges();
+
+                Assert.Equal(EntityState.Detached, context.Entry(removed).State);
+
+                Assert.Null(root.OptionalSingleAk);
+
+                Assert.Empty(context.OptionalSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Null(context.OptionalSingleAk2s.Single(e => e.Id == orphanedId).BackId);
+            }
+
+            using (var context = CreateContext())
+            {
+                var root = LoadFullGraph(context);
+
+                Assert.Null(root.OptionalSingleAk);
+
+                Assert.Empty(context.OptionalSingleAk1s.Where(e => e.Id == removedId));
+                Assert.Null(context.OptionalSingleAk2s.Single(e => e.Id == orphanedId).BackId);
+            }
+        }
+
         public enum ChangeMechanism
         {
             Dependent,
@@ -1709,11 +2724,16 @@ namespace Microsoft.Data.Entity.FunctionalTests
         protected static Root LoadFullGraph(GraphUpdatesContext context, Expression<Func<Root, bool>> predicate = null)
         {
             var query = context.Roots
-                .Include(e => e.RequiredChildren)
-                .Include(e => e.OptionalChildren)
-                .Include(e => e.RequiredSingle)
-                .Include(e => e.RequiredNonPkSingle)
-                .Include(e => e.OptionalSingle);
+                .Include(e => e.RequiredChildren).ThenInclude(e => e.Children)
+                .Include(e => e.OptionalChildren).ThenInclude(e => e.Children)
+                .Include(e => e.RequiredSingle).ThenInclude(e => e.Single)
+                .Include(e => e.RequiredNonPkSingle).ThenInclude(e => e.Single)
+                .Include(e => e.OptionalSingle).ThenInclude(e => e.Single)
+                .Include(e => e.RequiredChildrenAk).ThenInclude(e => e.Children)
+                .Include(e => e.OptionalChildrenAk).ThenInclude(e => e.Children)
+                .Include(e => e.RequiredSingleAk).ThenInclude(e => e.Single)
+                .Include(e => e.RequiredNonPkSingleAk).ThenInclude(e => e.Single)
+                .Include(e => e.OptionalSingleAk).ThenInclude(e => e.Single);
 
             var loadedGraph = predicate == null
                 ? query.Single()
@@ -2092,7 +3112,9 @@ namespace Microsoft.Data.Entity.FunctionalTests
             public int Id { get; set; }
             public Guid AlternateId { get; set; }
 
+            public Guid RootId { get; set; }
             public Root Root { get; set; }
+
             public RequiredSingleAk2 Single { get; set; }
         }
 
@@ -2101,6 +3123,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             public int Id { get; set; }
             public Guid AlternateId { get; set; }
 
+            public Guid BackId { get; set; }
             public RequiredSingleAk1 Back { get; set; }
         }
 
@@ -2201,86 +3224,92 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     {
                         b.Property(e => e.AlternateId).ValueGeneratedOnAdd();
 
-                        b.Collection(e => e.RequiredChildren)
-                            .InverseReference(e => e.Parent)
-                            .ForeignKey(e => e.ParentId);
+                        b.HasMany(e => e.RequiredChildren)
+                            .WithOne(e => e.Parent)
+                            .HasForeignKey(e => e.ParentId);
 
-                        b.Collection(e => e.OptionalChildren)
-                            .InverseReference(e => e.Parent)
-                            .ForeignKey(e => e.ParentId);
+                        b.HasMany(e => e.OptionalChildren)
+                            .WithOne(e => e.Parent)
+                            .HasForeignKey(e => e.ParentId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                        b.Reference(e => e.RequiredSingle)
-                            .InverseReference(e => e.Root)
-                            .ForeignKey<RequiredSingle1>(e => e.Id);
+                        b.HasOne(e => e.RequiredSingle)
+                            .WithOne(e => e.Root)
+                            .HasForeignKey<RequiredSingle1>(e => e.Id);
 
-                        b.Reference(e => e.OptionalSingle)
-                            .InverseReference(e => e.Root)
-                            .ForeignKey<OptionalSingle1>(e => e.RootId);
+                        b.HasOne(e => e.OptionalSingle)
+                            .WithOne(e => e.Root)
+                            .HasForeignKey<OptionalSingle1>(e => e.RootId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                        b.Reference(e => e.RequiredNonPkSingle)
-                            .InverseReference(e => e.Root)
-                            .ForeignKey<RequiredNonPkSingle1>(e => e.RootId);
+                        b.HasOne(e => e.RequiredNonPkSingle)
+                            .WithOne(e => e.Root)
+                            .HasForeignKey<RequiredNonPkSingle1>(e => e.RootId);
 
-                        b.Collection(e => e.RequiredChildrenAk)
-                            .InverseReference(e => e.Parent)
-                            .PrincipalKey(e => e.AlternateId)
-                            .ForeignKey(e => e.ParentId);
+                        b.HasMany(e => e.RequiredChildrenAk)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentId);
 
-                        b.Collection(e => e.OptionalChildrenAk)
-                            .InverseReference(e => e.Parent)
-                            .PrincipalKey(e => e.AlternateId)
-                            .ForeignKey(e => e.ParentId);
+                        b.HasMany(e => e.OptionalChildrenAk)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                        b.Reference(e => e.RequiredSingleAk)
-                            .InverseReference(e => e.Root)
-                            .PrincipalKey<Root>(e => e.AlternateId)
-                            .ForeignKey<RequiredSingleAk1>(e => e.AlternateId);
+                        b.HasOne(e => e.RequiredSingleAk)
+                            .WithOne(e => e.Root)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<RequiredSingleAk1>(e => e.RootId);
 
-                        b.Reference(e => e.OptionalSingleAk)
-                            .InverseReference(e => e.Root)
-                            .PrincipalKey<Root>(e => e.AlternateId)
-                            .ForeignKey<OptionalSingleAk1>(e => e.RootId);
+                        b.HasOne(e => e.OptionalSingleAk)
+                            .WithOne(e => e.Root)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<OptionalSingleAk1>(e => e.RootId)
+                            .OnDelete(DeleteBehavior.SetNull);
 
-                        b.Reference(e => e.RequiredNonPkSingleAk)
-                            .InverseReference(e => e.Root)
-                            .PrincipalKey<Root>(e => e.AlternateId)
-                            .ForeignKey<RequiredNonPkSingleAk1>(e => e.RootId);
+                        b.HasOne(e => e.RequiredNonPkSingleAk)
+                            .WithOne(e => e.Root)
+                            .HasPrincipalKey<Root>(e => e.AlternateId)
+                            .HasForeignKey<RequiredNonPkSingleAk1>(e => e.RootId);
                     });
 
                 modelBuilder.Entity<Required1>()
-                    .Collection(e => e.Children)
-                    .InverseReference(e => e.Parent)
-                    .ForeignKey(e => e.ParentId);
+                    .HasMany(e => e.Children)
+                    .WithOne(e => e.Parent)
+                    .HasForeignKey(e => e.ParentId);
 
                 modelBuilder.Entity<Optional1>()
-                    .Collection(e => e.Children)
-                    .InverseReference(e => e.Parent)
-                    .ForeignKey(e => e.ParentId);
+                    .HasMany(e => e.Children)
+                    .WithOne(e => e.Parent)
+                    .HasForeignKey(e => e.ParentId)
+                    .OnDelete(DeleteBehavior.SetNull);
 
                 modelBuilder.Entity<RequiredSingle1>()
-                    .Reference(e => e.Single)
-                    .InverseReference(e => e.Back)
-                    .ForeignKey<RequiredSingle2>(e => e.Id);
+                    .HasOne(e => e.Single)
+                    .WithOne(e => e.Back)
+                    .HasForeignKey<RequiredSingle2>(e => e.Id);
 
                 modelBuilder.Entity<OptionalSingle1>()
-                    .Reference(e => e.Single)
-                    .InverseReference(e => e.Back)
-                    .ForeignKey<OptionalSingle2>(e => e.BackId);
+                    .HasOne(e => e.Single)
+                    .WithOne(e => e.Back)
+                    .HasForeignKey<OptionalSingle2>(e => e.BackId)
+                    .OnDelete(DeleteBehavior.SetNull);
 
                 modelBuilder.Entity<RequiredNonPkSingle1>()
-                    .Reference(e => e.Single)
-                    .InverseReference(e => e.Back)
-                    .ForeignKey<RequiredNonPkSingle2>(e => e.BackId);
+                    .HasOne(e => e.Single)
+                    .WithOne(e => e.Back)
+                    .HasForeignKey<RequiredNonPkSingle2>(e => e.BackId);
 
                 modelBuilder.Entity<RequiredAk1>(b =>
                     {
                         b.Property(e => e.AlternateId)
                             .ValueGeneratedOnAdd();
 
-                        b.Collection(e => e.Children)
-                            .InverseReference(e => e.Parent)
-                            .PrincipalKey(e => e.AlternateId)
-                            .ForeignKey(e => e.ParentId);
+                        b.HasMany(e => e.Children)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentId);
                     });
 
                 modelBuilder.Entity<OptionalAk1>(b =>
@@ -2288,10 +3317,11 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         b.Property(e => e.AlternateId)
                             .ValueGeneratedOnAdd();
 
-                        b.Collection(e => e.Children)
-                            .InverseReference(e => e.Parent)
-                            .PrincipalKey(e => e.AlternateId)
-                            .ForeignKey(e => e.ParentId);
+                        b.HasMany(e => e.Children)
+                            .WithOne(e => e.Parent)
+                            .HasPrincipalKey(e => e.AlternateId)
+                            .HasForeignKey(e => e.ParentId)
+                            .OnDelete(DeleteBehavior.SetNull);
                     });
 
                 modelBuilder.Entity<RequiredSingleAk1>(b =>
@@ -2299,10 +3329,10 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         b.Property(e => e.AlternateId)
                             .ValueGeneratedOnAdd();
 
-                        b.Reference(e => e.Single)
-                            .InverseReference(e => e.Back)
-                            .ForeignKey<RequiredSingleAk2>(e => e.AlternateId)
-                            .PrincipalKey<RequiredSingleAk1>(e => e.AlternateId);
+                        b.HasOne(e => e.Single)
+                            .WithOne(e => e.Back)
+                            .HasForeignKey<RequiredSingleAk2>(e => e.BackId)
+                            .HasPrincipalKey<RequiredSingleAk1>(e => e.AlternateId);
                     });
 
                 modelBuilder.Entity<OptionalSingleAk1>(b =>
@@ -2310,10 +3340,11 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         b.Property(e => e.AlternateId)
                             .ValueGeneratedOnAdd();
 
-                        b.Reference(e => e.Single)
-                            .InverseReference(e => e.Back)
-                            .ForeignKey<OptionalSingleAk2>(e => e.BackId)
-                            .PrincipalKey<OptionalSingleAk1>(e => e.AlternateId);
+                        b.HasOne(e => e.Single)
+                            .WithOne(e => e.Back)
+                            .HasForeignKey<OptionalSingleAk2>(e => e.BackId)
+                            .HasPrincipalKey<OptionalSingleAk1>(e => e.AlternateId)
+                            .OnDelete(DeleteBehavior.SetNull);
                     });
 
                 modelBuilder.Entity<RequiredNonPkSingleAk1>(b =>
@@ -2321,10 +3352,10 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         b.Property(e => e.AlternateId)
                             .ValueGeneratedOnAdd();
 
-                        b.Reference(e => e.Single)
-                            .InverseReference(e => e.Back)
-                            .ForeignKey<RequiredNonPkSingleAk2>(e => e.BackId)
-                            .PrincipalKey<RequiredNonPkSingleAk1>(e => e.AlternateId);
+                        b.HasOne(e => e.Single)
+                            .WithOne(e => e.Back)
+                            .HasForeignKey<RequiredNonPkSingleAk2>(e => e.BackId)
+                            .HasPrincipalKey<RequiredNonPkSingleAk1>(e => e.AlternateId);
                     });
 
                 modelBuilder.Entity<RequiredAk2>()
@@ -2348,170 +3379,133 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .ValueGeneratedOnAdd();
             }
 
-            public abstract int IntSentinel { get; }
-
             protected virtual object CreateFullGraph()
             {
                 return new Root
+                {
+                    AlternateId = Guid.NewGuid(),
+                    RequiredChildren = new List<Required1>
                     {
-                        Id = IntSentinel,
-                        AlternateId = Guid.NewGuid(),
-                        RequiredChildren = new List<Required1>
+                        new Required1
+                        {
+                            Children = new List<Required2>
                             {
-                                new Required1
-                                    {
-                                        Id = IntSentinel,
-                                        ParentId = IntSentinel,
-                                        Children = new List<Required2>
-                                            {
-                                                new Required2 { ParentId = IntSentinel, Id = IntSentinel },
-                                                new Required2 { ParentId = IntSentinel, Id = IntSentinel }
-                                            }
-                                    },
-                                new Required1
-                                    {
-                                        Id = IntSentinel,
-                                        ParentId = IntSentinel,
-                                        Children = new List<Required2>
-                                            {
-                                                new Required2 { ParentId = IntSentinel, Id = IntSentinel },
-                                                new Required2 { ParentId = IntSentinel, Id = IntSentinel }
-                                            }
-                                    }
-                            },
-                        OptionalChildren = new List<Optional1>
-                            {
-                                new Optional1
-                                    {
-                                        Id = IntSentinel,
-                                        Children = new List<Optional2>
-                                            {
-                                                new Optional2 { Id = IntSentinel },
-                                                new Optional2 { Id = IntSentinel }
-                                            }
-                                    },
-                                new Optional1
-                                    {
-                                        Id = IntSentinel,
-                                        Children = new List<Optional2>
-                                            {
-                                                new Optional2 { Id = IntSentinel },
-                                                new Optional2 { Id = IntSentinel }
-                                            }
-                                    }
-                            },
-                        RequiredSingle = new RequiredSingle1
-                            {
-                                Id = IntSentinel,
-                                Single = new RequiredSingle2 { Id = IntSentinel }
-                            },
-                        OptionalSingle = new OptionalSingle1
-                            {
-                                Id = IntSentinel,
-                                Single = new OptionalSingle2 { Id = IntSentinel }
-                            },
-                        RequiredNonPkSingle = new RequiredNonPkSingle1
-                            {
-                                Id = IntSentinel,
-                                RootId = IntSentinel,
-                                Single = new RequiredNonPkSingle2 { BackId = IntSentinel, Id = IntSentinel }
-                            },
-                        RequiredChildrenAk = new List<RequiredAk1>
-                            {
-                                new RequiredAk1
-                                    {
-                                        Id = IntSentinel,
-                                        AlternateId = Guid.NewGuid(),
-                                        Children = new List<RequiredAk2>
-                                            {
-                                                new RequiredAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() },
-                                                new RequiredAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() }
-                                            }
-                                    },
-                                new RequiredAk1
-                                    {
-                                        Id = IntSentinel,
-                                        AlternateId = Guid.NewGuid(),
-                                        Children = new List<RequiredAk2>
-                                            {
-                                                new RequiredAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() },
-                                                new RequiredAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() }
-                                            }
-                                    }
-                            },
-                        OptionalChildrenAk = new List<OptionalAk1>
-                            {
-                                new OptionalAk1
-                                    {
-                                        Id = IntSentinel,
-                                        AlternateId = Guid.NewGuid(),
-                                        Children = new List<OptionalAk2>
-                                            {
-                                                new OptionalAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() },
-                                                new OptionalAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() }
-                                            }
-                                    },
-                                new OptionalAk1
-                                    {
-                                        Id = IntSentinel,
-                                        AlternateId = Guid.NewGuid(),
-                                        Children = new List<OptionalAk2>
-                                            {
-                                                new OptionalAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() },
-                                                new OptionalAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() }
-                                            }
-                                    }
-                            },
-                        RequiredSingleAk = new RequiredSingleAk1
-                            {
-                                Id = IntSentinel,
-                                AlternateId = Guid.NewGuid(),
-                                Single = new RequiredSingleAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() }
-                            },
-                        OptionalSingleAk = new OptionalSingleAk1
-                            {
-                                Id = IntSentinel,
-                                AlternateId = Guid.NewGuid(),
-                                Single = new OptionalSingleAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() }
-                            },
-                        RequiredNonPkSingleAk = new RequiredNonPkSingleAk1
-                            {
-                                Id = IntSentinel,
-                                AlternateId = Guid.NewGuid(),
-                                Single = new RequiredNonPkSingleAk2 { Id = IntSentinel, AlternateId = Guid.NewGuid() }
+                                new Required2(),
+                                new Required2()
                             }
-                    };
-            }
-
-            protected static void SetSentinelValues(ModelBuilder modelBuilder, int intSentinel)
-            {
-                foreach (var property in modelBuilder.Model.EntityTypes.SelectMany(e => e.Properties)
-                    .Where(p => ((IProperty)p).ClrType == typeof(int) || ((IProperty)p).ClrType == typeof(int?)))
-                {
-                    property.SentinelValue = intSentinel;
-                }
-
-                var sentinelGuid = new Guid("{71334AF2-51DE-4015-9CC1-10CE02D151BB}");
-
-                foreach (var property in modelBuilder.Model.EntityTypes.SelectMany(e => e.Properties)
-                    .Where(p => ((IProperty)p).ClrType == typeof(Guid) || ((IProperty)p).ClrType == typeof(Guid?)))
-                {
-                    property.SentinelValue = sentinelGuid;
-                }
+                        },
+                        new Required1
+                        {
+                            Children = new List<Required2>
+                            {
+                                new Required2(),
+                                new Required2()
+                            }
+                        }
+                    },
+                    OptionalChildren = new List<Optional1>
+                    {
+                        new Optional1
+                        {
+                            Children = new List<Optional2>
+                            {
+                                new Optional2(),
+                                new Optional2()
+                            }
+                        },
+                        new Optional1
+                        {
+                            Children = new List<Optional2>
+                            {
+                                new Optional2(),
+                                new Optional2()
+                            }
+                        }
+                    },
+                    RequiredSingle = new RequiredSingle1
+                    {
+                        Single = new RequiredSingle2()
+                    },
+                    OptionalSingle = new OptionalSingle1
+                    {
+                        Single = new OptionalSingle2()
+                    },
+                    RequiredNonPkSingle = new RequiredNonPkSingle1
+                    {
+                        Single = new RequiredNonPkSingle2()
+                    },
+                    RequiredChildrenAk = new List<RequiredAk1>
+                    {
+                        new RequiredAk1
+                        {
+                            AlternateId = Guid.NewGuid(),
+                            Children = new List<RequiredAk2>
+                            {
+                                new RequiredAk2 { AlternateId = Guid.NewGuid() },
+                                new RequiredAk2 { AlternateId = Guid.NewGuid() }
+                            }
+                        },
+                        new RequiredAk1
+                        {
+                            AlternateId = Guid.NewGuid(),
+                            Children = new List<RequiredAk2>
+                            {
+                                new RequiredAk2 { AlternateId = Guid.NewGuid() },
+                                new RequiredAk2 { AlternateId = Guid.NewGuid() }
+                            }
+                        }
+                    },
+                    OptionalChildrenAk = new List<OptionalAk1>
+                    {
+                        new OptionalAk1
+                        {
+                            AlternateId = Guid.NewGuid(),
+                            Children = new List<OptionalAk2>
+                            {
+                                new OptionalAk2 { AlternateId = Guid.NewGuid() },
+                                new OptionalAk2 { AlternateId = Guid.NewGuid() }
+                            }
+                        },
+                        new OptionalAk1
+                        {
+                            AlternateId = Guid.NewGuid(),
+                            Children = new List<OptionalAk2>
+                            {
+                                new OptionalAk2 { AlternateId = Guid.NewGuid() },
+                                new OptionalAk2 { AlternateId = Guid.NewGuid() }
+                            }
+                        }
+                    },
+                    RequiredSingleAk = new RequiredSingleAk1
+                    {
+                        AlternateId = Guid.NewGuid(),
+                        Single = new RequiredSingleAk2 { AlternateId = Guid.NewGuid() }
+                    },
+                    OptionalSingleAk = new OptionalSingleAk1
+                    {
+                        AlternateId = Guid.NewGuid(),
+                        Single = new OptionalSingleAk2 { AlternateId = Guid.NewGuid() }
+                    },
+                    RequiredNonPkSingleAk = new RequiredNonPkSingleAk1
+                    {
+                        AlternateId = Guid.NewGuid(),
+                        Single = new RequiredNonPkSingleAk2 { AlternateId = Guid.NewGuid() }
+                    }
+                };
             }
 
             protected virtual void Seed(DbContext context)
             {
                 var tracker = new KeyValueEntityTracker();
 
-                context.ChangeTracker.TrackGraph(CreateFullGraph(), e => tracker.TrackEntity(e));
+                context.ChangeTracker.TrackGraph(CreateFullGraph(), e => tracker.TrackEntity(e.Entry));
                 context.SaveChanges();
             }
 
             public class KeyValueEntityTracker
             {
                 public virtual void TrackEntity(EntityEntry entry)
-                    => entry.GetService()
+                    => entry.GetInfrastructure()
                         .SetEntityState(DetermineState(entry), acceptChanges: true);
 
                 public virtual EntityState DetermineState(EntityEntry entry)

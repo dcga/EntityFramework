@@ -28,7 +28,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
         public override Type Type => typeof(bool);
 
-        protected override Expression Accept([NotNull] ExpressionVisitor visitor)
+        protected override Expression Accept(ExpressionVisitor visitor)
         {
             Check.NotNull(visitor, nameof(visitor));
 
@@ -44,8 +44,8 @@ namespace Microsoft.Data.Entity.Query.Expressions
             var newMatchExpression = visitor.Visit(Match);
             var newPatternExpression = visitor.Visit(Pattern);
 
-            return newMatchExpression != Match
-                   || newPatternExpression != Pattern
+            return (newMatchExpression != Match)
+                   || (newPatternExpression != Pattern)
                 ? new LikeExpression(newMatchExpression, newPatternExpression)
                 : this;
         }

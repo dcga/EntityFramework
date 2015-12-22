@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Entity.Metadata.Builders;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Tests;
 using Xunit;
 
@@ -22,7 +23,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Property(e => e.Name)
                 .HasColumnName("Eman");
 
-            var property = modelBuilder.Model.GetEntityType(typeof(Customer)).GetProperty("Name");
+            var property = modelBuilder.Model.FindEntityType(typeof(Customer)).FindProperty("Name");
 
             Assert.Equal("Name", property.Name);
             Assert.Equal("Eman", property.Relational().ColumnName);
@@ -38,7 +39,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Property(e => e.Name)
                 .HasColumnType("nvarchar(42)");
 
-            var property = modelBuilder.Model.GetEntityType(typeof(Customer)).GetProperty("Name");
+            var property = modelBuilder.Model.FindEntityType(typeof(Customer)).FindProperty("Name");
 
             Assert.Equal("nvarchar(42)", property.Relational().ColumnType);
         }
@@ -53,7 +54,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Property(e => e.Name)
                 .HasDefaultValueSql("CherryCoke");
 
-            var property = modelBuilder.Model.GetEntityType(typeof(Customer)).GetProperty("Name");
+            var property = modelBuilder.Model.FindEntityType(typeof(Customer)).FindProperty("Name");
 
             Assert.Equal("CherryCoke", property.Relational().GeneratedValueSql);
             Assert.Equal(ValueGenerated.OnAdd, property.ValueGenerated);
@@ -69,7 +70,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Property(e => e.Name)
                 .HasComputedColumnSql("CherryCoke");
 
-            var property = modelBuilder.Model.GetEntityType(typeof(Customer)).GetProperty("Name");
+            var property = modelBuilder.Model.FindEntityType(typeof(Customer)).FindProperty("Name");
 
             Assert.Equal("CherryCoke", property.Relational().GeneratedValueSql);
             Assert.Equal(ValueGenerated.OnAddOrUpdate, property.ValueGenerated);
@@ -86,7 +87,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Property(e => e.Name)
                 .HasDefaultValue(guid);
 
-            var property = modelBuilder.Model.GetEntityType(typeof(Customer)).GetProperty("Name");
+            var property = modelBuilder.Model.FindEntityType(typeof(Customer)).FindProperty("Name");
 
             Assert.Equal(guid, property.Relational().DefaultValue);
         }
@@ -98,10 +99,10 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             modelBuilder
                 .Entity<Customer>()
-                .Key(e => e.Id)
-                .Name("KeyLimePie");
+                .HasKey(e => e.Id)
+                .HasName("KeyLimePie");
 
-            var key = modelBuilder.Model.GetEntityType(typeof(Customer)).GetPrimaryKey();
+            var key = modelBuilder.Model.FindEntityType(typeof(Customer)).FindPrimaryKey();
 
             Assert.Equal("KeyLimePie", key.Relational().Name);
         }
@@ -112,16 +113,16 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Entity<Customer>().Collection(e => e.Orders).InverseReference(e => e.Customer)
-                .ConstraintName("LemonSupreme");
+                .Entity<Customer>().HasMany(e => e.Orders).WithOne(e => e.Customer)
+                .HasConstraintName("LemonSupreme");
 
-            var foreignKey = modelBuilder.Model.GetEntityType(typeof(Order)).GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(Customer));
+            var foreignKey = modelBuilder.Model.FindEntityType(typeof(Order)).GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(Customer));
 
             Assert.Equal("LemonSupreme", foreignKey.Relational().Name);
 
             modelBuilder
-                .Entity<Customer>().Collection(e => e.Orders).InverseReference(e => e.Customer)
-                .ConstraintName(null);
+                .Entity<Customer>().HasMany(e => e.Orders).WithOne(e => e.Customer)
+                .HasConstraintName(null);
 
             Assert.Equal("FK_Order_Customer_CustomerId", foreignKey.Relational().Name);
         }
@@ -132,11 +133,11 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Entity<Customer>().Collection(e => e.Orders).InverseReference(e => e.Customer)
-                .ForeignKey(e => e.CustomerId)
-                .ConstraintName("LemonSupreme");
+                .Entity<Customer>().HasMany(e => e.Orders).WithOne(e => e.Customer)
+                .HasForeignKey(e => e.CustomerId)
+                .HasConstraintName("LemonSupreme");
 
-            var foreignKey = modelBuilder.Model.GetEntityType(typeof(Order)).GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(Customer));
+            var foreignKey = modelBuilder.Model.FindEntityType(typeof(Order)).GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(Customer));
 
             Assert.Equal("LemonSupreme", foreignKey.Relational().Name);
         }
@@ -147,16 +148,16 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Entity<Order>().Reference(e => e.Customer).InverseCollection(e => e.Orders)
-                .ConstraintName("LemonSupreme");
+                .Entity<Order>().HasOne(e => e.Customer).WithMany(e => e.Orders)
+                .HasConstraintName("LemonSupreme");
 
-            var foreignKey = modelBuilder.Model.GetEntityType(typeof(Order)).GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(Customer));
+            var foreignKey = modelBuilder.Model.FindEntityType(typeof(Order)).GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(Customer));
 
             Assert.Equal("LemonSupreme", foreignKey.Relational().Name);
 
             modelBuilder
-                .Entity<Order>().Reference(e => e.Customer).InverseCollection(e => e.Orders)
-                .ConstraintName(null);
+                .Entity<Order>().HasOne(e => e.Customer).WithMany(e => e.Orders)
+                .HasConstraintName(null);
 
             Assert.Equal("FK_Order_Customer_CustomerId", foreignKey.Relational().Name);
         }
@@ -167,11 +168,11 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Entity<Order>().Reference(e => e.Customer).InverseCollection(e => e.Orders)
-                .ForeignKey(e => e.CustomerId)
-                .ConstraintName("LemonSupreme");
+                .Entity<Order>().HasOne(e => e.Customer).WithMany(e => e.Orders)
+                .HasForeignKey(e => e.CustomerId)
+                .HasConstraintName("LemonSupreme");
 
-            var foreignKey = modelBuilder.Model.GetEntityType(typeof(Order)).GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(Customer));
+            var foreignKey = modelBuilder.Model.FindEntityType(typeof(Order)).GetForeignKeys().Single(fk => fk.PrincipalEntityType.ClrType == typeof(Customer));
 
             Assert.Equal("LemonSupreme", foreignKey.Relational().Name);
         }
@@ -182,17 +183,17 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Entity<Order>().Reference(e => e.Details).InverseReference(e => e.Order)
-                .PrincipalKey<Order>(e => e.OrderId)
-                .ConstraintName("LemonSupreme");
+                .Entity<Order>().HasOne(e => e.Details).WithOne(e => e.Order)
+                .HasPrincipalKey<Order>(e => e.OrderId)
+                .HasConstraintName("LemonSupreme");
 
-            var foreignKey = modelBuilder.Model.GetEntityType(typeof(OrderDetails)).GetForeignKeys().Single();
+            var foreignKey = modelBuilder.Model.FindEntityType(typeof(OrderDetails)).GetForeignKeys().Single();
 
             Assert.Equal("LemonSupreme", foreignKey.Relational().Name);
 
             modelBuilder
-                .Entity<Order>().Reference(e => e.Details).InverseReference(e => e.Order)
-                .ConstraintName(null);
+                .Entity<Order>().HasOne(e => e.Details).WithOne(e => e.Order)
+                .HasConstraintName(null);
 
             Assert.Equal("FK_OrderDetails_Order_OrderId", foreignKey.Relational().Name);
         }
@@ -203,11 +204,11 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Entity<Order>().Reference(e => e.Details).InverseReference(e => e.Order)
-                .ForeignKey<OrderDetails>(e => e.Id)
-                .ConstraintName("LemonSupreme");
+                .Entity<Order>().HasOne(e => e.Details).WithOne(e => e.Order)
+                .HasForeignKey<OrderDetails>(e => e.Id)
+                .HasConstraintName("LemonSupreme");
 
-            var foreignKey = modelBuilder.Model.GetEntityType(typeof(OrderDetails)).GetForeignKeys().Single();
+            var foreignKey = modelBuilder.Model.FindEntityType(typeof(OrderDetails)).GetForeignKeys().Single();
 
             Assert.Equal("LemonSupreme", foreignKey.Relational().Name);
         }
@@ -219,10 +220,10 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             modelBuilder
                 .Entity<Customer>()
-                .Index(e => e.Id)
-                .Name("Eeeendeeex");
+                .HasIndex(e => e.Id)
+                .HasName("Eeeendeeex");
 
-            var index = modelBuilder.Model.GetEntityType(typeof(Customer)).Indexes.Single();
+            var index = modelBuilder.Model.FindEntityType(typeof(Customer)).GetIndexes().Single();
 
             Assert.Equal("Eeeendeeex", index.Relational().Name);
         }
@@ -236,7 +237,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Entity<Customer>()
                 .ToTable("Customizer");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
 
             Assert.Equal("Customer", entityType.DisplayName());
             Assert.Equal("Customizer", entityType.Relational().TableName);
@@ -251,7 +252,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Entity(typeof(Customer))
                 .ToTable("Customizer");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
 
             Assert.Equal("Customer", entityType.DisplayName());
             Assert.Equal("Customizer", entityType.Relational().TableName);
@@ -266,7 +267,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Entity<Customer>()
                 .ToTable("Customizer", "db0");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
 
             Assert.Equal("Customer", entityType.DisplayName());
             Assert.Equal("Customizer", entityType.Relational().TableName);
@@ -282,7 +283,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Entity(typeof(Customer))
                 .ToTable("Customizer", "db0");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
 
             Assert.Equal("Customer", entityType.DisplayName());
             Assert.Equal("Customizer", entityType.Relational().TableName);
@@ -296,15 +297,38 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             modelBuilder
                 .Entity<Customer>()
-                .Discriminator(b => b.Name)
+                .HasDiscriminator(b => b.Name)
                 .HasValue(typeof(Customer), "1")
                 .HasValue(typeof(SpecialCustomer), "2");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
             Assert.Equal("Name", entityType.Relational().DiscriminatorProperty.Name);
             Assert.Equal(typeof(string), entityType.Relational().DiscriminatorProperty.ClrType);
             Assert.Equal("1", entityType.Relational().DiscriminatorValue);
-            Assert.Equal("2", modelBuilder.Model.GetEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
+            Assert.Equal("2", modelBuilder.Model.FindEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
+        }
+
+        [Fact]
+        public void Can_set_discriminator_value_using_property_expression_separately()
+        {
+            var modelBuilder = CreateConventionModelBuilder();
+
+            modelBuilder
+                .Entity<Customer>()
+                .HasDiscriminator(b => b.Name)
+                .HasValue("1");
+
+            modelBuilder
+                .Entity<SpecialCustomer>()
+                .HasBaseType<Customer>()
+                .HasDiscriminator(b => b.Name)
+                .HasValue("2");
+
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
+            Assert.Equal("Name", entityType.Relational().DiscriminatorProperty.Name);
+            Assert.Equal(typeof(string), entityType.Relational().DiscriminatorProperty.ClrType);
+            Assert.Equal("1", entityType.Relational().DiscriminatorValue);
+            Assert.Equal("2", modelBuilder.Model.FindEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
         }
 
         [Fact]
@@ -314,15 +338,38 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             modelBuilder
                 .Entity<Customer>()
-                .Discriminator("Name", typeof(string))
+                .HasDiscriminator("Name", typeof(string))
                 .HasValue(typeof(Customer), "1")
                 .HasValue(typeof(SpecialCustomer), "2");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
             Assert.Equal("Name", entityType.Relational().DiscriminatorProperty.Name);
             Assert.Equal(typeof(string), entityType.Relational().DiscriminatorProperty.ClrType);
             Assert.Equal("1", entityType.Relational().DiscriminatorValue);
-            Assert.Equal("2", modelBuilder.Model.GetEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
+            Assert.Equal("2", modelBuilder.Model.FindEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
+        }
+
+        [Fact]
+        public void Can_set_discriminator_value_using_property_name_separately()
+        {
+            var modelBuilder = CreateConventionModelBuilder();
+
+            modelBuilder
+                .Entity<Customer>()
+                .HasDiscriminator<string>("Name")
+                .HasValue("1");
+
+            modelBuilder
+                .Entity<SpecialCustomer>()
+                .HasBaseType<Customer>()
+                .HasDiscriminator<string>("Name")
+                .HasValue("2");
+
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
+            Assert.Equal("Name", entityType.Relational().DiscriminatorProperty.Name);
+            Assert.Equal(typeof(string), entityType.Relational().DiscriminatorProperty.ClrType);
+            Assert.Equal("1", entityType.Relational().DiscriminatorValue);
+            Assert.Equal("2", modelBuilder.Model.FindEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
         }
 
         [Fact]
@@ -332,15 +379,38 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             modelBuilder
                 .Entity(typeof(Customer))
-                .Discriminator("Name", typeof(string))
+                .HasDiscriminator("Name", typeof(string))
                 .HasValue(typeof(Customer), "1")
                 .HasValue(typeof(SpecialCustomer), "2");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
             Assert.Equal("Name", entityType.Relational().DiscriminatorProperty.Name);
             Assert.Equal(typeof(string), entityType.Relational().DiscriminatorProperty.ClrType);
             Assert.Equal("1", entityType.Relational().DiscriminatorValue);
-            Assert.Equal("2", modelBuilder.Model.GetEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
+            Assert.Equal("2", modelBuilder.Model.FindEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
+        }
+
+        [Fact]
+        public void Can_set_discriminator_value_non_generic_separately()
+        {
+            var modelBuilder = CreateConventionModelBuilder();
+
+            modelBuilder
+                .Entity(typeof(Customer))
+                .HasDiscriminator("Name", typeof(string))
+                .HasValue(typeof(Customer), "1");
+
+            modelBuilder
+                .Entity(typeof(SpecialCustomer))
+                .HasBaseType(typeof(Customer))
+                .HasDiscriminator("Name", typeof(string))
+                .HasValue(typeof(SpecialCustomer), "2");
+
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
+            Assert.Equal("Name", entityType.Relational().DiscriminatorProperty.Name);
+            Assert.Equal(typeof(string), entityType.Relational().DiscriminatorProperty.ClrType);
+            Assert.Equal("1", entityType.Relational().DiscriminatorValue);
+            Assert.Equal("2", modelBuilder.Model.FindEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
         }
 
         [Fact]
@@ -350,15 +420,15 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             modelBuilder
                 .Entity(typeof(Customer).FullName)
-                .Discriminator("Name", typeof(string))
+                .HasDiscriminator("Name", typeof(string))
                 .HasValue(typeof(Customer).FullName, "1")
                 .HasValue(typeof(SpecialCustomer).FullName, "2");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
             Assert.Equal("Name", entityType.Relational().DiscriminatorProperty.Name);
             Assert.Equal(typeof(string), entityType.Relational().DiscriminatorProperty.ClrType);
             Assert.Equal("1", entityType.Relational().DiscriminatorValue);
-            Assert.Equal("2", modelBuilder.Model.GetEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
+            Assert.Equal("2", modelBuilder.Model.FindEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
         }
 
         [Fact]
@@ -368,17 +438,38 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             modelBuilder
                 .Entity(typeof(Customer))
-                .Discriminator()
+                .HasDiscriminator()
                 .HasValue(typeof(Customer), "1")
                 .HasValue(typeof(SpecialCustomer), "2");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
             Assert.Equal("Discriminator", entityType.Relational().DiscriminatorProperty.Name);
             Assert.Equal(typeof(string), entityType.Relational().DiscriminatorProperty.ClrType);
             Assert.Equal("1", entityType.Relational().DiscriminatorValue);
-            Assert.Equal("2", modelBuilder.Model.GetEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
+            Assert.Equal("2", modelBuilder.Model.FindEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
         }
 
+        [Fact]
+        public void Can_set_default_discriminator_value_separately()
+        {
+            var modelBuilder = CreateConventionModelBuilder();
+
+            modelBuilder
+                .Entity(typeof(Customer))
+                .HasDiscriminator()
+                .HasValue("1");
+
+            modelBuilder
+                .Entity(typeof(SpecialCustomer))
+                .HasDiscriminator()
+                .HasValue("2");
+
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
+            Assert.Equal("Discriminator", entityType.Relational().DiscriminatorProperty.Name);
+            Assert.Equal(typeof(string), entityType.Relational().DiscriminatorProperty.ClrType);
+            Assert.Equal("1", entityType.Relational().DiscriminatorValue);
+            Assert.Equal("2", modelBuilder.Model.FindEntityType(typeof(SpecialCustomer)).Relational().DiscriminatorValue);
+        }
 
         [Fact]
         public void Can_set_schema_on_model()
@@ -401,7 +492,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Entity<Customer>()
                 .ToTable("Customizer");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
 
             Assert.Equal("Customer", entityType.DisplayName());
             Assert.Equal("Customizer", entityType.Relational().TableName);
@@ -425,7 +516,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Entity<Customer>()
                 .ToTable("Customizer", "db1");
 
-            var entityType = modelBuilder.Model.GetEntityType(typeof(Customer));
+            var entityType = modelBuilder.Model.FindEntityType(typeof(Customer));
 
             Assert.Equal("db0", modelBuilder.Model.Relational().DefaultSchema);
             Assert.Equal("Customer", entityType.DisplayName());
@@ -439,7 +530,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder.HasDefaultSchema("Tasty");
-            modelBuilder.Sequence("Snook");
+            modelBuilder.HasSequence("Snook");
 
             var sequence = modelBuilder.Model.Relational().FindSequence("Snook");
 
@@ -453,7 +544,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder.HasDefaultSchema("db0");
-            modelBuilder.Sequence("Snook", "Tasty");
+            modelBuilder.HasSequence("Snook", "Tasty");
 
             var sequence = modelBuilder.Model.Relational().FindSequence("Snook", "Tasty");
 
@@ -466,7 +557,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
         {
             var modelBuilder = CreateConventionModelBuilder();
 
-            modelBuilder.Sequence("Snook");
+            modelBuilder.HasSequence("Snook");
 
             var sequence = modelBuilder.Model.Relational().FindSequence("Snook");
 
@@ -489,7 +580,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
         {
             var modelBuilder = CreateConventionModelBuilder();
 
-            modelBuilder.Sequence("Snook", "Tasty");
+            modelBuilder.HasSequence("Snook", "Tasty");
 
             var sequence = modelBuilder.Model.Relational().FindSequence("Snook", "Tasty");
 
@@ -513,7 +604,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Sequence<int>("Snook")
+                .HasSequence<int>("Snook")
                 .IncrementsBy(11)
                 .StartsAt(1729)
                 .HasMin(111)
@@ -530,7 +621,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Sequence(typeof(int), "Snook")
+                .HasSequence(typeof(int), "Snook")
                 .IncrementsBy(11)
                 .StartsAt(1729)
                 .HasMin(111)
@@ -547,7 +638,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Sequence<int>("Snook", b =>
+                .HasSequence<int>("Snook", b =>
                 {
                     b.IncrementsBy(11)
                         .StartsAt(1729)
@@ -566,7 +657,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Sequence(typeof(int), "Snook", b =>
+                .HasSequence(typeof(int), "Snook", b =>
                 {
                     b.IncrementsBy(11)
                         .StartsAt(1729)
@@ -596,7 +687,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Sequence<int>("Snook", "Tasty")
+                .HasSequence<int>("Snook", "Tasty")
                 .IncrementsBy(11)
                 .StartsAt(1729)
                 .HasMin(111)
@@ -613,7 +704,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Sequence(typeof(int), "Snook", "Tasty")
+                .HasSequence(typeof(int), "Snook", "Tasty")
                 .IncrementsBy(11)
                 .StartsAt(1729)
                 .HasMin(111)
@@ -630,7 +721,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Sequence<int>("Snook", "Tasty", b =>
+                .HasSequence<int>("Snook", "Tasty", b =>
                 {
                     b.IncrementsBy(11).StartsAt(1729).HasMin(111).HasMax(2222);
                 });
@@ -646,7 +737,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Sequence(typeof(int), "Snook", "Tasty", b =>
+                .HasSequence(typeof(int), "Snook", "Tasty", b =>
                 {
                     b.IncrementsBy(11).StartsAt(1729).HasMin(111).HasMax(2222);
                 });
@@ -785,23 +876,23 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             AssertIsGeneric(
                 modelBuilder
-                    .Entity<Customer>().Collection(e => e.Orders)
-                    .InverseReference(e => e.Customer)
-                    .ConstraintName("Will"));
+                    .Entity<Customer>().HasMany(e => e.Orders)
+                    .WithOne(e => e.Customer)
+                    .HasConstraintName("Will"));
 
             AssertIsGeneric(
                 modelBuilder
                     .Entity<Order>()
-                    .Reference(e => e.Customer)
-                    .InverseCollection(e => e.Orders)
-                    .ConstraintName("Jay"));
+                    .HasOne(e => e.Customer)
+                    .WithMany(e => e.Orders)
+                    .HasConstraintName("Jay"));
 
             AssertIsGeneric(
                 modelBuilder
                     .Entity<Order>()
-                    .Reference(e => e.Details)
-                    .InverseReference(e => e.Order)
-                    .ConstraintName("Simon"));
+                    .HasOne(e => e.Details)
+                    .WithOne(e => e.Order)
+                    .HasConstraintName("Simon"));
         }
 
         [Fact]
@@ -810,21 +901,21 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var modelBuilder = CreateConventionModelBuilder();
 
             modelBuilder
-                .Entity<Customer>().Collection(typeof(Order), "Orders")
-                .InverseReference("Customer")
-                .ConstraintName("Will");
+                .Entity<Customer>().HasMany(typeof(Order), "Orders")
+                .WithOne("Customer")
+                .HasConstraintName("Will");
 
             modelBuilder
                 .Entity<Order>()
-                .Reference(e => e.Customer)
-                .InverseCollection(e => e.Orders)
-                .ConstraintName("Jay");
+                .HasOne(e => e.Customer)
+                .WithMany(e => e.Orders)
+                .HasConstraintName("Jay");
 
             modelBuilder
                 .Entity<Order>()
-                .Reference(e => e.Details)
-                .InverseReference(e => e.Order)
-                .ConstraintName("Simon");
+                .HasOne(e => e.Details)
+                .WithOne(e => e.Order)
+                .HasConstraintName("Simon");
         }
 
         private void AssertIsGeneric(EntityTypeBuilder<Customer> _)

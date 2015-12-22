@@ -1,11 +1,11 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Linq;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
@@ -65,10 +65,7 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
 
         private BatContext CreateContext() => new BatContext(_provider, _options);
 
-        public void Dispose()
-        {
-            _testStore?.Dispose();
-        }
+        public void Dispose() => _testStore.Dispose();
     }
 
     public class JokerContext : DbContext
@@ -84,8 +81,8 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
         {
             modelBuilder.Entity<Person>(b =>
                 {
-                    b.ToSqliteTable("People2");
-                    b.Key(t => t.Name);
+                    b.ForSqliteToTable("People2");
+                    b.HasKey(t => t.Name);
                     b.Property(t => t.Name).ValueGeneratedOnAdd();
                 });
         }

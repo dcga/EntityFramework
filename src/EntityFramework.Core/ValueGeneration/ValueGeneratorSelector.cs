@@ -5,10 +5,21 @@ using System;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Utilities;
+using Microsoft.Data.Entity.ValueGeneration.Internal;
 
 namespace Microsoft.Data.Entity.ValueGeneration
 {
+    /// <summary>
+    ///     <para>
+    ///         Selects value generators to be used to generate values for properties of entities.
+    ///     </para>
+    ///     <para>
+    ///         This type is typically used by database providers (and other extensions). It is generally
+    ///         not used in application code.
+    ///     </para>
+    /// </summary>
     public class ValueGeneratorSelector : IValueGeneratorSelector
     {
         private readonly ValueGeneratorFactory<GuidValueGenerator> _guidFactory
@@ -29,8 +40,15 @@ namespace Microsoft.Data.Entity.ValueGeneration
         private readonly ValueGeneratorFactory<TemporaryDateTimeOffsetValueGenerator> _dateTimeOffsetFactory
             = new ValueGeneratorFactory<TemporaryDateTimeOffsetValueGenerator>();
 
+        /// <summary>
+        ///     The cache being used to store value generator instances.
+        /// </summary>
         public virtual IValueGeneratorCache Cache { get; }
 
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="ValueGeneratorSelector" /> class.
+        /// </summary>
+        /// <param name="cache"> The cache to be used to store value generator instances. </param>
         public ValueGeneratorSelector([NotNull] IValueGeneratorCache cache)
         {
             Check.NotNull(cache, nameof(cache));
@@ -38,6 +56,15 @@ namespace Microsoft.Data.Entity.ValueGeneration
             Cache = cache;
         }
 
+        /// <summary>
+        ///     Selects the appropriate value generator for a given property.
+        /// </summary>
+        /// <param name="property"> The property to get the value generator for. </param>
+        /// <param name="entityType">
+        ///     The entity type that the value generator will be used for. When called on inherited properties on derived entity types,
+        ///     this entity type may be different from the declared entity type on <paramref name="property" />
+        /// </param>
+        /// <returns> The value generator to be used. </returns>
         public virtual ValueGenerator Select(IProperty property, IEntityType entityType)
         {
             Check.NotNull(property, nameof(property));
@@ -46,12 +73,21 @@ namespace Microsoft.Data.Entity.ValueGeneration
             return Cache.GetOrAdd(property, entityType, Create);
         }
 
+        /// <summary>
+        ///     Creates a new value generator for the given property.
+        /// </summary>
+        /// <param name="property"> The property to get the value generator for. </param>
+        /// <param name="entityType">
+        ///     The entity type that the value generator will be used for. When called on inherited properties on derived entity types,
+        ///     this entity type may be different from the declared entity type on <paramref name="property" />
+        /// </param>
+        /// <returns> The newly created value generator. </returns>
         public virtual ValueGenerator Create([NotNull] IProperty property, [NotNull] IEntityType entityType)
         {
             Check.NotNull(property, nameof(property));
             Check.NotNull(entityType, nameof(entityType));
 
-            var propertyType = property.ClrType.UnwrapNullableType();
+            var propertyType = property.ClrType.UnwrapNullableType().UnwrapEnumType();
 
             if (propertyType == typeof(Guid))
             {
@@ -59,9 +95,9 @@ namespace Microsoft.Data.Entity.ValueGeneration
             }
 
             if (propertyType.IsInteger()
-                || propertyType == typeof(decimal)
-                || propertyType == typeof(float)
-                || propertyType == typeof(double))
+                || (propertyType == typeof(decimal))
+                || (propertyType == typeof(float))
+                || (propertyType == typeof(double)))
             {
                 return _numberFactory.Create(property);
             }
@@ -87,7 +123,7 @@ namespace Microsoft.Data.Entity.ValueGeneration
             }
 
             throw new NotSupportedException(
-                Strings.NoValueGenerator(property.Name, property.DeclaringEntityType.DisplayName(), propertyType.Name));
+                CoreStrings.NoValueGenerator(property.Name, property.DeclaringEntityType.DisplayName(), propertyType.Name));
         }
     }
 }

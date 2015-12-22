@@ -5,10 +5,10 @@ using System;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Data.Entity.Commands.TestUtilities;
-using Microsoft.Data.Entity.Commands.Utilities;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Migrations;
+using Microsoft.Data.Entity.Migrations.Design;
 using Microsoft.Data.Entity.Migrations.Internal;
 using Microsoft.Data.Entity.Migrations.Operations;
 using Xunit;
@@ -21,12 +21,12 @@ namespace Microsoft.Data.Entity.Commands.Migrations
         public void Migrations_compile()
         {
             var codeHelper = new CSharpHelper();
-            var generator = new CSharpMigrationGenerator(
+            var generator = new CSharpMigrationsGenerator(
                 codeHelper,
                 new CSharpMigrationOperationGenerator(codeHelper),
-                new CSharpModelGenerator(codeHelper));
+                new CSharpSnapshotGenerator(codeHelper));
 
-            var migrationCode = generator.Generate(
+            var migrationCode = generator.GenerateMigration(
                 "MyNamespace",
                 "MyMigration",
                 new[] {
@@ -55,6 +55,7 @@ namespace MyNamespace
 
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+
         }
     }
 }
@@ -66,7 +67,7 @@ namespace MyNamespace
                 typeof(MyContext),
                 "MyMigration",
                 "20150511161616_MyMigration",
-                new Model {["Some:EnumValue"] = RegexOptions.Multiline });
+                new Model { ["Some:EnumValue"] = RegexOptions.Multiline });
             Assert.Equal(
                 @"using System;
 using Microsoft.Data.Entity;
@@ -85,7 +86,7 @@ namespace MyNamespace
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
             modelBuilder
-                .Annotation(""Some:EnumValue"", RegexOptions.Multiline);
+                .HasAnnotation(""Some:EnumValue"", RegexOptions.Multiline);
         }
     }
 }
@@ -123,23 +124,23 @@ namespace MyNamespace
 
             Assert.Equal(1, migration.UpOperations.Count);
             Assert.Empty(migration.DownOperations);
-            Assert.Empty(migration.TargetModel.EntityTypes);
+            Assert.Empty(migration.TargetModel.GetEntityTypes());
         }
 
         [Fact]
         public void Snapshots_compile()
         {
             var codeHelper = new CSharpHelper();
-            var generator = new CSharpMigrationGenerator(
+            var generator = new CSharpMigrationsGenerator(
                 codeHelper,
                 new CSharpMigrationOperationGenerator(codeHelper),
-                new CSharpModelGenerator(codeHelper));
+                new CSharpSnapshotGenerator(codeHelper));
 
             var modelSnapshotCode = generator.GenerateSnapshot(
                 "MyNamespace",
                 typeof(MyContext),
                 "MySnapshot",
-                new Model {["Some:EnumValue"] = RegexOptions.Multiline });
+                new Model { ["Some:EnumValue"] = RegexOptions.Multiline });
             Assert.Equal(@"using System;
 using Microsoft.Data.Entity;
 using Microsoft.Data.Entity.Infrastructure;
@@ -156,7 +157,7 @@ namespace MyNamespace
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
             modelBuilder
-                .Annotation(""Some:EnumValue"", RegexOptions.Multiline);
+                .HasAnnotation(""Some:EnumValue"", RegexOptions.Multiline);
         }
     }
 }
@@ -188,7 +189,7 @@ namespace MyNamespace
             Assert.Equal(typeof(MyContext), contextTypeAttribute.ContextType);
 
             var snapshot = (ModelSnapshot)Activator.CreateInstance(snapshotType);
-            Assert.Empty(snapshot.Model.EntityTypes);
+            Assert.Empty(snapshot.Model.GetEntityTypes());
         }
 
         public class MyContext

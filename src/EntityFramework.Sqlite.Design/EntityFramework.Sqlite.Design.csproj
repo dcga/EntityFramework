@@ -8,9 +8,9 @@
     <ProjectGuid>{2FA76686-11EB-4A4C-B3E2-1FDAF29E4A62}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Microsoft.Data.Entity.Sqlite.Design</RootNamespace>
+    <RootNamespace>Microsoft.Data.Entity.Scaffolding</RootNamespace>
     <AssemblyName>EntityFramework.Sqlite.Design</AssemblyName>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <TargetFrameworkProfile />
   </PropertyGroup>
@@ -19,7 +19,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -27,7 +27,7 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <DefineConstants>TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -37,35 +37,22 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Shared\Check.cs">
-      <Link>Check.cs</Link>
+      <Link>Shared\Check.cs</Link>
     </Compile>
     <Compile Include="..\Shared\CodeAnnotations.cs">
-      <Link>CodeAnnotations.cs</Link>
+      <Link>Shared\CodeAnnotations.cs</Link>
     </Compile>
     <Compile Include="..\Shared\LoggingExtensions.cs">
-      <Link>LoggingExtensions.cs</Link>
+      <Link>Shared\LoggingExtensions.cs</Link>
+    </Compile>
+    <Compile Include="..\Shared\SharedTypeExtensions.cs">
+      <Link>Shared\SharedTypeExtensions.cs</Link>
     </Compile>
     <Compile Include="Properties\InternalsVisibleTo.cs" />
-    <Compile Include="..\..\tools\Resources.cs">
-      <Link>Properties\Resources.cs</Link>
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>Resources.tt</DependentUpon>
-    </Compile>
-    <Compile Include="ReverseEngineering\Configuration\SqliteModelConfiguration.cs" />
-    <Compile Include="ReverseEngineering\SqliteDesignTimeMetadataProviderFactory.cs" />
-    <Compile Include="ReverseEngineering\SqliteDmlParser.cs" />
-    <Compile Include="ReverseEngineering\SqliteMetadataModelProvider.cs" />
-    <Compile Include="Properties\Strings.Designer.cs">
-      <DependentUpon>Strings.resx</DependentUpon>
-    </Compile>
-    <Compile Include="ReverseEngineering\SqliteModelConfigurationFactory.cs" />
-    <Compile Include="SqliteReverseTypeMapper.cs" />
-    <Content Include="..\..\tools\Resources.tt">
-      <Link>Properties\Resources.tt</Link>
-      <Generator>TextTemplatingFileGenerator</Generator>
-      <LastGenOutput>Resources.cs</LastGenOutput>
-    </Content>
+    <Compile Include="SqliteScaffoldingModelFactory.cs" />
+    <Compile Include="SqliteTableSelectionSetExtensions.cs" />
+    <Compile Include="SqliteDesignTimeServices.cs" />
+    <Compile Include="SqliteDatabaseModelFactory.cs" />
     <None Include="project.json" />
   </ItemGroup>
   <ItemGroup>
@@ -87,16 +74,10 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Properties\Strings.resx">
-      <LogicalName>EntityFramework.Sqlite.Design.Strings.resources</LogicalName>
-      <SubType>Designer</SubType>
-    </EmbeddedResource>
-  </ItemGroup>
-  <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
   </Target>

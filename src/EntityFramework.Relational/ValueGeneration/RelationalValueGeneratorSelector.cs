@@ -4,6 +4,7 @@
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Utilities;
+using Microsoft.Data.Entity.ValueGeneration.Internal;
 
 namespace Microsoft.Data.Entity.ValueGeneration
 {
@@ -11,7 +12,7 @@ namespace Microsoft.Data.Entity.ValueGeneration
     {
         public RelationalValueGeneratorSelector(
             [NotNull] IValueGeneratorCache cache,
-            [NotNull] IRelationalMetadataExtensionProvider relationalExtensions)
+            [NotNull] IRelationalAnnotationProvider relationalExtensions)
             : base(cache)
         {
             Check.NotNull(relationalExtensions, nameof(relationalExtensions));
@@ -19,15 +20,15 @@ namespace Microsoft.Data.Entity.ValueGeneration
             RelationalExtensions = relationalExtensions;
         }
 
-        protected virtual IRelationalMetadataExtensionProvider RelationalExtensions { get; }
+        protected virtual IRelationalAnnotationProvider RelationalExtensions { get; }
 
         public override ValueGenerator Create(IProperty property, IEntityType entityType)
         {
             Check.NotNull(property, nameof(property));
             Check.NotNull(entityType, nameof(entityType));
 
-            if (property.DeclaringEntityType.BaseType == null
-                && RelationalExtensions.For(property.DeclaringEntityType).DiscriminatorProperty == property)
+            if ((property.DeclaringEntityType.BaseType == null)
+                && (RelationalExtensions.For(property.DeclaringEntityType).DiscriminatorProperty == property))
             {
                 return new DiscriminatorValueGenerator(RelationalExtensions.For(entityType).DiscriminatorValue);
             }

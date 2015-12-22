@@ -3,7 +3,6 @@
 
 using System;
 using System.Data.Common;
-using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using Microsoft.Data.Entity.FunctionalTests;
@@ -45,9 +44,8 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
         {
             CreateShared(typeof(SqliteTestStore).Name + _name, initializeDatabase);
 
-            _connection = new SqliteConnection(CreateConnectionString(_name));
+            CreateAndOpenConnection();
 
-            _connection.Open();
             _transaction = _connection.BeginTransaction();
 
             return this;
@@ -55,11 +53,20 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
 
         private SqliteTestStore CreateTransient(bool sharedCache)
         {
+            CreateAndOpenConnection(sharedCache);
+
+            return AsTransient();
+        }
+
+        private void CreateAndOpenConnection(bool sharedCache = false)
+        {
             _connection = new SqliteConnection(CreateConnectionString(_name, sharedCache));
 
             _connection.Open();
 
-            return this.AsTransient();
+            var command = _connection.CreateCommand();
+            command.CommandText = "PRAGMA foreign_keys=ON;";
+            command.ExecuteNonQuery();
         }
 
         public SqliteTestStore AsTransient()
@@ -103,29 +110,19 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
         {
             Transaction?.Dispose();
             Connection?.Dispose();
+            base.Dispose();
 
             if (_deleteDatabase)
             {
-                var fileName = _name + ".db";
-                try
-                {
-                    // TODO figure out why some tests cannot delete db files
-                    File.Delete(fileName);
-                }
-                catch (IOException e)
-                {
-                    Debug.WriteLine(e.Message);
-                }
+                File.Delete(_name + ".db");
             }
-            base.Dispose();
         }
 
         public static string CreateConnectionString(string name, bool sharedCache = false) =>
             new SqliteConnectionStringBuilder
             {
                 DataSource = name + ".db",
-                CacheMode = sharedCache ? CacheMode.Shared : CacheMode.Private
-            }
-                .ToString();
+                Cache = sharedCache ? SqliteCacheMode.Shared : SqliteCacheMode.Private
+            }.ToString();
     }
 }

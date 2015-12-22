@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata.Internal;
+using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Metadata.Builders
 {
@@ -53,25 +54,25 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </summary>
         /// <param name="collection">
         ///     A lambda expression representing the collection navigation property on the other end of this
-        ///     relationship (<c>t => t.Collection1</c>). If no property is specified, the relationship will be
+        ///     relationship (<c>blog => blog.Posts</c>). If no property is specified, the relationship will be
         ///     configured without a navigation property on the other end of the relationship.
         /// </param>
         /// <returns> An object to further configure the relationship. </returns>
-        public virtual ReferenceCollectionBuilder<TRelatedEntity, TEntity> InverseCollection(
+        public virtual ReferenceCollectionBuilder<TRelatedEntity, TEntity> WithMany(
             [CanBeNull] Expression<Func<TRelatedEntity, IEnumerable<TEntity>>> collection)
-            => new ReferenceCollectionBuilder<TRelatedEntity, TEntity>(InverseCollectionBuilder(collection?.GetPropertyAccess().Name));
+            => new ReferenceCollectionBuilder<TRelatedEntity, TEntity>(WithManyBuilder(collection?.GetPropertyAccess().Name));
 
         /// <summary>
         ///     Configures this as a one-to-one relationship.
         /// </summary>
         /// <param name="reference">
         ///     A lambda expression representing the reference navigation property on the other end of this
-        ///     relationship (<c>t => t.Reference1</c>). If no property is specified, the relationship will be
+        ///     relationship (<c>blog => blog.BlogInfo</c>). If no property is specified, the relationship will be
         ///     configured without a navigation property on the other end of the relationship.
         /// </param>
         /// <returns> An object to further configure the relationship. </returns>
-        public virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> InverseReference([CanBeNull] Expression<Func<TRelatedEntity, TEntity>> reference)
-            => new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(InverseReferenceBuilder(reference?.GetPropertyAccess().Name));
+        public virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> WithOne([CanBeNull] Expression<Func<TRelatedEntity, TEntity>> reference)
+            => new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(WithOneBuilder(reference?.GetPropertyAccess().Name));
 
         /// <summary>
         ///     Configures this as a one-to-many relationship.
@@ -81,8 +82,9 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     If null, there is no navigation property on the other end of the relationship.
         /// </param>
         /// <returns> An object to further configure the relationship. </returns>
-        public new virtual ReferenceCollectionBuilder<TRelatedEntity, TEntity> InverseCollection([CanBeNull] string collection = null)
-            => new ReferenceCollectionBuilder<TRelatedEntity, TEntity>(InverseCollectionBuilder(collection));
+        public new virtual ReferenceCollectionBuilder<TRelatedEntity, TEntity> WithMany([CanBeNull] string collection = null)
+            => new ReferenceCollectionBuilder<TRelatedEntity, TEntity>(
+                WithManyBuilder(Check.NullButNotEmpty(collection, nameof(collection))));
 
         /// <summary>
         ///     Configures this as a one-to-one relationship.
@@ -92,7 +94,8 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     If null, there is no navigation property on the other end of the relationship.
         /// </param>
         /// <returns> An object to further configure the relationship. </returns>
-        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> InverseReference([CanBeNull] string reference = null)
-            => new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(InverseReferenceBuilder(reference));
+        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> WithOne([CanBeNull] string reference = null)
+            => new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(
+                WithOneBuilder(Check.NullButNotEmpty(reference, nameof(reference))));
     }
 }

@@ -18,12 +18,12 @@ namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
             Check.NotNull(navigation, nameof(navigation));
             Check.NotNull(attribute, nameof(attribute));
 
-            if (!navigation.PointsToPrincipal()
-                || navigation.DeclaringEntityType.ClrType?.GetRuntimeProperties().FirstOrDefault(pi => pi.Name == navigation.Name)?.PropertyType.TryGetSequenceType() != null)
+            if (!navigation.IsDependentToPrincipal()
+                || (navigation.DeclaringEntityType.ClrType?.GetRuntimeProperties().FirstOrDefault(pi => pi.Name == navigation.Name)?.PropertyType.TryGetSequenceType() != null))
             {
                 return relationshipBuilder;
             }
-            return relationshipBuilder.Required(true, ConfigurationSource.DataAnnotation) ?? relationshipBuilder;
+            return relationshipBuilder.IsRequired(true, ConfigurationSource.DataAnnotation) ?? relationshipBuilder;
         }
     }
 }

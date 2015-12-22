@@ -20,7 +20,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
     ///         and it is not designed to be directly constructed in your application code.
     ///     </para>
     /// </summary>
-    public class EntityTypeBuilder : IAccessor<Model>, IAccessor<InternalEntityTypeBuilder>
+    public class EntityTypeBuilder : IInfrastructure<IMutableModel>, IInfrastructure<InternalEntityTypeBuilder>
     {
         /// <summary>
         ///     <para>
@@ -40,25 +40,31 @@ namespace Microsoft.Data.Entity.Metadata.Builders
             Builder = builder;
         }
 
+        /// <summary>
+        ///     Creates a new builder based on the provided internal builder. This can be overridden by derived builders
+        ///     so that logic inherited from this base class will create instances of the derived builder.
+        /// </summary>
+        /// <param name="builder"> The internal builder to create the new builder from. </param>
+        /// <returns> The newly created builder. </returns>
         protected virtual EntityTypeBuilder New([NotNull] InternalEntityTypeBuilder builder)
             => new EntityTypeBuilder(builder);
 
         private InternalEntityTypeBuilder Builder { get; }
 
         /// <summary>
-        ///     The internal builder being used to configure the entity type.
+        ///     Gets the internal builder being used to configure the entity type.
         /// </summary>
-        InternalEntityTypeBuilder IAccessor<InternalEntityTypeBuilder>.Service => Builder;
+        InternalEntityTypeBuilder IInfrastructure<InternalEntityTypeBuilder>.Instance => Builder;
 
         /// <summary>
         ///     The entity type being configured.
         /// </summary>
-        public virtual EntityType Metadata => Builder.Metadata;
+        public virtual IMutableEntityType Metadata => Builder.Metadata;
 
         /// <summary>
         ///     The model that the entity type belongs to.
         /// </summary>
-        Model IAccessor<Model>.Service => Builder.ModelBuilder.Metadata;
+        IMutableModel IInfrastructure<IMutableModel>.Instance => Builder.ModelBuilder.Metadata;
 
         /// <summary>
         ///     Adds or updates an annotation on the entity type. If an annotation with the key specified in
@@ -67,36 +73,38 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// <param name="annotation"> The key of the annotation to be added or updated. </param>
         /// <param name="value"> The value to be stored in the annotation. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual EntityTypeBuilder Annotation([NotNull] string annotation, [NotNull] object value)
+        public virtual EntityTypeBuilder HasAnnotation([NotNull] string annotation, [NotNull] object value)
         {
             Check.NotEmpty(annotation, nameof(annotation));
             Check.NotNull(value, nameof(value));
 
-            Builder.Annotation(annotation, value, ConfigurationSource.Explicit);
+            Builder.HasAnnotation(annotation, value, ConfigurationSource.Explicit);
 
             return this;
         }
 
-        public virtual EntityTypeBuilder BaseType([NotNull] string name)
-        {
-            Check.NotEmpty(name, nameof(name));
+        /// <summary>
+        ///     Sets the base type of this entity in an inheritance hierarchy.
+        /// </summary>
+        /// <param name="name"> The name of the base type. </param>
+        /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
+        public virtual EntityTypeBuilder HasBaseType([CanBeNull] string name)
+            => New(Builder.HasBaseType(name, ConfigurationSource.Explicit));
 
-            return New(Builder.BaseType(name, ConfigurationSource.Explicit));
-        }
-
-        public virtual EntityTypeBuilder BaseType([NotNull] Type entityType)
-        {
-            Check.NotNull(entityType, nameof(entityType));
-
-            return New(Builder.BaseType(entityType, ConfigurationSource.Explicit));
-        }
+        /// <summary>
+        ///     Sets the base type of this entity in an inheritance hierarchy.
+        /// </summary>
+        /// <param name="entityType"> The base type. </param>
+        /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
+        public virtual EntityTypeBuilder HasBaseType([CanBeNull] Type entityType)
+            => New(Builder.HasBaseType(entityType, ConfigurationSource.Explicit));
 
         /// <summary>
         ///     Sets the properties that make up the primary key for this entity type.
         /// </summary>
         /// <param name="propertyNames"> The names of the properties that make up the primary key. </param>
         /// <returns> An object that can be used to configure the primary key. </returns>
-        public virtual KeyBuilder Key([NotNull] params string[] propertyNames)
+        public virtual KeyBuilder HasKey([NotNull] params string[] propertyNames)
         {
             Check.NotEmpty(propertyNames, nameof(propertyNames));
 
@@ -109,11 +117,11 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </summary>
         /// <param name="propertyNames"> The names of the properties that make up the unique constraint. </param>
         /// <returns> An object that can be used to configure the unique constraint. </returns>
-        public virtual KeyBuilder AlternateKey([NotNull] params string[] propertyNames)
+        public virtual KeyBuilder HasAlternateKey([NotNull] params string[] propertyNames)
         {
             Check.NotNull(propertyNames, nameof(propertyNames));
 
-            return new KeyBuilder(Builder.Key(propertyNames, ConfigurationSource.Explicit));
+            return new KeyBuilder(Builder.HasKey(propertyNames, ConfigurationSource.Explicit));
         }
 
         /// <summary>
@@ -174,11 +182,11 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </summary>
         /// <param name="propertyNames"> The names of the properties that make up the index. </param>
         /// <returns> An object that can be used to configure the index. </returns>
-        public virtual IndexBuilder Index([NotNull] params string[] propertyNames)
+        public virtual IndexBuilder HasIndex([NotNull] params string[] propertyNames)
         {
             Check.NotEmpty(propertyNames, nameof(propertyNames));
 
-            return new IndexBuilder(Builder.Index(propertyNames, ConfigurationSource.Explicit));
+            return new IndexBuilder(Builder.HasIndex(propertyNames, ConfigurationSource.Explicit));
         }
 
         /// <summary>
@@ -188,8 +196,8 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     </para>
         ///     <para>
         ///         After calling this method, you should chain a call to
-        ///         <see cref="ReferenceNavigationBuilder.InverseCollection(string)" />
-        ///         or <see cref="ReferenceNavigationBuilder.InverseReference(string)" /> to fully configure
+        ///         <see cref="ReferenceNavigationBuilder.WithMany" />
+        ///         or <see cref="ReferenceNavigationBuilder.WithOne" /> to fully configure
         ///         the relationship. Calling just this method without the chained call will not
         ///         produce a valid relationship.
         ///     </para>
@@ -201,11 +209,12 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     end.
         /// </param>
         /// <returns> An object that can be used to configure the relationship. </returns>
-        public virtual ReferenceNavigationBuilder Reference(
+        public virtual ReferenceNavigationBuilder HasOne(
             [NotNull] Type relatedType,
             [CanBeNull] string navigationName = null)
         {
             Check.NotNull(relatedType, nameof(relatedType));
+            Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
             var relatedEntityType = Builder.ModelBuilder.Entity(relatedType, ConfigurationSource.Explicit).Metadata;
 
@@ -222,8 +231,8 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     </para>
         ///     <para>
         ///         After calling this method, you should chain a call to
-        ///         <see cref="ReferenceNavigationBuilder.InverseCollection(string)" />
-        ///         or <see cref="ReferenceNavigationBuilder.InverseReference(string)" /> to fully configure
+        ///         <see cref="ReferenceNavigationBuilder.WithMany" />
+        ///         or <see cref="ReferenceNavigationBuilder.WithOne" /> to fully configure
         ///         the relationship. Calling just this method without the chained call will not
         ///         produce a valid relationship.
         ///     </para>
@@ -235,11 +244,12 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     end.
         /// </param>
         /// <returns> An object that can be used to configure the relationship. </returns>
-        public virtual ReferenceNavigationBuilder Reference(
+        public virtual ReferenceNavigationBuilder HasOne(
             [NotNull] string relatedTypeName,
             [CanBeNull] string navigationName = null)
         {
             Check.NotEmpty(relatedTypeName, nameof(relatedTypeName));
+            Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
             var relatedEntityType = Builder.ModelBuilder.Entity(relatedTypeName, ConfigurationSource.Explicit).Metadata;
 
@@ -256,7 +266,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     </para>
         ///     <para>
         ///         After calling this method, you should chain a call to
-        ///         <see cref="CollectionNavigationBuilder.InverseReference(string)" />
+        ///         <see cref="CollectionNavigationBuilder.WithOne" />
         ///         to fully configure the relationship. Calling just this method without the chained call will not
         ///         produce a valid relationship.
         ///     </para>
@@ -268,11 +278,12 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     end.
         /// </param>
         /// <returns> An object that can be used to configure the relationship. </returns>
-        public virtual CollectionNavigationBuilder Collection(
+        public virtual CollectionNavigationBuilder HasMany(
             [NotNull] Type relatedType,
             [CanBeNull] string navigationName = null)
         {
             Check.NotNull(relatedType, nameof(relatedType));
+            Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
             var relatedEntityType = Builder.ModelBuilder.Entity(relatedType, ConfigurationSource.Explicit).Metadata;
 
@@ -286,7 +297,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     </para>
         ///     <para>
         ///         After calling this method, you should chain a call to
-        ///         <see cref="CollectionNavigationBuilder.InverseReference(string)" />
+        ///         <see cref="CollectionNavigationBuilder.WithOne" />
         ///         to fully configure the relationship. Calling just this method without the chained call will not
         ///         produce a valid relationship.
         ///     </para>
@@ -298,37 +309,64 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     end.
         /// </param>
         /// <returns> An object that can be used to configure the relationship. </returns>
-        public virtual CollectionNavigationBuilder Collection(
+        public virtual CollectionNavigationBuilder HasMany(
             [NotNull] string relatedTypeName,
             [CanBeNull] string navigationName = null)
         {
             Check.NotEmpty(relatedTypeName, nameof(relatedTypeName));
+            Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
             var relatedEntityType = Builder.ModelBuilder.Entity(relatedTypeName, ConfigurationSource.Explicit).Metadata;
 
             return new CollectionNavigationBuilder(CollectionBuilder(relatedEntityType, navigationName));
         }
 
+        /// <summary>
+        ///     Creates a relationship builder for a relationship that has a reference navigation property on this entity.
+        /// </summary>
+        /// <param name="relatedEntityType"> The entity type that the relationship targets. </param>
+        /// <param name="navigationName">
+        ///     The name of the navigation property on this entity. If null is passed, then a relationship with no navigation
+        ///     property is created.
+        /// </param>
+        /// <returns> The newly created builder. </returns>
         protected virtual InternalRelationshipBuilder ReferenceBuilder(
             [NotNull] EntityType relatedEntityType, [CanBeNull] string navigationName)
-            => Builder.Relationship(
-                relatedEntityType,
-                Metadata,
-                navigationToPrincipalName: navigationName ?? "",
-                navigationToDependentName: null,
-                configurationSource: ConfigurationSource.Explicit,
-                strictPrincipal: relatedEntityType == Metadata);
+        {
+            var relationship = Builder.ModelBuilder.Entity(Metadata.Name, ConfigurationSource.Explicit)
+                .Relationship(relatedEntityType, ConfigurationSource.Explicit);
 
+            if (relationship.Metadata.IsSelfReferencing())
+            {
+                relationship = relationship.PrincipalEntityType(relatedEntityType, ConfigurationSource.Explicit);
+            }
+
+            return relationship.DependentToPrincipal(navigationName, ConfigurationSource.Explicit);
+        }
+
+        /// <summary>
+        ///     Creates a relationship builder for a relationship that has a collection navigation property on this entity.
+        /// </summary>
+        /// <param name="relatedEntityType"> The entity type that the relationship targets. </param>
+        /// <param name="navigationName">
+        ///     The name of the navigation property on this entity. If null is passed, then a relationship with no navigation
+        ///     property is created.
+        /// </param>
+        /// <returns> The newly created builder. </returns>
         protected virtual InternalRelationshipBuilder CollectionBuilder(
             [NotNull] EntityType relatedEntityType, [CanBeNull] string navigationName)
-            => Builder.Relationship(
-                Metadata,
-                relatedEntityType,
-                navigationToPrincipalName: null,
-                navigationToDependentName: navigationName ?? "",
-                configurationSource: ConfigurationSource.Explicit,
-                isUnique: false);
-        
+            => Builder.ModelBuilder.Entity(relatedEntityType.Name, ConfigurationSource.Explicit)
+                .Relationship(Builder, ConfigurationSource.Explicit)
+                .DependentEntityType(relatedEntityType, ConfigurationSource.Explicit)
+                .IsUnique(false, ConfigurationSource.Explicit)
+                .PrincipalToDependent(navigationName, ConfigurationSource.Explicit);
+
+        /// <summary>
+        ///     Creates a builder for a property on this entity.
+        /// </summary>
+        /// <param name="propertyType"> The type of values stored in the property. </param>
+        /// <param name="propertyName"> The name of the property. </param>
+        /// <returns> The newly created builder. </returns>
         protected virtual InternalPropertyBuilder PropertyBuilder(
             [NotNull] Type propertyType, [CanBeNull] string propertyName)
         {
@@ -336,7 +374,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
             Check.NotEmpty(propertyName, nameof(propertyName));
 
             var builder = Builder.Property(propertyName, ConfigurationSource.Explicit);
-            var clrTypeSet = builder.ClrType(propertyType, ConfigurationSource.Explicit);
+            var clrTypeSet = builder.HasClrType(propertyType, ConfigurationSource.Explicit);
             Debug.Assert(clrTypeSet);
             return builder;
         }

@@ -11,10 +11,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         where TTestStore : TestStore
         where TFixture : DataAnnotationFixtureBase<TTestStore>, new()
     {
-        protected DataAnnotationContext CreateContext()
-        {
-            return Fixture.CreateContext(TestStore);
-        }
+        protected DataAnnotationContext CreateContext() => Fixture.CreateContext(TestStore);
 
         protected DataAnnotationTestBase(TFixture fixture)
         {
@@ -27,10 +24,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
         protected TTestStore TestStore { get; }
 
-        public void Dispose()
-        {
-            TestStore.Dispose();
-        }
+        public void Dispose() => TestStore.Dispose();
 
         [Fact]
         public virtual void ConcurrencyCheckAttribute_throws_if_value_in_database_changed()
@@ -89,7 +83,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                Assert.False(context.Model.EntityTypes.Any(e => e.Name == typeof(C).FullName));
+                Assert.False(context.Model.GetEntityTypes().Any(e => e.Name == typeof(C).FullName));
             }
         }
 
@@ -98,7 +92,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                Assert.False(context.Model.EntityTypes.Any(e => e.Name == typeof(UselessBookDetails).FullName));
+                Assert.False(context.Model.GetEntityTypes().Any(e => e.Name == typeof(UselessBookDetails).FullName));
             }
         }
 
@@ -107,7 +101,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                Assert.Null(context.Model.EntityTypes.First(e => e.Name == typeof(One).FullName).FindProperty("IgnoredProperty"));
+                Assert.Null(context.Model.GetEntityTypes().First(e => e.Name == typeof(One).FullName).FindProperty("IgnoredProperty"));
             }
         }
 

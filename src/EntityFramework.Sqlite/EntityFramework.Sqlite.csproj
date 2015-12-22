@@ -8,26 +8,30 @@
     <ProjectGuid>{E340807B-ECBB-41DF-A164-23FE833C76DE}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Microsoft.Data.Entity.Sqlite</RootNamespace>
+    <RootNamespace>Microsoft.Data.Entity</RootNamespace>
     <AssemblyName>EntityFramework.Sqlite</AssemblyName>
     <FileAlignment>512</FileAlignment>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsAsErrors>
+    </WarningsAsErrors>
+    <NoWarn>
+    </NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <DefineConstants>TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -56,64 +60,64 @@
       <Link>Utilities\Check.cs</Link>
     </Compile>
     <Compile Include="..\Shared\SharedTypeExtensions.cs">
-      <Link>Utilities\SharedTypeExtensions.cs</Link>
+      <Link>Extensions\SharedTypeExtensions.cs</Link>
     </Compile>
+    <Compile Include="Infrastructure\Internal\SqliteModelSource.cs" />
+    <Compile Include="Internal\SqliteModelValidator.cs" />
+    <Compile Include="Infrastructure\Internal\SqliteOptionsExtension.cs" />
     <Compile Include="Metadata\Builders\SqliteEntityTypeBuilderExtensions.cs" />
     <Compile Include="Metadata\Builders\SqliteReferenceCollectionBuilderExtensions.cs" />
     <Compile Include="Metadata\Builders\SqliteReferenceReferenceBuilderExtensions.cs" />
     <Compile Include="Metadata\Builders\SqliteIndexBuilderExtensions.cs" />
     <Compile Include="Metadata\Builders\SqliteKeyBuilderExtensions.cs" />
     <Compile Include="Metadata\Builders\SqlitePropertyBuilderExtensions.cs" />
+    <Compile Include="Metadata\Internal\SqliteAnnotationNames.cs" />
     <Compile Include="Metadata\Internal\SqliteInternalMetadataBuilderExtensions.cs" />
-    <Compile Include="Metadata\SqliteAnnotationNames.cs" />
-    <Compile Include="Metadata\SqliteMetadataExtensionProvider.cs" />
+    <Compile Include="Metadata\Internal\SqliteAnnotationProvider.cs" />
     <Compile Include="Metadata\SqliteMetadataExtensions.cs" />
-    <Compile Include="Migrations\SqliteHistoryRepository.cs" />
+    <Compile Include="Migrations\Internal\SqliteHistoryRepository.cs" />
     <Compile Include="Migrations\SqliteMigrationsAnnotationProvider.cs" />
     <Compile Include="Migrations\SqliteMigrationsSqlGenerator.cs" />
-    <Compile Include="Properties\Strings.Designer.cs">
-      <DependentUpon>Strings.resx</DependentUpon>
+    <Compile Include="Properties\SqliteStrings.Designer.cs">
+      <DependentUpon>SqliteStrings.resx</DependentUpon>
     </Compile>
-    <Compile Include="Query\ExpressionTranslators\MathAbsTranslator.cs" />
-    <Compile Include="Query\ExpressionTranslators\SqliteStringCompareTranslator.cs" />
-    <Compile Include="Query\ExpressionTranslators\StringLengthTranslator.cs" />
-    <Compile Include="Query\ExpressionTranslators\StringToLowerTranslator.cs" />
-    <Compile Include="Query\ExpressionTranslators\StringToUpperTranslator.cs" />
-    <Compile Include="Query\SqliteQueryCompilationContext.cs" />
-    <Compile Include="Query\SqliteQuerySqlGenerator.cs" />
-    <Compile Include="Query\ExpressionTranslators\SqliteCompositeExpressionFragmentTranslator.cs" />
-    <Compile Include="Query\ExpressionTranslators\SqliteCompositeMemberTranslator.cs" />
-    <Compile Include="SqliteDatabaseConnection.cs" />
-    <Compile Include="SqliteDatabaseCreator.cs" />
-    <Compile Include="SqliteConventionSetBuilder.cs" />
-    <Compile Include="SqliteDbContextOptionsBuilder.cs" />
+    <Compile Include="Query\ExpressionTranslators\Internal\SqliteMathAbsTranslator.cs" />
+    <Compile Include="Query\ExpressionTranslators\Internal\SqliteStringLengthTranslator.cs" />
+    <Compile Include="Query\ExpressionTranslators\Internal\SqliteStringToLowerTranslator.cs" />
+    <Compile Include="Query\ExpressionTranslators\Internal\SqliteStringToUpperTranslator.cs" />
+    <Compile Include="Query\Sql\SqliteQuerySqlGenerator.cs" />
+    <Compile Include="Query\Sql\SqliteQuerySqlGeneratorFactory.cs" />
+    <Compile Include="Query\ExpressionTranslators\Internal\SqliteCompositeMemberTranslator.cs" />
+    <Compile Include="Storage\Internal\SqliteDatabaseCreator.cs" />
+    <Compile Include="Storage\Internal\SqliteRelationalConnection.cs" />
+    <Compile Include="Metadata\Conventions\SqliteConventionSetBuilder.cs" />
+    <Compile Include="Infrastructure\SqliteDbContextOptionsBuilder.cs" />
     <Compile Include="SqliteDbContextOptionsBuilderExtensions.cs" />
-    <Compile Include="SqliteEntityFrameworkServicesBuilderExtensions.cs" />
-    <Compile Include="Query\ExpressionTranslators\SqliteCompositeMethodCallTranslator.cs" />
-    <Compile Include="SqliteModelSource.cs" />
-    <Compile Include="Update\SqliteUpdateSqlGenerator.cs" />
-    <Compile Include="SqliteTypeMapper.cs" />
-    <Compile Include="Update\SqliteModificationCommandBatchFactory.cs" />
+    <Compile Include="Infrastructure\SqliteEntityFrameworkServicesBuilderExtensions.cs" />
+    <Compile Include="Query\ExpressionTranslators\Internal\SqliteCompositeMethodCallTranslator.cs" />
+    <Compile Include="Storage\Internal\SqliteSqlGenerationHelper.cs" />
+    <Compile Include="Storage\Internal\SqliteTypeMapper.cs" />
+    <Compile Include="Update\Internal\SqliteModificationCommandBatchFactory.cs" />
+    <Compile Include="Update\Internal\SqliteUpdateSqlGenerator.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\InternalsVisibleTo.cs" />
     <Compile Include="..\Shared\CodeAnnotations.cs">
       <Link>Utilities\CodeAnnotations.cs</Link>
     </Compile>
-    <Compile Include="SqliteDatabase.cs" />
-    <Compile Include="SqliteDatabaseProviderServices.cs" />
-    <Compile Include="SqliteOptionsExtension.cs" />
-    <Compile Include="ValueGeneration\SqliteValueGeneratorCache.cs" />
+    <Compile Include="Storage\SqliteDatabaseProviderServices.cs" />
+    <Compile Include="ValueGeneration\Internal\SqliteValueGeneratorCache.cs" />
     <Content Include="..\..\tools\Resources.tt">
       <Link>Properties\Resources.tt</Link>
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>Resources.cs</LastGenOutput>
+      <CustomToolNamespace>Microsoft.Data.Entity.Internal</CustomToolNamespace>
     </Content>
     <EmbeddedResource Include="Properties\EntityFramework.Sqlite.rd.xml" />
     <None Include="project.json" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Properties\Strings.resx">
-      <LogicalName>EntityFramework.Sqlite.Strings.resources</LogicalName>
+    <EmbeddedResource Include="Properties\SqliteStrings.resx">
+      <LogicalName>EntityFramework.Sqlite.SqliteStrings.resources</LogicalName>
       <SubType>Designer</SubType>
     </EmbeddedResource>
   </ItemGroup>

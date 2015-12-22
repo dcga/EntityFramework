@@ -4,7 +4,7 @@
 using System;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.Data.Entity.InMemory.FunctionalTests
 {
@@ -28,8 +28,9 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
             optionsBuilder.UseInMemoryDatabase();
             _options = optionsBuilder.Options;
         }
-        
+
         public override DbContext CreateContext() => new DbContext(_serviceProvider, _options);
+
         public override void Dispose()
         {
             _testStore.Dispose();

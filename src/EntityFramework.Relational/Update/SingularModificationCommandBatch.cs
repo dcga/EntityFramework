@@ -2,15 +2,22 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.Data.Entity.Storage;
 
 namespace Microsoft.Data.Entity.Update
 {
     public class SingularModificationCommandBatch : AffectedCountModificationCommandBatch
     {
         public SingularModificationCommandBatch(
-            [NotNull] IUpdateSqlGenerator sqlGenerator)
-            : base(sqlGenerator)
+            [NotNull] IRelationalCommandBuilderFactory commandBuilderFactory,
+            [NotNull] ISqlGenerationHelper sqlGenerationHelper,
+            [NotNull] IUpdateSqlGenerator updateSqlGenerator,
+            [NotNull] IRelationalValueBufferFactoryFactory valueBufferFactoryFactory)
+            : base(
+                commandBuilderFactory,
+                sqlGenerationHelper,
+                updateSqlGenerator,
+                valueBufferFactoryFactory)
         {
         }
 

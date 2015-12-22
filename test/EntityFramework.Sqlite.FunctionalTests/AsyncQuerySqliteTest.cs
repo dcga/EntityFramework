@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.FunctionalTests.TestModels.Northwind;
+using Microsoft.Data.Entity.FunctionalTests.TestUtilities.Xunit;
 using Xunit;
 
 #pragma warning disable 1998
@@ -35,18 +36,16 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
         {
             await AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.Contains("M")), // case-insensitive
-                cs => cs.Where(c => c.ContactName.Contains("M") 
-                                     || c.ContactName.Contains("m")), // case-sensitive
+                cs => cs.Where(c => c.ContactName.Contains("M")
+                                    || c.ContactName.Contains("m")), // case-sensitive
                 entryCount: 34);
         }
 
         public override async Task String_Contains_MethodCall()
         {
             await AssertQuery<Customer>(
-                cs => cs.Where(c => c.ContactName.Contains(LocalMethod1())), // case-insensitive
-                cs => cs.Where(c => c.ContactName.Contains(LocalMethod1()) 
-                                    || c.ContactName.Contains(LocalMethod2())), // case-sensitive
-                entryCount: 34);
+                cs => cs.Where(c => c.ContactName.Contains(LocalMethod1())),
+                entryCount: 19);
         }
 
         public async Task Skip_when_no_order_by()
@@ -54,11 +53,11 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
             await Assert.ThrowsAsync<Exception>(async () => await AssertQuery<Customer>(cs => cs.Skip(5).Take(10)));
         }
 
-        [Fact]
+        [ConditionalFact]
         public async Task Single_Predicate_Cancellation()
         {
             await Assert.ThrowsAsync<TaskCanceledException>(async () =>
-                await Single_Predicate_Cancellation(TestSqlLoggerFactory.CancelQuery()));
+                await Single_Predicate_Cancellation(Fixture.CancelQuery()));
         }
 
         public AsyncQuerySqliteTest(NorthwindQuerySqliteFixture fixture)

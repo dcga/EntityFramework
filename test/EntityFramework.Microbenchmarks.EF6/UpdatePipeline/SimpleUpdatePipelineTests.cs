@@ -3,12 +3,12 @@
 
 using System.Linq;
 using EntityFramework.Microbenchmarks.Core;
-using EntityFramework.Microbenchmarks.Core.Models.Orders;
 using EntityFramework.Microbenchmarks.EF6.Models.Orders;
 using Xunit;
 
 namespace EntityFramework.Microbenchmarks.EF6.UpdatePipeline
 {
+    [SqlServerRequired]
     public class SimpleUpdatePipelineTests : IClassFixture<SimpleUpdatePipelineTests.SimpleUpdatePipelineFixture>
     {
         private readonly SimpleUpdatePipelineFixture _fixture;
@@ -19,16 +19,14 @@ namespace EntityFramework.Microbenchmarks.EF6.UpdatePipeline
         }
 
         [Benchmark]
-        public void Insert(MetricCollector collector)
+        public void Insert(IMetricCollector collector)
         {
             using (var context = _fixture.CreateContext())
             {
                 using (context.Database.BeginTransaction())
                 {
-                    for (var i = 0; i < 1000; i++)
-                    {
-                        context.Customers.Add(new Customer { Name = "New Customer " + i });
-                    }
+                    var customers = _fixture.CreateCustomers(1000, setPrimaryKeys: false);
+                    context.Customers.AddRange(customers);
 
                     collector.StartCollection();
                     var records = context.SaveChanges();
@@ -40,7 +38,7 @@ namespace EntityFramework.Microbenchmarks.EF6.UpdatePipeline
         }
 
         [Benchmark]
-        public void Update(MetricCollector collector)
+        public void Update(IMetricCollector collector)
         {
             using (var context = _fixture.CreateContext())
             {
@@ -48,7 +46,7 @@ namespace EntityFramework.Microbenchmarks.EF6.UpdatePipeline
                 {
                     foreach (var customer in context.Customers)
                     {
-                        customer.Name += " Modified";
+                        customer.FirstName += " Modified";
                     }
 
                     collector.StartCollection();
@@ -61,16 +59,13 @@ namespace EntityFramework.Microbenchmarks.EF6.UpdatePipeline
         }
 
         [Benchmark]
-        public void Delete(MetricCollector collector)
+        public void Delete(IMetricCollector collector)
         {
             using (var context = _fixture.CreateContext())
             {
                 using (context.Database.BeginTransaction())
                 {
-                    foreach (var customer in context.Customers)
-                    {
-                        context.Customers.Remove(customer);
-                    }
+                    context.Customers.RemoveRange(context.Customers.ToList());
 
                     collector.StartCollection();
                     var records = context.SaveChanges();
@@ -82,27 +77,25 @@ namespace EntityFramework.Microbenchmarks.EF6.UpdatePipeline
         }
 
         [Benchmark]
-        public void Mixed(MetricCollector collector)
+        public void Mixed(IMetricCollector collector)
         {
             using (var context = _fixture.CreateContext())
             {
                 using (context.Database.BeginTransaction())
                 {
-                    var customers = context.Customers.ToArray();
+                    var existingCustomers = context.Customers.ToArray();
 
-                    for (var i = 0; i < 333; i++)
-                    {
-                        context.Customers.Add(new Customer { Name = "New Customer " + i });
-                    }
+                    var newCustomers = _fixture.CreateCustomers(333, setPrimaryKeys: false);
+                    context.Customers.AddRange(newCustomers);
 
                     for (var i = 0; i < 1000; i += 3)
                     {
-                        context.Customers.Remove(customers[i]);
+                        context.Customers.Remove(existingCustomers[i]);
                     }
 
                     for (var i = 1; i < 1000; i += 3)
                     {
-                        customers[i].Name += " Modified";
+                        existingCustomers[i].FirstName += " Modified";
                     }
 
                     collector.StartCollection();
@@ -118,7 +111,8 @@ namespace EntityFramework.Microbenchmarks.EF6.UpdatePipeline
         {
             public SimpleUpdatePipelineFixture()
                 : base("Perf_UpdatePipeline_Simple_EF6", 0, 1000, 0, 0)
-            { }
+            {
+            }
         }
     }
 }

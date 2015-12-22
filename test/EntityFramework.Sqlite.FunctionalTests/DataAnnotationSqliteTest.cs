@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using Microsoft.Data.Entity.FunctionalTests;
-using Microsoft.Data.Entity.Metadata;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
@@ -18,12 +17,13 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
         {
             base.ConcurrencyCheckAttribute_throws_if_value_in_database_changed();
 
-            Assert.Equal(@"SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""
+            Assert.Contains(@"SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""
 FROM ""Sample"" AS ""r""
 WHERE ""r"".""UniqueNo"" = 1
-LIMIT 1
+LIMIT 1",
+                Sql);
 
-SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""
+            Assert.Contains(@"SELECT ""r"".""UniqueNo"", ""r"".""MaxLengthProperty"", ""r"".""Name"", ""r"".""RowVersion""
 FROM ""Sample"" AS ""r""
 WHERE ""r"".""UniqueNo"" = 1
 LIMIT 1
@@ -52,7 +52,7 @@ SELECT changes();",
         {
             base.DatabaseGeneratedAttribute_autogenerates_values_when_set_to_identity();
 
-            Assert.Equal(@"@p0: 
+            Assert.Contains(@"@p0: 
 @p1: Third
 @p2: 00000000-0000-0000-0000-000000000003
 
@@ -69,7 +69,7 @@ WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(10, context.Model.GetEntityType(typeof(One)).GetProperty("MaxLengthProperty").GetMaxLength());
+                Assert.Equal(10, context.Model.FindEntityType(typeof(One)).FindProperty("MaxLengthProperty").GetMaxLength());
             }
         }
 
@@ -77,21 +77,18 @@ WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
         {
             base.RequiredAttribute_for_navigation_throws_while_inserting_null_value();
 
-            Assert.Equal(@"@p0: Book1
+            Assert.Contains(@"@p0: 0
+@p1: Book1
 
-INSERT INTO ""BookDetail"" (""BookId"")
-VALUES (@p0);
-SELECT ""Id""
-FROM ""BookDetail""
-WHERE changes() = 1 AND ""Id"" = last_insert_rowid();
+INSERT INTO ""BookDetail"" (""Id"", ""BookId"")
+VALUES (@p0, @p1);",
+                Sql);
 
-@p0:
+            Assert.Contains(@"@p0: 0
+@p1: 
 
-INSERT INTO ""BookDetail"" (""BookId"")
-VALUES (@p0);
-SELECT ""Id""
-FROM ""BookDetail""
-WHERE changes() = 1 AND ""Id"" = last_insert_rowid();",
+INSERT INTO ""BookDetail"" (""Id"", ""BookId"")
+VALUES (@p0, @p1);",
                 Sql);
         }
 
@@ -99,7 +96,7 @@ WHERE changes() = 1 AND ""Id"" = last_insert_rowid();",
         {
             base.RequiredAttribute_for_property_throws_while_inserting_null_value();
 
-            Assert.Equal(@"@p0: 
+            Assert.Contains(@"@p0: 
 @p1: ValidString
 @p2: 00000000-0000-0000-0000-000000000001
 
@@ -107,9 +104,10 @@ INSERT INTO ""Sample"" (""MaxLengthProperty"", ""Name"", ""RowVersion"")
 VALUES (@p0, @p1, @p2);
 SELECT ""UniqueNo""
 FROM ""Sample""
-WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();
+WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
+                Sql);
 
-@p0: 
+            Assert.Contains(@"@p0: 
 @p1: 
 @p2: 00000000-0000-0000-0000-000000000002
 
@@ -126,7 +124,7 @@ WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(16, context.Model.GetEntityType(typeof(Two)).GetProperty("Data").GetMaxLength());
+                Assert.Equal(16, context.Model.FindEntityType(typeof(Two)).FindProperty("Data").GetMaxLength());
             }
         }
 
@@ -135,7 +133,7 @@ WHERE changes() = 1 AND ""UniqueNo"" = last_insert_rowid();",
         {
             using (var context = CreateContext())
             {
-                Assert.True(context.Model.GetEntityType(typeof(Two)).GetProperty("Timestamp").IsConcurrencyToken);
+                Assert.True(context.Model.FindEntityType(typeof(Two)).FindProperty("Timestamp").IsConcurrencyToken);
             }
         }
 

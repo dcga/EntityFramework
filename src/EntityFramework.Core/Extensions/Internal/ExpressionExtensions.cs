@@ -6,7 +6,6 @@ using System.Diagnostics;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Internal;
-using Microsoft.Data.Entity.Utilities;
 
 // ReSharper disable once CheckNamespace
 
@@ -19,17 +18,35 @@ namespace System.Linq.Expressions
         {
             Debug.Assert(propertyAccessExpression.Parameters.Count == 1);
 
-            var propertyInfo
-                = propertyAccessExpression
-                    .Parameters
-                    .Single()
-                    .MatchSimplePropertyAccess(propertyAccessExpression.Body);
+            var parameterExpression = propertyAccessExpression.Parameters.Single();
+            var propertyInfo = parameterExpression.MatchSimplePropertyAccess(propertyAccessExpression.Body);
 
             if (propertyInfo == null)
             {
                 throw new ArgumentException(
-                    Strings.InvalidPropertyExpression(propertyAccessExpression),
+                    CoreStrings.InvalidPropertyExpression(propertyAccessExpression),
                     nameof(propertyAccessExpression));
+            }
+
+            var declaringType = propertyInfo.DeclaringType;
+            var parameterType = parameterExpression.Type;
+
+            if (declaringType != null
+                && declaringType != parameterType
+                && declaringType.GetTypeInfo().IsInterface
+                && declaringType.IsAssignableFrom(parameterType))
+            {
+                var propertyGetter = propertyInfo.GetGetMethod(true);
+                var interfaceMapping = parameterType.GetTypeInfo().GetRuntimeInterfaceMap(declaringType);
+                var index = Array.FindIndex(interfaceMapping.InterfaceMethods, p => p == propertyGetter);
+                var targetMethod = interfaceMapping.TargetMethods[index];
+                foreach (var runtimeProperty in parameterType.GetRuntimeProperties())
+                {
+                    if (targetMethod == runtimeProperty.GetGetMethod(true))
+                    {
+                        return runtimeProperty;
+                    }
+                }
             }
 
             return propertyInfo;
@@ -45,7 +62,7 @@ namespace System.Linq.Expressions
             if (propertyPaths == null)
             {
                 throw new ArgumentException(
-                    Strings.InvalidPropertiesExpression(propertyAccessExpression),
+                    CoreStrings.InvalidPropertiesExpression(propertyAccessExpression),
                     nameof(propertyAccessExpression));
             }
 
@@ -78,7 +95,7 @@ namespace System.Linq.Expressions
             var propertyPath
                 = propertyMatcher(lambdaExpression.Body, lambdaExpression.Parameters.Single());
 
-            return (propertyPath != null) ? new[] { propertyPath } : null;
+            return propertyPath != null ? new[] { propertyPath } : null;
         }
 
         private static PropertyInfo MatchSimplePropertyAccess(
@@ -86,7 +103,7 @@ namespace System.Linq.Expressions
         {
             var propertyInfos = MatchPropertyAccess(parameterExpression, propertyAccessExpression);
 
-            return propertyInfos != null && propertyInfos.Length == 1 ? propertyInfos[0] : null;
+            return (propertyInfos != null) && (propertyInfos.Length == 1) ? propertyInfos[0] : null;
         }
 
         public static PropertyInfo[] GetComplexPropertyAccess([NotNull] this LambdaExpression propertyAccessExpression)
@@ -102,7 +119,7 @@ namespace System.Linq.Expressions
             if (propertyPath == null)
             {
                 throw new ArgumentException(
-                    Strings.InvalidPropertiesExpression(propertyAccessExpression),
+                    CoreStrings.InvalidPropertiesExpression(propertyAccessExpression),
                     nameof(propertyAccessExpression));
             }
 
@@ -139,23 +156,33 @@ namespace System.Linq.Expressions
 
                 propertyAccessExpression = memberExpression.Expression;
             }
-            while (memberExpression.Expression != parameterExpression);
+            while (memberExpression.Expression.RemoveConvert() != parameterExpression);
 
             return propertyInfos.ToArray();
         }
 
-        public static Expression RemoveConvert([NotNull] this Expression expression)
+        public static Expression RemoveConvert([CanBeNull] this Expression expression)
         {
-            Check.NotNull(expression, nameof(expression));
-
             while ((expression != null)
-                   && (expression.NodeType == ExpressionType.Convert
-                       || expression.NodeType == ExpressionType.ConvertChecked))
+                   && ((expression.NodeType == ExpressionType.Convert)
+                       || (expression.NodeType == ExpressionType.ConvertChecked)))
             {
                 expression = RemoveConvert(((UnaryExpression)expression).Operand);
             }
 
             return expression;
+        }
+
+        public static TExpression GetRootExpression<TExpression>([NotNull] this Expression expression)
+            where TExpression : Expression
+        {
+            MemberExpression memberExpression;
+            while ((memberExpression = expression as MemberExpression) != null)
+            {
+                expression = memberExpression.Expression;
+            }
+
+            return expression as TExpression;
         }
     }
 }

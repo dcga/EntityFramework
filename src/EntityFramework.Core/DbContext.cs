@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -9,13 +10,14 @@ using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.ChangeTracking;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
+using Microsoft.Data.Entity.Extensions.Internal;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Data.Entity
 {
@@ -31,26 +33,29 @@ namespace Microsoft.Data.Entity
     ///     </para>
     ///     <para>
     ///         Override the <see cref="OnConfiguring(DbContextOptionsBuilder)" /> method to configure the database (and
-    ///         other options) to be used for the context.
+    ///         other options) to be used for the context. Alternatively, if you would rather perform configuration externally
+    ///         instead of inline in your context, you can use <see cref="DbContextOptionsBuilder{TContext}" />
+    ///         (or <see cref="DbContextOptionsBuilder" />) to externally create an instance of <see cref="DbContextOptions{TContext}" />
+    ///         (or <see cref="DbContextOptions" />) and pass it to a base constructor of <see cref="DbContext" />.
     ///     </para>
     ///     <para>
     ///         The model is discovered by running a set of conventions over the entity classes found in the
-    ///         <see cref="DbSet{TEntity}" />
-    ///         properties on the derived context. To further configure the model that is discovered by convention, you can
-    ///         override the <see cref="OnModelCreating(ModelBuilder)" /> method.
+    ///         <see cref="DbSet{TEntity}" /> properties on the derived context. To further configure the model that
+    ///         is discovered by convention, you can override the <see cref="OnModelCreating(ModelBuilder)" /> method.
     ///     </para>
     /// </remarks>
-    public class DbContext : IDisposable, IAccessor<IServiceProvider>
+    public class DbContext : IDisposable, IInfrastructure<IServiceProvider>
     {
-        private static readonly ThreadSafeDictionaryCache<Type, Type> _optionsTypes = new ThreadSafeDictionaryCache<Type, Type>();
+        private static readonly ConcurrentDictionary<Type, Type> _optionsTypes = new ConcurrentDictionary<Type, Type>();
 
         private LazyRef<IDbContextServices> _contextServices;
         private LazyRef<IDbSetInitializer> _setInitializer;
         private LazyRef<ChangeTracker> _changeTracker;
         private ILogger _logger;
-        private ILoggerFactory _loggerFactory;
 
         private bool _initializing;
+        private IServiceScope _serviceScope;
+        private bool _disposed;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="DbContext" /> class. The
@@ -70,17 +75,16 @@ namespace Microsoft.Data.Entity
         ///     </para>
         ///     <para>
         ///         The service provider must contain all the services required by Entity Framework (and the database being
-        ///         used).
-        ///         The Entity Framework services can be registered using the
+        ///         used). The Entity Framework services can be registered using the
         ///         <see cref="EntityFrameworkServiceCollectionExtensions.AddEntityFramework" /> method.
-        ///         Most databases also provide an extension method on <see cref="IServiceCollection" /> to register the services
-        ///         required.
+        ///         Most databases also provide an extension method on <see cref="IServiceCollection" /> to register the
+        ///         services required. For example, the Microsoft SQL Server provider includes an AddSqlServer() method
+        ///         to add the required services.
         ///     </para>
         ///     <para>
         ///         If the <see cref="IServiceProvider" /> has a <see cref="DbContextOptions" /> or
-        ///         <see cref="DbContextOptions{TContext}" />
-        ///         registered, then this will be used as the options for this context instance. The <see cref="OnConfiguring" />
-        ///         method
+        ///         <see cref="DbContextOptions{TContext}" /> registered, then this will be used as the options for
+        ///         this context instance. The <see cref="OnConfiguring" /> method
         ///         will still be called to allow further configuration of the options.
         ///     </para>
         /// </summary>
@@ -113,19 +117,19 @@ namespace Microsoft.Data.Entity
         ///         configuration of the options.
         ///     </para>
         ///     <para>
-        ///         The service provider must contain all the services required by Entity Framework (and the databases being
-        ///         used).
-        ///         The Entity Framework services can be registered using the
+        ///         The service provider must contain all the services required by Entity Framework (and the database being
+        ///         used). The Entity Framework services can be registered using the
         ///         <see cref="EntityFrameworkServiceCollectionExtensions.AddEntityFramework" /> method.
-        ///         Most databases also provide an extension method on <see cref="IServiceCollection" /> to register the services
-        ///         required.
+        ///         Most databases also provide an extension method on <see cref="IServiceCollection" /> to register the
+        ///         services required. For example, the Microsoft SQL Server provider includes an AddSqlServer() method
+        ///         to add the required services.
         ///     </para>
         ///     <para>
         ///         If the <see cref="IServiceProvider" /> has a <see cref="DbContextOptions" /> or
         ///         <see cref="DbContextOptions{TContext}" />
-        ///         registered, then this will be used as the options for this context instance. The <see cref="OnConfiguring" />
-        ///         method
-        ///         will still be called to allow further configuration of the options.
+        ///         registered, then this will be used as the options for this context instance. The
+        ///         <see cref="OnConfiguring(DbContextOptionsBuilder)" />
+        ///         method will still be called to allow further configuration of the options.
         ///     </para>
         /// </summary>
         /// <param name="serviceProvider">The service provider to be used.</param>
@@ -158,10 +162,10 @@ namespace Microsoft.Data.Entity
             var options = (DbContextOptions)serviceProvider.GetService(genericOptions)
                           ?? serviceProvider.GetService<DbContextOptions>();
 
-            if (options != null
-                && options.GetType() != genericOptions)
+            if ((options != null)
+                && (options.GetType() != genericOptions))
             {
-                throw new InvalidOperationException(Strings.NonGenericOptions);
+                throw new InvalidOperationException(CoreStrings.NonGenericOptions);
             }
 
             return options ?? new DbContextOptions<DbContext>();
@@ -171,13 +175,23 @@ namespace Microsoft.Data.Entity
 
         private IStateManager GetStateManager() => ServiceProvider.GetRequiredService<IStateManager>();
 
-        private IServiceProvider ServiceProvider => _contextServices.Value.ServiceProvider;
+        private IServiceProvider ServiceProvider
+        {
+            get
+            {
+                if (_disposed)
+                {
+                    throw new ObjectDisposedException(GetType().Name);
+                }
+                return _contextServices.Value.ServiceProvider;
+            }
+        }
 
         private IDbContextServices InitializeServices(IServiceProvider serviceProvider, DbContextOptions options)
         {
             if (_initializing)
             {
-                throw new InvalidOperationException(Strings.RecursiveOnConfiguring);
+                throw new InvalidOperationException(CoreStrings.RecursiveOnConfiguring);
             }
 
             try
@@ -185,20 +199,20 @@ namespace Microsoft.Data.Entity
                 _initializing = true;
 
                 var optionsBuilder = new DbContextOptionsBuilder(options);
+
                 OnConfiguring(optionsBuilder);
 
                 var providerSource = serviceProvider != null ? ServiceProviderSource.Explicit : ServiceProviderSource.Implicit;
 
                 serviceProvider = serviceProvider ?? ServiceProviderCache.Instance.GetOrAdd(optionsBuilder.Options);
 
-                _loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
-                _logger = _loggerFactory.CreateLogger<DbContext>();
-                _logger.LogDebug(Strings.DebugLogWarning(nameof(LogLevel.Debug), nameof(ILoggerFactory) + "." + nameof(ILoggerFactory.MinimumLevel), nameof(LogLevel) + "." + nameof(LogLevel.Verbose)));
+                _logger = serviceProvider.GetRequiredService<ILogger<DbContext>>();
 
-                var scopedServiceProvider = serviceProvider
+                _serviceScope = serviceProvider
                     .GetRequiredService<IServiceScopeFactory>()
-                    .CreateScope()
-                    .ServiceProvider;
+                    .CreateScope();
+
+                var scopedServiceProvider = _serviceScope.ServiceProvider;
 
                 return scopedServiceProvider
                     .GetRequiredService<IDbContextServices>()
@@ -211,11 +225,8 @@ namespace Microsoft.Data.Entity
         }
 
         private void InitializeSets(IServiceProvider serviceProvider, DbContextOptions options)
-        {
-            serviceProvider = serviceProvider ?? ServiceProviderCache.Instance.GetOrAdd(options);
-
-            serviceProvider.GetRequiredService<IDbSetInitializer>().InitializeSets(this);
-        }
+            => (serviceProvider ?? ServiceProviderCache.Instance.GetOrAdd(options))
+                .GetRequiredService<IDbSetInitializer>().InitializeSets(this);
 
         /// <summary>
         ///     <para>
@@ -226,19 +237,20 @@ namespace Microsoft.Data.Entity
         ///         not directly exposed in the public API surface.
         ///     </para>
         /// </summary>
-        IServiceProvider IAccessor<IServiceProvider>.Service => ServiceProvider;
+        IServiceProvider IInfrastructure<IServiceProvider>.Instance => ServiceProvider;
 
         /// <summary>
-        ///     Override this method to configure the database (and other options) to be used for this context.
-        ///     This method is called for each instance of the context that is created.
+        ///     <para>
+        ///         Override this method to configure the database (and other options) to be used for this context.
+        ///         This method is called for each instance of the context that is created.
+        ///     </para>
+        ///     <para>
+        ///         In situations where an instance of <see cref="DbContextOptions" /> may or may not have been passed
+        ///         to the constructor, you can use <see cref="DbContextOptionsBuilder.IsConfigured" /> to determine if
+        ///         the options have already been set, and skip some or all of the logic in
+        ///         <see cref="DbContext.OnConfiguring(DbContextOptionsBuilder)" />.
+        ///     </para>
         /// </summary>
-        /// <remarks>
-        ///     If you passed an instance of <see cref="DbContextOptions" /> to the constructor of the context (or
-        ///     provided an <see cref="IServiceProvider" /> with <see cref="DbContextOptions" /> registered) then
-        ///     it is cloned before being passed to this method. This allows the options to be altered without
-        ///     affecting other context instances that are constructed with the same <see cref="DbContextOptions" />
-        ///     instance.
-        /// </remarks>
         /// <param name="optionsBuilder">
         ///     A builder used to create or modify options for this context. Databases (and other extensions)
         ///     typically define extension methods on this object that allow you to configure the context.
@@ -252,6 +264,10 @@ namespace Microsoft.Data.Entity
         ///     exposed in <see cref="DbSet{TEntity}" /> properties on your derived context. The resulting model may be cached
         ///     and re-used for subsequent instances of your derived context.
         /// </summary>
+        /// <remarks>
+        ///     If a model is explicitly set on the options for this context (via <see cref="DbContextOptionsBuilder.UseModel(IModel)" />)
+        ///     then this method will not be run.
+        /// </remarks>
         /// <param name="modelBuilder">
         ///     The builder being used to construct the model for this context. Databases (and other extensions) typically
         ///     define extension methods on this object that allow you to configure aspects of the model that are specific
@@ -262,33 +278,33 @@ namespace Microsoft.Data.Entity
         }
 
         /// <summary>
-        ///     Saves all changes made in this context to the underlying database.
+        ///     Saves all changes made in this context to the database.
         /// </summary>
         /// <remarks>
-        ///     This method will automatically call <see cref="ChangeTracker.DetectChanges" /> to discover any changes
-        ///     to entity instances before saving to the underlying database. This can be disabled via
-        ///     <see cref="ChangeTracker.AutoDetectChangesEnabled" />.
+        ///     This method will automatically call <see cref="ChangeTracking.ChangeTracker.DetectChanges" /> to discover any
+        ///     changes to entity instances before saving to the underlying database. This can be disabled via
+        ///     <see cref="ChangeTracking.ChangeTracker.AutoDetectChangesEnabled" />.
         /// </remarks>
         /// <returns>
-        ///     The number of state entries written to the underlying database.
+        ///     The number of state entries written to the database.
         /// </returns>
         [DebuggerStepThrough]
         public virtual int SaveChanges() => SaveChanges(acceptAllChangesOnSuccess: true);
 
         /// <summary>
-        ///     Saves all changes made in this context to the underlying database.
+        ///     Saves all changes made in this context to the database.
         /// </summary>
         /// <param name="acceptAllChangesOnSuccess">
-        ///     Indicates whether <see cref="ChangeTracker.AcceptAllChanges" /> is called after the changes have been
-        ///     sent succesfully to the database.
+        ///     Indicates whether <see cref="ChangeTracking.ChangeTracker.AcceptAllChanges" /> is called after the changes have
+        ///     been sent successfully to the database.
         /// </param>
         /// <remarks>
-        ///     This method will automatically call <see cref="ChangeTracker.DetectChanges" /> to discover any changes
-        ///     to entity instances before saving to the underlying database. This can be disabled via
-        ///     <see cref="ChangeTracker.AutoDetectChangesEnabled" />.
+        ///     This method will automatically call <see cref="ChangeTracking.ChangeTracker.DetectChanges" /> to discover any
+        ///     changes to entity instances before saving to the underlying database. This can be disabled via
+        ///     <see cref="ChangeTracking.ChangeTracker.AutoDetectChangesEnabled" />.
         /// </remarks>
         /// <returns>
-        ///     The number of state entries written to the underlying database.
+        ///     The number of state entries written to the database.
         /// </returns>
         [DebuggerStepThrough]
         public virtual int SaveChanges(bool acceptAllChangesOnSuccess)
@@ -301,13 +317,13 @@ namespace Microsoft.Data.Entity
             {
                 return stateManager.SaveChanges(acceptAllChangesOnSuccess);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
                 _logger.LogError(
-                    new DatabaseErrorLogState(GetType()),
-                    ex,
-                    (state, exception) =>
-                        Strings.LogExceptionDuringSaveChanges(Environment.NewLine, exception));
+                    CoreLoggingEventId.DatabaseError,
+                    () => new DatabaseErrorLogState(GetType()),
+                    exception,
+                    e => CoreStrings.LogExceptionDuringSaveChanges(Environment.NewLine, e));
 
                 throw;
             }
@@ -322,13 +338,13 @@ namespace Microsoft.Data.Entity
         }
 
         /// <summary>
-        ///     Asynchronously saves all changes made in this context to the underlying database.
+        ///     Asynchronously saves all changes made in this context to the database.
         /// </summary>
         /// <remarks>
         ///     <para>
-        ///         This method will automatically call <see cref="ChangeTracker.DetectChanges" /> to discover any changes
-        ///         to entity instances before saving to the underlying database. This can be disabled via
-        ///         <see cref="ChangeTracker.AutoDetectChangesEnabled" />.
+        ///         This method will automatically call <see cref="ChangeTracking.ChangeTracker.DetectChanges" /> to discover any
+        ///         changes to entity instances before saving to the underlying database. This can be disabled via
+        ///         <see cref="ChangeTracking.ChangeTracker.AutoDetectChangesEnabled" />.
         ///     </para>
         ///     <para>
         ///         Multiple active operations on the same context instance are not supported.  Use 'await' to ensure
@@ -338,25 +354,23 @@ namespace Microsoft.Data.Entity
         /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task to complete.</param>
         /// <returns>
         ///     A task that represents the asynchronous save operation. The task result contains the
-        ///     number of state entries written to the underlying database.
+        ///     number of state entries written to the database.
         /// </returns>
         public virtual Task<int> SaveChangesAsync(CancellationToken cancellationToken = default(CancellationToken))
-        {
-            return SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken: cancellationToken);
-        }
+            => SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken: cancellationToken);
 
         /// <summary>
-        ///     Asynchronously saves all changes made in this context to the underlying database.
+        ///     Asynchronously saves all changes made in this context to the database.
         /// </summary>
         /// <param name="acceptAllChangesOnSuccess">
-        ///     Indicates whether <see cref="ChangeTracker.AcceptAllChanges" /> is called after the changes have been
-        ///     sent succesfully to the database.
+        ///     Indicates whether <see cref="ChangeTracking.ChangeTracker.AcceptAllChanges" /> is called after the changes have
+        ///     been sent successfully to the database.
         /// </param>
         /// <remarks>
         ///     <para>
-        ///         This method will automatically call <see cref="ChangeTracker.DetectChanges" /> to discover any changes
-        ///         to entity instances before saving to the underlying database. This can be disabled via
-        ///         <see cref="ChangeTracker.AutoDetectChangesEnabled" />.
+        ///         This method will automatically call <see cref="ChangeTracking.ChangeTracker.DetectChanges" /> to discover any
+        ///         changes to entity instances before saving to the underlying database. This can be disabled via
+        ///         <see cref="ChangeTracking.ChangeTracker.AutoDetectChangesEnabled" />.
         ///     </para>
         ///     <para>
         ///         Multiple active operations on the same context instance are not supported.  Use 'await' to ensure
@@ -366,7 +380,7 @@ namespace Microsoft.Data.Entity
         /// <param name="cancellationToken">A <see cref="CancellationToken" /> to observe while waiting for the task to complete.</param>
         /// <returns>
         ///     A task that represents the asynchronous save operation. The task result contains the
-        ///     number of state entries written to the underlying database.
+        ///     number of state entries written to the database.
         /// </returns>
         public virtual async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess,
             CancellationToken cancellationToken = default(CancellationToken))
@@ -382,13 +396,13 @@ namespace Microsoft.Data.Entity
             {
                 return await stateManager.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
                 _logger.LogError(
-                    new DatabaseErrorLogState(GetType()),
-                    ex,
-                    (state, exception) =>
-                        Strings.LogExceptionDuringSaveChanges(Environment.NewLine, exception));
+                    CoreLoggingEventId.DatabaseError,
+                    () => new DatabaseErrorLogState(GetType()),
+                    exception,
+                    e => CoreStrings.LogExceptionDuringSaveChanges(Environment.NewLine, e));
 
                 throw;
             }
@@ -399,16 +413,13 @@ namespace Microsoft.Data.Entity
         /// </summary>
         public virtual void Dispose()
         {
-            if (_contextServices.HasValue)
-            {
-                _contextServices.Value.Dispose();
-            }
+            _disposed = true;
+            _serviceScope?.Dispose();
         }
 
         /// <summary>
-        ///     Gets an <see cref="EntityEntry{TEntity}" /> for the given entity providing access to
-        ///     information the context is tracking for the given the entity and the ability
-        ///     to perform actions on the entity.
+        ///     Gets an <see cref="EntityEntry{TEntity}" /> for the given entity. The entry provides
+        ///     access to change tracking information and operations for the entity.
         /// </summary>
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
         /// <param name="entity"> The entity to get the entry for. </param>
@@ -422,12 +433,8 @@ namespace Microsoft.Data.Entity
             return EntryWithoutDetectChanges(entity);
         }
 
-        private EntityEntry<TEntity> EntryWithoutDetectChanges<TEntity>([NotNull] TEntity entity) where TEntity : class
-        {
-            Check.NotNull(entity, nameof(entity));
-
-            return new EntityEntry<TEntity>(this, GetStateManager().GetOrCreateEntry(entity));
-        }
+        private EntityEntry<TEntity> EntryWithoutDetectChanges<TEntity>(TEntity entity) where TEntity : class
+            => new EntityEntry<TEntity>(GetStateManager().GetOrCreateEntry(entity));
 
         /// <summary>
         ///     <para>
@@ -451,11 +458,20 @@ namespace Microsoft.Data.Entity
             return EntryWithoutDetectChanges(entity);
         }
 
-        private EntityEntry EntryWithoutDetectChanges([NotNull] object entity)
-        {
-            Check.NotNull(entity, nameof(entity));
+        private EntityEntry EntryWithoutDetectChanges(object entity)
+            => new EntityEntry(GetStateManager().GetOrCreateEntry(entity));
 
-            return new EntityEntry(this, GetStateManager().GetOrCreateEntry(entity));
+        private void SetEntityState(InternalEntityEntry entry, EntityState entityState, GraphBehavior behavior)
+        {
+            if ((behavior == GraphBehavior.IncludeDependents)
+                && (entry.EntityState == EntityState.Detached))
+            {
+                ServiceProvider.GetRequiredService<IEntityGraphAttacher>().AttachGraph(entry, entityState);
+            }
+            else
+            {
+                entry.SetEntityState(entityState, acceptChanges: true);
+            }
         }
 
         /// <summary>
@@ -464,17 +480,17 @@ namespace Microsoft.Data.Entity
         /// </summary>
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
         /// <param name="entity"> The entity to add. </param>
+        /// <param name="behavior">
+        ///     Determines whether the context will bring in only the given entity or also other related entities.
+        /// </param>
         /// <returns>
-        ///     The <see cref="EntityEntry{TEntity}" /> for the entity. This entry provides access to
-        ///     information the context is tracking for the entity and the ability to perform
-        ///     actions on the entity.
+        ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
+        ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Add<TEntity>([NotNull] TEntity entity) where TEntity : class
-        {
-            Check.NotNull(entity, nameof(entity));
-
-            return SetEntityState(entity, EntityState.Added);
-        }
+        public virtual EntityEntry<TEntity> Add<TEntity>(
+            [NotNull] TEntity entity,
+            GraphBehavior behavior = GraphBehavior.IncludeDependents) where TEntity : class
+            => SetEntityState(Check.NotNull(entity, nameof(entity)), EntityState.Added, Check.IsDefined(behavior, nameof(behavior)));
 
         /// <summary>
         ///     Begins tracking the given entity in the <see cref="EntityState.Unchanged" /> state such that no
@@ -482,21 +498,17 @@ namespace Microsoft.Data.Entity
         /// </summary>
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
         /// <param name="entity"> The entity to attach. </param>
+        /// <param name="behavior">
+        ///     Determines whether the context will bring in only the given entity or also other related entities.
+        /// </param>
         /// <returns>
-        ///     The <see cref="EntityEntry{TEntity}" /> for the entity. This entry provides access to
-        ///     information the context is tracking for the entity and the ability to perform
-        ///     actions on the entity.
+        ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
+        ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Attach<TEntity>([NotNull] TEntity entity) where TEntity : class
-        {
-            Check.NotNull(entity, nameof(entity));
-
-            var entry = EntryWithoutDetectChanges(entity);
-            var internalEntry = entry.GetService();
-            internalEntry.SetEntityState(EntityState.Unchanged, acceptChanges: true);
-
-            return new EntityEntry<TEntity>(entry.Context, internalEntry);
-        }
+        public virtual EntityEntry<TEntity> Attach<TEntity>(
+            [NotNull] TEntity entity,
+            GraphBehavior behavior = GraphBehavior.IncludeDependents) where TEntity : class
+            => SetEntityState(Check.NotNull(entity, nameof(entity)), EntityState.Unchanged, Check.IsDefined(behavior, nameof(behavior)));
 
         /// <summary>
         ///     <para>
@@ -505,24 +517,24 @@ namespace Microsoft.Data.Entity
         ///     </para>
         ///     <para>
         ///         All properties of the entity will be marked as modified. To mark only some properties as modified, use
-        ///         <see cref="Attach{TEntity}(TEntity)" /> to begin tracking the entity in the
-        ///         <see cref="EntityState.Unchanged" />
-        ///         state and then use the returned <see cref="EntityEntry{TEntity}" /> to mark the desired properties as modified.
+        ///         <see cref="Attach{TEntity}(TEntity, GraphBehavior)" /> to begin tracking the entity in the
+        ///         <see cref="EntityState.Unchanged" /> state and then use the returned <see cref="EntityEntry{TEntity}" />
+        ///         to mark the desired properties as modified.
         ///     </para>
         /// </summary>
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
         /// <param name="entity"> The entity to update. </param>
+        /// <param name="behavior">
+        ///     Determines whether the context will bring in only the given entity or also other related entities.
+        /// </param>
         /// <returns>
-        ///     The <see cref="EntityEntry{TEntity}" /> for the entity. This entry provides access to
-        ///     information the context is tracking for the entity and the ability to perform
-        ///     actions on the entity.
+        ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
+        ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry<TEntity> Update<TEntity>([NotNull] TEntity entity) where TEntity : class
-        {
-            Check.NotNull(entity, nameof(entity));
-
-            return SetEntityState(entity, EntityState.Modified);
-        }
+        public virtual EntityEntry<TEntity> Update<TEntity>(
+            [NotNull] TEntity entity,
+            GraphBehavior behavior = GraphBehavior.IncludeDependents) where TEntity : class
+            => SetEntityState(Check.NotNull(entity, nameof(entity)), EntityState.Modified, Check.IsDefined(behavior, nameof(behavior)));
 
         /// <summary>
         ///     Begins tracking the given entity in the <see cref="EntityState.Deleted" /> state such that it will
@@ -536,27 +548,33 @@ namespace Microsoft.Data.Entity
         /// <typeparam name="TEntity"> The type of the entity. </typeparam>
         /// <param name="entity"> The entity to remove. </param>
         /// <returns>
-        ///     The <see cref="EntityEntry{TEntity}" /> for the entity. This entry provides access to
-        ///     information the context is tracking for the entity and the ability to perform
-        ///     actions on the entity.
+        ///     The <see cref="EntityEntry{TEntity}" /> for the entity. The entry provides
+        ///     access to change tracking information and operations for the entity.
         /// </returns>
         public virtual EntityEntry<TEntity> Remove<TEntity>([NotNull] TEntity entity) where TEntity : class
         {
             Check.NotNull(entity, nameof(entity));
 
+            var entry = EntryWithoutDetectChanges(entity);
+
             // An Added entity does not yet exist in the database. If it is then marked as deleted there is
             // nothing to delete because it was not yet inserted, so just make sure it doesn't get inserted.
-            return SetEntityState(
-                entity, EntryWithoutDetectChanges(entity).State == EntityState.Added
+            entry.State =
+                entry.State == EntityState.Added
                     ? EntityState.Detached
-                    : EntityState.Deleted);
+                    : EntityState.Deleted;
+
+            return entry;
         }
 
-        private EntityEntry<TEntity> SetEntityState<TEntity>(TEntity entity, EntityState entityState) where TEntity : class
+        private EntityEntry<TEntity> SetEntityState<TEntity>(
+            TEntity entity,
+            EntityState entityState,
+            GraphBehavior behavior) where TEntity : class
         {
             var entry = EntryWithoutDetectChanges(entity);
 
-            entry.State = entityState;
+            SetEntityState(entry.GetInfrastructure(), entityState, behavior);
 
             return entry;
         }
@@ -566,34 +584,34 @@ namespace Microsoft.Data.Entity
         ///     be inserted into the database when <see cref="SaveChanges()" /> is called.
         /// </summary>
         /// <param name="entity"> The entity to add. </param>
+        /// <param name="behavior">
+        ///     Determines whether the context will bring in only the given entity or also other related entities.
+        /// </param>
         /// <returns>
-        ///     The <see cref="EntityEntry" /> for the entity. This entry provides access to
-        ///     information the context is tracking for the entity and the ability to perform
-        ///     actions on the entity.
+        ///     The <see cref="EntityEntry" /> for the entity. The entry provides
+        ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry Add([NotNull] object entity)
-        {
-            Check.NotNull(entity, nameof(entity));
-
-            return SetEntityState(entity, EntityState.Added);
-        }
+        public virtual EntityEntry Add(
+            [NotNull] object entity,
+            GraphBehavior behavior = GraphBehavior.IncludeDependents)
+            => SetEntityState(Check.NotNull(entity, nameof(entity)), EntityState.Added, Check.IsDefined(behavior, nameof(behavior)));
 
         /// <summary>
         ///     Begins tracking the given entity in the <see cref="EntityState.Unchanged" /> state such that no
         ///     operation will be performed when <see cref="SaveChanges()" /> is called.
         /// </summary>
         /// <param name="entity"> The entity to attach. </param>
+        /// <param name="behavior">
+        ///     Determines whether the context will bring in only the given entity or also other related entities.
+        /// </param>
         /// <returns>
-        ///     The <see cref="EntityEntry" /> for the entity. This entry provides access to
-        ///     information the context is tracking for the entity and the ability to perform
-        ///     actions on the entity.
+        ///     The <see cref="EntityEntry" /> for the entity. The entry provides
+        ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry Attach([NotNull] object entity)
-        {
-            Check.NotNull(entity, nameof(entity));
-
-            return SetEntityState(entity, EntityState.Unchanged);
-        }
+        public virtual EntityEntry Attach(
+            [NotNull] object entity,
+            GraphBehavior behavior = GraphBehavior.IncludeDependents)
+            => SetEntityState(Check.NotNull(entity, nameof(entity)), EntityState.Unchanged, Check.IsDefined(behavior, nameof(behavior)));
 
         /// <summary>
         ///     <para>
@@ -602,22 +620,22 @@ namespace Microsoft.Data.Entity
         ///     </para>
         ///     <para>
         ///         All properties of the entity will be marked as modified. To mark only some properties as modified, use
-        ///         <see cref="Attach(object)" /> to begin tracking the entity in the <see cref="EntityState.Unchanged" />
+        ///         <see cref="Attach(object, GraphBehavior)" /> to begin tracking the entity in the <see cref="EntityState.Unchanged" />
         ///         state and then use the returned <see cref="EntityEntry" /> to mark the desired properties as modified.
         ///     </para>
         /// </summary>
         /// <param name="entity"> The entity to update. </param>
+        /// <param name="behavior">
+        ///     Determines whether the context will bring in only the given entity or also other related entities.
+        /// </param>
         /// <returns>
-        ///     The <see cref="EntityEntry" /> for the entity. This entry provides access to
-        ///     information the context is tracking for the entity and the ability to perform
-        ///     actions on the entity.
+        ///     The <see cref="EntityEntry" /> for the entity. The entry provides
+        ///     access to change tracking information and operations for the entity.
         /// </returns>
-        public virtual EntityEntry Update([NotNull] object entity)
-        {
-            Check.NotNull(entity, nameof(entity));
-
-            return SetEntityState(entity, EntityState.Modified);
-        }
+        public virtual EntityEntry Update(
+            [NotNull] object entity,
+            GraphBehavior behavior = GraphBehavior.IncludeDependents)
+            => SetEntityState(Check.NotNull(entity, nameof(entity)), EntityState.Modified, Check.IsDefined(behavior, nameof(behavior)));
 
         /// <summary>
         ///     Begins tracking the given entity in the <see cref="EntityState.Deleted" /> state such that it will
@@ -630,39 +648,32 @@ namespace Microsoft.Data.Entity
         /// </remarks>
         /// <param name="entity"> The entity to remove. </param>
         /// <returns>
-        ///     The <see cref="EntityEntry" /> for the entity. This entry provides access to
-        ///     information the context is tracking for the entity and the ability to perform
-        ///     actions on the entity.
+        ///     The <see cref="EntityEntry" /> for the entity. The entry provides
+        ///     access to change tracking information and operations for the entity.
         /// </returns>
         public virtual EntityEntry Remove([NotNull] object entity)
         {
             Check.NotNull(entity, nameof(entity));
 
-            // An Added entity does not yet exist in the database. If it is then marked as deleted there is
-            // nothing to delete because it was not yet inserted, so just make sure it doesn't get inserted.
-            return SetEntityState(
-                entity, EntryWithoutDetectChanges(entity).State == EntityState.Added
-                    ? EntityState.Detached
-                    : EntityState.Deleted);
-        }
-
-        private EntityEntry SetEntityState(object entity, EntityState entityState)
-        {
             var entry = EntryWithoutDetectChanges(entity);
 
-            entry.State = entityState;
+            // An Added entity does not yet exist in the database. If it is then marked as deleted there is
+            // nothing to delete because it was not yet inserted, so just make sure it doesn't get inserted.
+            entry.State =
+                entry.State == EntityState.Added
+                    ? EntityState.Detached
+                    : EntityState.Deleted;
 
             return entry;
         }
 
-        private void SetEntityStates(object[] entities, EntityState entityState)
+        private EntityEntry SetEntityState(object entity, EntityState entityState, GraphBehavior behavior)
         {
-            var stateManager = GetStateManager();
+            var entry = EntryWithoutDetectChanges(entity);
 
-            foreach (var entity in entities)
-            {
-                stateManager.GetOrCreateEntry(entity).SetEntityState(entityState);
-            }
+            SetEntityState(entry.GetInfrastructure(), entityState, behavior);
+
+            return entry;
         }
 
         /// <summary>
@@ -671,11 +682,7 @@ namespace Microsoft.Data.Entity
         /// </summary>
         /// <param name="entities"> The entities to add. </param>
         public virtual void AddRange([NotNull] params object[] entities)
-        {
-            Check.NotNull(entities, nameof(entities));
-
-            SetEntityStates(entities, EntityState.Added);
-        }
+            => AddRange((IEnumerable<object>)entities);
 
         /// <summary>
         ///     Begins tracking the given entities in the <see cref="EntityState.Unchanged" /> state such that no
@@ -683,11 +690,7 @@ namespace Microsoft.Data.Entity
         /// </summary>
         /// <param name="entities"> The entities to attach. </param>
         public virtual void AttachRange([NotNull] params object[] entities)
-        {
-            Check.NotNull(entities, nameof(entities));
-
-            SetEntityStates(entities, EntityState.Unchanged, acceptChanges: true);
-        }
+            => AttachRange((IEnumerable<object>)entities);
 
         /// <summary>
         ///     <para>
@@ -696,17 +699,13 @@ namespace Microsoft.Data.Entity
         ///     </para>
         ///     <para>
         ///         All properties of the entities will be marked as modified. To mark only some properties as modified, use
-        ///         <see cref="Attach(object)" /> to begin tracking each entity in the <see cref="EntityState.Unchanged" />
+        ///         <see cref="Attach(object, GraphBehavior)" /> to begin tracking each entity in the <see cref="EntityState.Unchanged" />
         ///         state and then use the returned <see cref="EntityEntry" /> to mark the desired properties as modified.
         ///     </para>
         /// </summary>
         /// <param name="entities"> The entities to update. </param>
         public virtual void UpdateRange([NotNull] params object[] entities)
-        {
-            Check.NotNull(entities, nameof(entities));
-
-            SetEntityStates(entities, EntityState.Modified);
-        }
+            => UpdateRange((IEnumerable<object>)entities);
 
         /// <summary>
         ///     Begins tracking the given entities in the <see cref="EntityState.Deleted" /> state such that they will
@@ -719,19 +718,15 @@ namespace Microsoft.Data.Entity
         /// </remarks>
         /// <param name="entities"> The entities to remove. </param>
         public virtual void RemoveRange([NotNull] params object[] entities)
-        {
-            Check.NotNull(entities, nameof(entities));
+            => RemoveRange((IEnumerable<object>)entities);
 
-            RemoveRange((IEnumerable<object>)entities);
-        }
-
-        private void SetEntityStates(IEnumerable<object> entities, EntityState entityState, bool acceptChanges = false)
+        private void SetEntityStates(IEnumerable<object> entities, EntityState entityState, GraphBehavior behavior)
         {
             var stateManager = GetStateManager();
 
             foreach (var entity in entities)
             {
-                stateManager.GetOrCreateEntry(entity).SetEntityState(entityState, acceptChanges);
+                SetEntityState(stateManager.GetOrCreateEntry(entity), entityState, behavior);
             }
         }
 
@@ -740,24 +735,26 @@ namespace Microsoft.Data.Entity
         ///     be inserted into the database when <see cref="SaveChanges()" /> is called.
         /// </summary>
         /// <param name="entities"> The entities to add. </param>
-        public virtual void AddRange([NotNull] IEnumerable<object> entities)
-        {
-            Check.NotNull(entities, nameof(entities));
-
-            SetEntityStates(entities, EntityState.Added);
-        }
+        /// <param name="behavior">
+        ///     Determines whether the context will bring in only the given entities or also other related entities.
+        /// </param>
+        public virtual void AddRange(
+            [NotNull] IEnumerable<object> entities,
+            GraphBehavior behavior = GraphBehavior.IncludeDependents)
+            => SetEntityStates(Check.NotNull(entities, nameof(entities)), EntityState.Added, Check.IsDefined(behavior, nameof(behavior)));
 
         /// <summary>
         ///     Begins tracking the given entities in the <see cref="EntityState.Unchanged" /> state such that no
         ///     operation will be performed when <see cref="SaveChanges()" /> is called.
         /// </summary>
         /// <param name="entities"> The entities to attach. </param>
-        public virtual void AttachRange([NotNull] IEnumerable<object> entities)
-        {
-            Check.NotNull(entities, nameof(entities));
-
-            SetEntityStates(entities, EntityState.Unchanged, acceptChanges: true);
-        }
+        /// <param name="behavior">
+        ///     Determines whether the context will bring in only the given entities or also other related entities.
+        /// </param>
+        public virtual void AttachRange(
+            [NotNull] IEnumerable<object> entities,
+            GraphBehavior behavior = GraphBehavior.IncludeDependents)
+            => SetEntityStates(Check.NotNull(entities, nameof(entities)), EntityState.Unchanged, Check.IsDefined(behavior, nameof(behavior)));
 
         /// <summary>
         ///     <para>
@@ -766,17 +763,18 @@ namespace Microsoft.Data.Entity
         ///     </para>
         ///     <para>
         ///         All properties of the entities will be marked as modified. To mark only some properties as modified, use
-        ///         <see cref="Attach(object)" /> to begin tracking each entity in the <see cref="EntityState.Unchanged" />
+        ///         <see cref="Attach(object, GraphBehavior)" /> to begin tracking each entity in the <see cref="EntityState.Unchanged" />
         ///         state and then use the returned <see cref="EntityEntry" /> to mark the desired properties as modified.
         ///     </para>
         /// </summary>
         /// <param name="entities"> The entities to update. </param>
-        public virtual void UpdateRange([NotNull] IEnumerable<object> entities)
-        {
-            Check.NotNull(entities, nameof(entities));
-
-            SetEntityStates(entities, EntityState.Modified);
-        }
+        /// <param name="behavior">
+        ///     Determines whether the context will bring in only the given entities or also other related entities.
+        /// </param>
+        public virtual void UpdateRange(
+            [NotNull] IEnumerable<object> entities,
+            GraphBehavior behavior = GraphBehavior.IncludeDependents)
+            => SetEntityStates(Check.NotNull(entities, nameof(entities)), EntityState.Modified, Check.IsDefined(behavior, nameof(behavior)));
 
         /// <summary>
         ///     Begins tracking the given entities in the <see cref="EntityState.Deleted" /> state such that they will
@@ -816,13 +814,12 @@ namespace Microsoft.Data.Entity
         public virtual ChangeTracker ChangeTracker => _changeTracker.Value;
 
         /// <summary>
-        ///     The metadata about the shape of entities and relationships between them.
+        ///     The metadata about the shape of entities, the relationships between them, and how they map to the database.
         /// </summary>
         public virtual IModel Model => ServiceProvider.GetRequiredService<IModel>();
 
         /// <summary>
-        ///     Creates a set to perform operations for a given entity type in the model. LINQ queries against
-        ///     <see cref="DbSet{TEntity}" /> will be translated into queries against the database.
+        ///     Creates a <see cref="DbSet{TEntity}" /> that can be used to query and save instances of <typeparamref name="TEntity" />.
         /// </summary>
         /// <typeparam name="TEntity"> The type of entity for which a set should be returned. </typeparam>
         /// <returns> A set for the given entity type. </returns>

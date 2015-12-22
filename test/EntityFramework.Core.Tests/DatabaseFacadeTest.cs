@@ -2,12 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Storage;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
 
@@ -23,7 +24,7 @@ namespace Microsoft.Data.Entity.Tests
             creatorMock.Setup(m => m.EnsureDeleted()).Returns(true);
 
             var context = TestHelpers.Instance.CreateContext(
-                new ServiceCollection().AddInstance(creatorMock.Object));
+                new ServiceCollection().AddSingleton(creatorMock.Object));
 
             Assert.True(context.Database.EnsureCreated());
             creatorMock.Verify(m => m.EnsureCreated(), Times.Once);
@@ -42,7 +43,7 @@ namespace Microsoft.Data.Entity.Tests
             creatorMock.Setup(m => m.EnsureDeletedAsync(cancellationToken)).Returns(Task.FromResult(true));
 
             var context = TestHelpers.Instance.CreateContext(
-                new ServiceCollection().AddInstance(creatorMock.Object));
+                new ServiceCollection().AddSingleton(creatorMock.Object));
 
             Assert.True(await context.Database.EnsureCreatedAsync(cancellationToken));
             creatorMock.Verify(m => m.EnsureCreatedAsync(cancellationToken), Times.Once);
@@ -57,8 +58,8 @@ namespace Microsoft.Data.Entity.Tests
             using (var context = TestHelpers.Instance.CreateContext())
             {
                 Assert.Same(
-                    ((IAccessor<IServiceProvider>)context).Service,
-                    ((IAccessor<IServiceProvider>)context.Database).Service);
+                    ((IInfrastructure<IServiceProvider>)context).Instance,
+                    ((IInfrastructure<IServiceProvider>)context.Database).Instance);
             }
         }
 
@@ -79,6 +80,84 @@ namespace Microsoft.Data.Entity.Tests
             using (var context = TestHelpers.Instance.CreateContext())
             {
                 Assert.Same(context.GetService<IModel>(), context.Database.GetService<IModel>());
+            }
+        }
+
+        [Fact]
+        public void Can_begin_transaction()
+        {
+            var transactionManagerMock = new Mock<IDbContextTransactionManager>();
+            var transaction = Mock.Of<IDbContextTransaction>();
+
+            transactionManagerMock.Setup(m => m.BeginTransaction()).Returns(transaction);
+
+            var context = TestHelpers.Instance.CreateContext(
+                new ServiceCollection().AddSingleton(transactionManagerMock.Object));
+
+            Assert.Same(transaction, context.Database.BeginTransaction());
+
+            transactionManagerMock.Verify(m => m.BeginTransaction(), Times.Once);
+        }
+
+        [Fact]
+        public void Can_begin_transaction_async()
+        {
+            var transactionManagerMock = new Mock<IDbContextTransactionManager>();
+            var transaction = Mock.Of<IDbContextTransaction>();
+
+            var transactionTask = new Task<IDbContextTransaction>(() => transaction);
+
+            transactionManagerMock.Setup(m => m.BeginTransactionAsync(It.IsAny<CancellationToken>()))
+                .Returns(transactionTask);
+
+            var context = TestHelpers.Instance.CreateContext(
+                new ServiceCollection().AddSingleton(transactionManagerMock.Object));
+
+            var cancellationToken = new CancellationToken();
+
+            Assert.Same(transactionTask, context.Database.BeginTransactionAsync(cancellationToken));
+
+            transactionManagerMock.Verify(m => m.BeginTransactionAsync(cancellationToken), Times.Once);
+        }
+
+        [Fact]
+        public void Can_commit_transaction()
+        {
+            var transactionManagerMock = new Mock<IDbContextTransactionManager>();
+
+            var context = TestHelpers.Instance.CreateContext(
+                new ServiceCollection().AddSingleton(transactionManagerMock.Object));
+
+            context.Database.CommitTransaction();
+
+            transactionManagerMock.Verify(m => m.CommitTransaction(), Times.Once);
+        }
+
+        [Fact]
+        public void Can_roll_back_transaction()
+        {
+            var transactionManagerMock = new Mock<IDbContextTransactionManager>();
+
+            var context = TestHelpers.Instance.CreateContext(
+                new ServiceCollection().AddSingleton(transactionManagerMock.Object));
+
+            context.Database.RollbackTransaction();
+
+            transactionManagerMock.Verify(m => m.RollbackTransaction(), Times.Once);
+        }
+
+        [Fact]
+        public void Cannot_use_DatabaseFacade_after_dispose()
+        {
+            var context = TestHelpers.Instance.CreateContext();
+            var facade = context.Database;
+            context.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => context.Database.GetService<IModel>());
+
+            foreach (var methodInfo in facade.GetType().GetMethods(BindingFlags.Public))
+            {
+                Assert.Throws<ObjectDisposedException>(() => methodInfo.Invoke(facade, null));
             }
         }
     }

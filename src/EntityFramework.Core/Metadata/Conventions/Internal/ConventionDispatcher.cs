@@ -34,15 +34,33 @@ namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
             return entityTypeBuilder;
         }
 
+        public virtual InternalEntityTypeBuilder OnEntityTypeMemberIgnored(
+            [NotNull] InternalEntityTypeBuilder entityTypeBuilder,
+            [NotNull] string ignoredMemberName)
+        {
+            Check.NotNull(entityTypeBuilder, nameof(entityTypeBuilder));
+            Check.NotEmpty(ignoredMemberName, nameof(ignoredMemberName));
+
+            foreach (var entityTypeMemberIgnoredConvention in _conventionSet.EntityTypeMemberIgnoredConventions)
+            {
+                if (!entityTypeMemberIgnoredConvention.Apply(entityTypeBuilder, ignoredMemberName))
+                {
+                    break;
+                }
+            }
+
+            return entityTypeBuilder;
+        }
+
         public virtual InternalEntityTypeBuilder OnBaseEntityTypeSet(
             [NotNull] InternalEntityTypeBuilder entityTypeBuilder,
-            [CanBeNull] EntityType oldBaseType)
+            [CanBeNull] EntityType previousBaseType)
         {
             Check.NotNull(entityTypeBuilder, nameof(entityTypeBuilder));
 
             foreach (var entityTypeConvention in _conventionSet.BaseEntityTypeSetConventions)
             {
-                if (!entityTypeConvention.Apply(entityTypeBuilder, oldBaseType))
+                if (!entityTypeConvention.Apply(entityTypeBuilder, previousBaseType))
                 {
                     break;
                 }
@@ -86,6 +104,32 @@ namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
             {
                 keyBuilder = keyConvention.Apply(keyBuilder);
                 if (keyBuilder == null)
+                {
+                    break;
+                }
+            }
+
+            return keyBuilder;
+        }
+
+        public virtual void OnKeyRemoved([NotNull] InternalEntityTypeBuilder entityTypeBuilder, [NotNull] Key key)
+        {
+            Check.NotNull(entityTypeBuilder, nameof(entityTypeBuilder));
+            Check.NotNull(key, nameof(key));
+
+            foreach (var keyConvention in _conventionSet.KeyRemovedConventions)
+            {
+                keyConvention.Apply(entityTypeBuilder, key);
+            }
+        }
+
+        public virtual InternalKeyBuilder OnPrimaryKeySet([NotNull] InternalKeyBuilder keyBuilder, [CanBeNull] Key previousPrimaryKey)
+        {
+            Check.NotNull(keyBuilder, nameof(keyBuilder));
+
+            foreach (var keyConvention in _conventionSet.PrimaryKeySetConventions)
+            {
+                if (!keyConvention.Apply(keyBuilder, previousPrimaryKey))
                 {
                     break;
                 }
@@ -143,6 +187,24 @@ namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
             return relationshipBuilder;
         }
 
+        public virtual void OnNavigationRemoved(
+            [NotNull] InternalEntityTypeBuilder sourceEntityTypeBuilder,
+            [NotNull] InternalEntityTypeBuilder targetEntityTypeBuilder,
+            [NotNull] string navigationName)
+        {
+            Check.NotNull(sourceEntityTypeBuilder, nameof(sourceEntityTypeBuilder));
+            Check.NotNull(targetEntityTypeBuilder, nameof(targetEntityTypeBuilder));
+            Check.NotNull(navigationName, nameof(navigationName));
+
+            foreach (var navigationConvention in _conventionSet.NavigationRemovedConventions)
+            {
+                if (!navigationConvention.Apply(sourceEntityTypeBuilder, targetEntityTypeBuilder, navigationName))
+                {
+                    break;
+                }
+            }
+        }
+
         public virtual InternalPropertyBuilder OnPropertyAdded([NotNull] InternalPropertyBuilder propertyBuilder)
         {
             Check.NotNull(propertyBuilder, nameof(propertyBuilder));
@@ -151,6 +213,19 @@ namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
             {
                 propertyBuilder = propertyConvention.Apply(propertyBuilder);
                 if (propertyBuilder == null)
+                {
+                    break;
+                }
+            }
+
+            return propertyBuilder;
+        }
+
+        public virtual InternalPropertyBuilder OnPropertyNullableChanged([NotNull] InternalPropertyBuilder propertyBuilder)
+        {
+            foreach (var propertyConvention in _conventionSet.PropertyNullableChangedConventions)
+            {
+                if (!propertyConvention.Apply(propertyBuilder))
                 {
                     break;
                 }

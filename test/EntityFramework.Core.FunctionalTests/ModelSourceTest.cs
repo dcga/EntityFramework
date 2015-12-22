@@ -3,12 +3,12 @@
 
 using System;
 using System.Linq;
-using Microsoft.Data.Entity.InMemory;
+using Microsoft.Data.Entity.Infrastructure.Internal;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
-using Microsoft.Data.Entity.Metadata.Builders;
 using Microsoft.Data.Entity.Metadata.Conventions.Internal;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Data.Entity.Metadata.Internal;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Microsoft.Data.Entity.FunctionalTests
@@ -31,8 +31,8 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 var model = context.Model;
 
                 Assert.Equal("Us!", model["AllYourModelAreBelongTo"]);
-                Assert.Equal("Us!", model.EntityTypes.Single(e => e.DisplayName() == "Base")["AllYourBaseAreBelongTo"]);
-                Assert.Contains("Peak", model.EntityTypes.Select(e => e.DisplayName()));
+                Assert.Equal("Us!", model.GetEntityTypes().Single(e => e.DisplayName() == "Base")["AllYourBaseAreBelongTo"]);
+                Assert.Contains("Peak", model.GetEntityTypes().Select(e => e.DisplayName()));
             }
         }
 
@@ -66,7 +66,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Base>().Annotation("AllYourBaseAreBelongTo", "Us!");
+                modelBuilder.Entity<Base>().HasAnnotation("AllYourBaseAreBelongTo", "Us!");
             }
 
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

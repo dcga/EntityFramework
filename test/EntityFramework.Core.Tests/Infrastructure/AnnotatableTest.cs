@@ -16,7 +16,7 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
         {
             var annotatable = new Annotatable();
             Assert.Null(annotatable.FindAnnotation("Foo"));
-            Assert.Null(annotatable.RemoveAnnotation(new Annotation("Foo", "Bar")));
+            Assert.Null(annotatable.RemoveAnnotation("Foo"));
 
             var annotation = annotatable.AddAnnotation("Foo", "Bar");
 
@@ -27,12 +27,12 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
 
             Assert.Same(annotation, annotatable.GetOrAddAnnotation("Foo", "Baz"));
 
-            Assert.Equal(new[] { annotation }, annotatable.Annotations.ToArray());
+            Assert.Equal(new[] { annotation }, annotatable.GetAnnotations().ToArray());
 
-            Assert.Same(annotation, annotatable.RemoveAnnotation(annotation));
+            Assert.Same(annotation, annotatable.RemoveAnnotation(annotation.Name));
 
-            Assert.Empty(annotatable.Annotations);
-            Assert.Null(annotatable.RemoveAnnotation(annotation));
+            Assert.Empty(annotatable.GetAnnotations());
+            Assert.Null(annotatable.RemoveAnnotation(annotation.Name));
             Assert.Null(annotatable["Foo"]);
             Assert.Null(annotatable.FindAnnotation("Foo"));
         }
@@ -45,7 +45,7 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
             annotatable.AddAnnotation("Foo", "Bar");
 
             Assert.Equal(
-                Strings.DuplicateAnnotation("Foo"),
+                CoreStrings.DuplicateAnnotation("Foo"),
                 Assert.Throws<InvalidOperationException>(() => annotatable.AddAnnotation("Foo", "Bar")).Message);
         }
 
@@ -68,10 +68,10 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
             annotatable["Foo"] = null;
 
             Assert.Null(annotatable["Foo"]);
-            Assert.Empty(annotatable.Annotations);
+            Assert.Empty(annotatable.GetAnnotations());
 
             Assert.Equal(
-                Strings.AnnotationNotFound("Foo"),
+                CoreStrings.AnnotationNotFound("Foo"),
                 Assert.Throws<InvalidOperationException>(() => annotatable.GetAnnotation("Foo")).Message);
         }
 
@@ -83,7 +83,7 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
             var annotation1 = annotatable.AddAnnotation("Z", "Foo");
             var annotation2 = annotatable.AddAnnotation("A", "Bar");
 
-            Assert.True(new[] { annotation2, annotation1 }.SequenceEqual(annotatable.Annotations));
+            Assert.True(new[] { annotation2, annotation1 }.SequenceEqual(annotatable.GetAnnotations()));
         }
     }
 }

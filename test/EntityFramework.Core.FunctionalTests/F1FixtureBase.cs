@@ -18,23 +18,23 @@ namespace Microsoft.Data.Entity.FunctionalTests
             //builder.ComplexType<Location>();
             modelBuilder.Entity<Chassis>(b =>
                 {
-                    b.Key(c => c.TeamId);
+                    b.HasKey(c => c.TeamId);
                     b.Property(e => e.Version)
                         .ValueGeneratedOnAddOrUpdate()
-                        .ConcurrencyToken();
+                        .IsConcurrencyToken();
                 });
 
             modelBuilder.Entity<Driver>(b =>
                 {
                     b.Property(e => e.Version)
                         .ValueGeneratedOnAddOrUpdate()
-                        .ConcurrencyToken();
+                        .IsConcurrencyToken();
                 });
 
             modelBuilder.Entity<Engine>(b =>
                 {
-                    b.Property(e => e.EngineSupplierId).ConcurrencyToken();
-                    b.Property(e => e.Name).ConcurrencyToken();
+                    b.Property(e => e.EngineSupplierId).IsConcurrencyToken();
+                    b.Property(e => e.Name).IsConcurrencyToken();
                 });
 
             // TODO: Complex type
@@ -60,7 +60,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 {
                     b.Property(e => e.Version)
                         .ValueGeneratedOnAddOrUpdate()
-                        .ConcurrencyToken();
+                        .IsConcurrencyToken();
                 });
 
             // TODO: Complex type
@@ -77,15 +77,15 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 {
                     b.Property(t => t.Version)
                         .ValueGeneratedOnAddOrUpdate()
-                        .ConcurrencyToken();
+                        .IsConcurrencyToken();
 
-                    b.Reference(e => e.Gearbox).InverseReference().ForeignKey<Team>(e => e.GearboxId);
-                    b.Reference(e => e.Chassis).InverseReference(e => e.Team).ForeignKey<Chassis>(e => e.TeamId);
+                    b.HasOne(e => e.Gearbox).WithOne().HasForeignKey<Team>(e => e.GearboxId);
+                    b.HasOne(e => e.Chassis).WithOne(e => e.Team).HasForeignKey<Chassis>(e => e.TeamId);
                 });
 
             modelBuilder.Entity<TestDriver>();
-
             modelBuilder.Entity<TitleSponsor>();
+
             // TODO: Complex type
             // .Property(t => t.Details);
 

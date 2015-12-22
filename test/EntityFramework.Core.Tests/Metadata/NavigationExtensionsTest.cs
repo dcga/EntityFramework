@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Tests.Metadata
@@ -16,8 +17,8 @@ namespace Microsoft.Data.Entity.Tests.Metadata
         {
             var model = BuildModel();
 
-            var category = model.GetEntityType(typeof(Product)).GetNavigations().Single(e => e.Name == "Category");
-            var products = model.GetEntityType(typeof(Category)).GetNavigations().Single(e => e.Name == "Products");
+            var category = model.FindEntityType(typeof(Product)).GetNavigations().Single(e => e.Name == "Category");
+            var products = model.FindEntityType(typeof(Category)).GetNavigations().Single(e => e.Name == "Products");
 
             Assert.Same(category, products.FindInverse());
             Assert.Same(products, category.FindInverse());
@@ -28,8 +29,8 @@ namespace Microsoft.Data.Entity.Tests.Metadata
         {
             var model = BuildModel();
 
-            var category = model.GetEntityType(typeof(Product)).GetNavigations().Single(e => e.Name == "FeaturedProductCategory");
-            var product = model.GetEntityType(typeof(Category)).GetNavigations().Single(e => e.Name == "FeaturedProduct");
+            var category = model.FindEntityType(typeof(Product)).GetNavigations().Single(e => e.Name == "FeaturedProductCategory");
+            var product = model.FindEntityType(typeof(Category)).GetNavigations().Single(e => e.Name == "FeaturedProduct");
 
             Assert.Same(category, product.FindInverse());
             Assert.Same(product, category.FindInverse());
@@ -40,8 +41,8 @@ namespace Microsoft.Data.Entity.Tests.Metadata
         {
             var model = BuildModel();
 
-            var productType = model.GetEntityType(typeof(Product));
-            var categoryType = model.GetEntityType(typeof(Category));
+            var productType = model.FindEntityType(typeof(Product));
+            var categoryType = model.FindEntityType(typeof(Category));
 
             var category = productType.GetNavigations().Single(e => e.Name == "Category");
             var products = categoryType.GetNavigations().Single(e => e.Name == "Products");
@@ -53,19 +54,19 @@ namespace Microsoft.Data.Entity.Tests.Metadata
         [Fact]
         public void Returns_null_when_no_inverse()
         {
-            var products = BuildModel(createCategory: false).GetEntityType(typeof(Category)).GetNavigations().Single(e => e.Name == "Products");
+            var products = BuildModel(createCategory: false).FindEntityType(typeof(Category)).GetNavigations().Single(e => e.Name == "Products");
 
             Assert.Null(products.FindInverse());
 
-            var category = BuildModel(createProducts: false).GetEntityType(typeof(Product)).GetNavigations().Single(e => e.Name == "Category");
+            var category = BuildModel(createProducts: false).FindEntityType(typeof(Product)).GetNavigations().Single(e => e.Name == "Category");
 
             Assert.Null(category.FindInverse());
 
-            var featuredCategory = BuildModel(createFeaturedProduct: false).GetEntityType(typeof(Product)).GetNavigations().Single(e => e.Name == "FeaturedProductCategory");
+            var featuredCategory = BuildModel(createFeaturedProduct: false).FindEntityType(typeof(Product)).GetNavigations().Single(e => e.Name == "FeaturedProductCategory");
 
             Assert.Null(featuredCategory.FindInverse());
 
-            var featuredProduct = BuildModel(createFeaturedProductCategory: false).GetEntityType(typeof(Category)).GetNavigations().Single(e => e.Name == "FeaturedProduct");
+            var featuredProduct = BuildModel(createFeaturedProductCategory: false).FindEntityType(typeof(Category)).GetNavigations().Single(e => e.Name == "FeaturedProduct");
 
             Assert.Null(featuredProduct.FindInverse());
         }
@@ -94,35 +95,35 @@ namespace Microsoft.Data.Entity.Tests.Metadata
             bool createProducts = true, bool createCategory = true,
             bool createFeaturedProductCategory = true, bool createFeaturedProduct = true)
         {
-            var model = new Model();
-            var builder = TestHelpers.Instance.CreateConventionBuilder(model);
+            var builder = TestHelpers.Instance.CreateConventionBuilder();
+            var model = builder.Model;
 
             builder.Entity<Product>();
             builder.Entity<Category>();
 
-            var categoryType = model.GetEntityType(typeof(Category));
-            var productType = model.GetEntityType(typeof(Product));
+            var categoryType = model.FindEntityType(typeof(Category));
+            var productType = model.FindEntityType(typeof(Product));
 
-            var categoryFk = productType.GetOrAddForeignKey(productType.GetProperty("CategoryId"), categoryType.GetPrimaryKey(), categoryType);
-            var featuredProductFk = categoryType.GetOrAddForeignKey(categoryType.GetProperty("FeaturedProductId"), productType.GetPrimaryKey(), productType);
+            var categoryFk = productType.GetOrAddForeignKey(productType.FindProperty("CategoryId"), categoryType.FindPrimaryKey(), categoryType);
+            var featuredProductFk = categoryType.GetOrAddForeignKey(categoryType.FindProperty("FeaturedProductId"), productType.FindPrimaryKey(), productType);
             featuredProductFk.IsUnique = true;
 
             if (createProducts)
             {
-                categoryType.AddNavigation("Products", categoryFk, pointsToPrincipal: false);
+                categoryFk.HasPrincipalToDependent(nameof(Category.Products));
             }
             if (createCategory)
             {
-                productType.AddNavigation("Category", categoryFk, pointsToPrincipal: true);
+                categoryFk.HasDependentToPrincipal(nameof(Product.Category));
             }
 
             if (createFeaturedProductCategory)
             {
-                productType.AddNavigation("FeaturedProductCategory", featuredProductFk, pointsToPrincipal: false);
+                featuredProductFk.HasPrincipalToDependent(nameof(Product.FeaturedProductCategory));
             }
             if (createFeaturedProduct)
             {
-                categoryType.AddNavigation("FeaturedProduct", featuredProductFk, pointsToPrincipal: true);
+                featuredProductFk.HasDependentToPrincipal(nameof(Category.FeaturedProduct));
             }
 
             return model;
@@ -133,7 +134,7 @@ namespace Microsoft.Data.Entity.Tests.Metadata
         {
             var entry = TestHelpers.Instance.CreateInternalEntry<Dependent>(BuildCollectionsModel());
 
-            Assert.False(entry.EntityType.GetNavigation("Principal1").IsNonNotifyingCollection(entry));
+            Assert.False(entry.EntityType.FindNavigation("Principal1").IsNonNotifyingCollection(entry));
         }
 
         [Fact]
@@ -142,7 +143,7 @@ namespace Microsoft.Data.Entity.Tests.Metadata
             var entry = TestHelpers.Instance.CreateInternalEntry<Principal>(BuildCollectionsModel());
 
             // TODO: The following assert should be changed to False once INotifyCollectionChanged is supported (Issue #445)
-            Assert.True(entry.EntityType.GetNavigation("Dependents2").IsNonNotifyingCollection(entry));
+            Assert.True(entry.EntityType.FindNavigation("Dependents2").IsNonNotifyingCollection(entry));
         }
 
         [Fact]
@@ -151,7 +152,7 @@ namespace Microsoft.Data.Entity.Tests.Metadata
             var entry = TestHelpers.Instance.CreateInternalEntry<Principal>(BuildCollectionsModel());
 
             // TODO: The following assert should be changed to False once INotifyCollectionChanged is supported (Issue #445)
-            Assert.True(entry.EntityType.GetNavigation("Dependents1").IsNonNotifyingCollection(entry));
+            Assert.True(entry.EntityType.FindNavigation("Dependents1").IsNonNotifyingCollection(entry));
         }
 
         [Fact]
@@ -163,7 +164,7 @@ namespace Microsoft.Data.Entity.Tests.Metadata
                 new Principal { Dependents1 = new ObservableCollection<Dependent>() });
 
             // TODO: The following assert should be changed to False once INotifyCollectionChanged is supported (Issue #445)
-            Assert.True(entry.EntityType.GetNavigation("Dependents1").IsNonNotifyingCollection(entry));
+            Assert.True(entry.EntityType.FindNavigation("Dependents1").IsNonNotifyingCollection(entry));
         }
 
         [Fact]
@@ -174,15 +175,15 @@ namespace Microsoft.Data.Entity.Tests.Metadata
                 EntityState.Detached,
                 new Principal { Dependents1 = new List<Dependent>() });
 
-            Assert.True(entry.EntityType.GetNavigation("Dependents1").IsNonNotifyingCollection(entry));
+            Assert.True(entry.EntityType.FindNavigation("Dependents1").IsNonNotifyingCollection(entry));
         }
 
         private static IModel BuildCollectionsModel()
         {
             var builder = TestHelpers.Instance.CreateConventionBuilder();
 
-            builder.Entity<Principal>().Collection(e => e.Dependents1).InverseReference(e => e.Principal1);
-            builder.Entity<Principal>().Collection(e => e.Dependents2).InverseReference(e => e.Principal2);
+            builder.Entity<Principal>().HasMany(e => e.Dependents1).WithOne(e => e.Principal1);
+            builder.Entity<Principal>().HasMany(e => e.Dependents2).WithOne(e => e.Principal2);
 
             return builder.Model;
         }

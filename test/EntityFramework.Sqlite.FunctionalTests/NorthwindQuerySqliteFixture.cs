@@ -2,12 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Threading;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.FunctionalTests.TestModels.Northwind;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Sqlite.FunctionalTests.TestModels;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
 {
@@ -15,35 +16,48 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly DbContextOptions _options;
-        private readonly SqliteTestStore _testStore;
+
+        private readonly SqliteTestStore _testStore = SqliteNorthwindContext.GetSharedStore();
+        private readonly TestSqlLoggerFactory _testSqlLoggerFactory = new TestSqlLoggerFactory();
 
         public NorthwindQuerySqliteFixture()
         {
-            _testStore = SqliteNorthwindContext.GetSharedStore();
+            _serviceProvider
+                = new ServiceCollection()
+                    .AddEntityFramework()
+                    .AddSqlite()
+                    .ServiceCollection()
+                    .AddSingleton(TestSqliteModelSource.GetFactory(OnModelCreating))
+                    .AddSingleton<ILoggerFactory>(_testSqlLoggerFactory)
+                    .BuildServiceProvider();
 
-            _serviceProvider = new ServiceCollection()
-                .AddEntityFramework()
-                .AddSqlite()
-                .ServiceCollection()
-                .AddSingleton(TestSqliteModelSource.GetFactory(OnModelCreating))
-                .AddInstance<ILoggerFactory>(new TestSqlLoggerFactory())
-                .BuildServiceProvider();
+            _options = BuildOptions();
 
-            var optionsBuilder = new DbContextOptionsBuilder();
-            optionsBuilder.UseSqlite(_testStore.Connection.ConnectionString);
-            _options = optionsBuilder.Options;
-
-            _serviceProvider.GetRequiredService<ILoggerFactory>()
-                .MinimumLevel = LogLevel.Debug;
+            _serviceProvider.GetRequiredService<ILoggerFactory>();
         }
 
-        public override NorthwindContext CreateContext()
+        protected DbContextOptions BuildOptions()
         {
-            var context = new SqliteNorthwindContext(_serviceProvider, _options);
-            context.ChangeTracker.AutoDetectChangesEnabled = false;
-            return context;
+            var optionsBuilder = new DbContextOptionsBuilder();
+
+            var sqliteDbContextOptionsBuilder
+                = optionsBuilder.UseSqlite(_testStore.Connection.ConnectionString)
+                    .SuppressForeignKeyEnforcement();
+
+            ConfigureOptions(sqliteDbContextOptionsBuilder);
+
+            return optionsBuilder.Options;
         }
+
+        protected virtual void ConfigureOptions(SqliteDbContextOptionsBuilder sqliteDbContextOptionsBuilder)
+        {
+        }
+
+        public override NorthwindContext CreateContext() 
+            => new SqliteNorthwindContext(_serviceProvider, _options);
 
         public void Dispose() => _testStore.Dispose();
+
+        public override CancellationToken CancelQuery() => _testSqlLoggerFactory.CancelQuery();
     }
 }

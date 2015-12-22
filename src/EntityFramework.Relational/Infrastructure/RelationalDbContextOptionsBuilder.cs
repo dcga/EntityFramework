@@ -38,14 +38,24 @@ namespace Microsoft.Data.Entity.Infrastructure
 
             return SetOption(
                 e =>
-                {
-                    e.MigrationsHistoryTableName = tableName;
-                    e.MigrationsHistoryTableSchema = schema;
-                });
+                    {
+                        e.MigrationsHistoryTableName = tableName;
+                        e.MigrationsHistoryTableSchema = schema;
+                    });
         }
 
         public virtual TBuilder SuppressAmbientTransactionWarning()
             => SetOption(e => e.ThrowOnAmbientTransaction = false);
+
+        public virtual TBuilder UseRelationalNulls()
+            => SetOption(e => e.UseRelationalNulls = true);
+
+        public virtual TBuilder QueryClientEvaluationBehavior(QueryClientEvaluationBehavior queryClientEvaluationBehavior)
+        {
+            Check.IsDefined(queryClientEvaluationBehavior, nameof(queryClientEvaluationBehavior));
+
+            return SetOption(e => e.QueryClientEvaluationBehavior = queryClientEvaluationBehavior);
+        }
 
         protected virtual TBuilder SetOption([NotNull] Action<TExtension> setAction)
         {

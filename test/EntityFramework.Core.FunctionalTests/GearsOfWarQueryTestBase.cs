@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Entity.FunctionalTests.TestModels.GearsOfWarModel;
+using Microsoft.Data.Entity.FunctionalTests.TestUtilities.Xunit;
 using Xunit;
+// ReSharper disable ReplaceWithSingleCallToSingle
 
 namespace Microsoft.Data.Entity.FunctionalTests
 {
@@ -35,7 +37,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                var query = context.Tags.Include(t => t.Gear.Reports);
+                var query = context.Tags.Include(t => t.Gear.Weapons);
                 var result = query.ToList();
 
                 Assert.Equal(6, result.Count);
@@ -43,7 +45,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 var gears = result.Select(t => t.Gear).Where(g => g != null).ToList();
                 Assert.Equal(5, gears.Count);
 
-                Assert.True(gears.All(g => g.Reports != null));
+                Assert.True(gears.All(g => g.Weapons != null));
             }
         }
 
@@ -81,7 +83,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
                 Assert.Equal(5, result.Count);
 
-                var cities = result.Select(g => g.CityOfBirth);
+                var cities = result.Select(g => g.CityOfBirth).ToList();
                 Assert.True(cities.All(c => c != null));
                 Assert.True(cities.All(c => c.BornGears != null));
             }
@@ -159,6 +161,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
 
             ClearLog();
+
             using (var context = CreateContext())
             {
                 var query = context.Gears
@@ -223,6 +226,204 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
 
         [Fact]
+        public virtual void Include_navigation_on_derived_type()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Gears.OfType<Officer>().Include(o => o.Reports);
+                var result = query.ToList();
+
+                Assert.Equal(2, result.Count);
+
+                var marcusReports = result.Where(e => e.Nickname == "Marcus").Single().Reports.ToList();
+                Assert.Equal(3, marcusReports.Count);
+                Assert.Contains("Baird", marcusReports.Select(g => g.Nickname));
+                Assert.Contains("Cole Train", marcusReports.Select(g => g.Nickname));
+                Assert.Contains("Dom", marcusReports.Select(g => g.Nickname));
+
+                var bairdReports = result.Where(e => e.Nickname == "Baird").Single().Reports.ToList();
+                Assert.Equal(1, bairdReports.Count);
+                Assert.Contains("Paduk", bairdReports.Select(g => g.Nickname));
+            }
+        }
+
+        [Fact]
+        public virtual void Select_Where_Navigation_Included()
+        {
+            using (var context = CreateContext())
+            {
+                var cogTags
+                    = (from ct in context.Set<CogTag>().Include(o => o.Gear)
+                       where ct.Gear.Nickname == "Marcus"
+                       select ct).ToList();
+
+                Assert.Equal(1, cogTags.Count);
+                Assert.True(cogTags.All(o => o.Gear != null));
+            }
+        }
+
+        [Fact]
+        public virtual void Include_with_join_reference1()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Gears.Join(
+                    context.Tags,
+                    g => new { SquadId = (int?)g.SquadId, g.Nickname },
+                    t => new { SquadId = t.GearSquadId, Nickname = t.GearNickName },
+                    (g, t) => g).Include(g => g.CityOfBirth);
+
+                var result = query.ToList();
+                Assert.Equal(5, result.Count);
+                Assert.True(result.All(g => g.CityOfBirth != null));
+            }
+        }
+
+        [ConditionalFact]
+        [MonoVersionCondition(Min = "4.2.0", SkipReason = "Queries fail on Mono < 4.2.0 due to differences in the implementation of LINQ")]
+        public virtual void Include_with_join_reference2()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Tags.Join(
+                    context.Gears,
+                    t => new { SquadId = t.GearSquadId, Nickname = t.GearNickName },
+                    g => new { SquadId = (int?)g.SquadId, g.Nickname },
+                    (t, g) => g).Include(g => g.CityOfBirth);
+
+                var result = query.ToList();
+                Assert.Equal(5, result.Count);
+                Assert.True(result.All(g => g.CityOfBirth != null));
+            }
+        }
+
+        [Fact]
+        public virtual void Include_with_join_collection1()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Gears.Join(
+                    context.Tags,
+                    g => new { SquadId = (int?)g.SquadId, g.Nickname },
+                    t => new { SquadId = t.GearSquadId, Nickname = t.GearNickName },
+                    (g, t) => g).Include(g => g.Weapons);
+
+                var result = query.ToList();
+                Assert.Equal(5, result.Count);
+                Assert.True(result.All(g => g.Weapons.Count > 0));
+            }
+        }
+
+        [ConditionalFact]
+        [MonoVersionCondition(Min = "4.2.0", SkipReason = "Queries fail on Mono < 4.2.0 due to differences in the implementation of LINQ")]
+        public virtual void Include_with_join_collection2()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Tags.Join(
+                    context.Gears,
+                    t => new { SquadId = t.GearSquadId, Nickname = t.GearNickName },
+                    g => new { SquadId = (int?)g.SquadId, g.Nickname },
+                    (t, g) => g).Include(g => g.Weapons);
+
+                var result = query.ToList();
+                Assert.Equal(5, result.Count);
+                Assert.True(result.All(g => g.Weapons.Count > 0));
+            }
+        }
+
+        [Fact]
+        public virtual void Include_with_join_multi_level()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Gears.Join(
+                    context.Tags,
+                    g => new { SquadId = (int?)g.SquadId, g.Nickname },
+                    t => new { SquadId = t.GearSquadId, Nickname = t.GearNickName },
+                    (g, t) => g).Include(g => g.CityOfBirth.StationedGears);
+
+                var result = query.ToList();
+                Assert.Equal(5, result.Count);
+                Assert.True(result.All(g => g.CityOfBirth != null));
+            }
+        }
+
+        [Fact]
+        public virtual void Include_with_join_and_inheritance1()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Tags.Join(
+                    context.Gears.OfType<Officer>(),
+                    t => new { SquadId = t.GearSquadId, Nickname = t.GearNickName },
+                    o => new { SquadId = (int?)o.SquadId, o.Nickname },
+                    (t, o) => o).Include(o => o.CityOfBirth);
+
+                var result = query.ToList();
+                Assert.Equal(2, result.Count);
+                Assert.True(result.All(o => o.CityOfBirth != null));
+            }
+        }
+
+        [Fact]
+        public virtual void Include_with_join_and_inheritance2()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Gears.OfType<Officer>().Join(
+                    context.Tags,
+                    o => new { SquadId = (int?)o.SquadId, o.Nickname },
+                    t => new { SquadId = t.GearSquadId, Nickname = t.GearNickName },
+                    (o, t) => o).Include(g => g.Weapons);
+
+                var result = query.ToList();
+                Assert.Equal(2, result.Count);
+                Assert.True(result.All(o => o.Weapons.Count > 0));
+            }
+        }
+
+        [Fact]
+        public virtual void Include_with_join_and_inheritance3()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Tags.Join(
+                    context.Gears.OfType<Officer>(),
+                    t => new { SquadId = t.GearSquadId, Nickname = t.GearNickName },
+                    g => new { SquadId = (int?)g.SquadId, g.Nickname },
+                    (t, o) => o).Include(o => o.Reports);
+
+                var result = query.ToList();
+                Assert.Equal(2, result.Count);
+                Assert.True(result.All(o => o.Reports.Count > 0));
+            }
+        }
+
+        [Fact]
+        public virtual void Include_with_nested_navigation_in_order_by()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Weapons
+                    .Include(w => w.Owner)
+                    .OrderBy(e => e.Owner.CityOfBirth.Name);
+
+                var result = query.ToList();
+                Assert.Equal(9, result.Count);
+                Assert.Equal("Ephyra", result[0].Owner.CityOrBirthName);
+                Assert.Equal("Ephyra", result[1].Owner.CityOrBirthName);
+                Assert.Equal("Hanover", result[2].Owner.CityOrBirthName);
+                Assert.Equal("Hanover", result[3].Owner.CityOrBirthName);
+                Assert.Equal("Jacinto", result[4].Owner.CityOrBirthName);
+                Assert.Equal("Jacinto", result[5].Owner.CityOrBirthName);
+                Assert.Equal("Unknown", result[6].Owner.CityOrBirthName);
+                Assert.Equal("Unknown", result[7].Owner.CityOrBirthName);
+                Assert.Equal("Unknown", result[8].Owner.CityOrBirthName);
+            }
+        }
+
+        [Fact]
         public virtual void Where_enum()
         {
             using (var context = CreateContext())
@@ -261,7 +462,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Fact]
+        //[Fact] Issue #3424
         public virtual void Where_nullable_enum_with_non_nullable_parameter()
         {
             var ammunitionType = AmmunitionType.Cartridge;
@@ -404,30 +605,15 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
 
         [Fact]
-        public virtual void Select_Where_Navigation_Included()
-        {
-            using (var context = CreateContext())
-            {
-                var cogTags
-                    = (from o in context.Set<CogTag>().Include(o => o.Gear)
-                        where o.Gear.Nickname == "Marcus"
-                        select o).ToList();
-
-                Assert.Equal(1, cogTags.Count);
-                Assert.True(cogTags.All(o => o.Gear != null));
-            }
-        }
-
-        [Fact]
         public virtual void Singleton_Navigation_With_Member_Access()
         {
             using (var context = CreateContext())
             {
                 var cogTags
-                    = (from o in context.Set<CogTag>()
-                        where o.Gear.Nickname == "Marcus"
-                        where o.Gear.CityOrBirthName != "Ephyra"
-                        select new { B = o.Gear.CityOrBirthName }).ToList();
+                    = (from ct in context.Set<CogTag>()
+                        where ct.Gear.Nickname == "Marcus"
+                        where ct.Gear.CityOrBirthName != "Ephyra"
+                        select new { B = ct.Gear.CityOrBirthName }).ToList();
 
                 Assert.Equal(1, cogTags.Count);
                 Assert.True(cogTags.All(o => o.B != null));
@@ -440,13 +626,96 @@ namespace Microsoft.Data.Entity.FunctionalTests
             using (var context = CreateContext())
             {
                 var cogTags
-                    = (from o in context.Set<CogTag>()
-                        where o.Gear.Nickname == "Marcus"
-                        where o.Gear.CityOrBirthName != "Ephyra"
-                        select new { A = o.Gear, B = o.Gear.CityOrBirthName }).ToList();
+                    = (from ct in context.Set<CogTag>()
+                        where ct.Gear.Nickname == "Marcus"
+                        where ct.Gear.CityOrBirthName != "Ephyra"
+                        select new { A = ct.Gear, B = ct.Gear.CityOrBirthName }).ToList();
 
                 Assert.Equal(1, cogTags.Count);
                 Assert.True(cogTags.All(o => o.A != null && o.B != null));
+            }
+        }
+
+        [Fact]
+        public virtual void GroupJoin_Composite_Key()
+        {
+            using (var context = CreateContext())
+            {
+                var gears
+                    = (from ct in context.Set<CogTag>()
+                        join g in context.Set<Gear>()
+                            on new { N = ct.GearNickName, S = ct.GearSquadId }
+                            equals new { N = g.Nickname, S = (int?)g.SquadId } into gs
+                        from g in gs
+                        select g).ToList();
+
+                Assert.Equal(5, gears.Count);
+            }
+        }
+
+        [ConditionalFact]
+        [MonoVersionCondition(Min = "4.2.0", SkipReason = "Queries fail on Mono < 4.2.0 due to differences in the implementation of LINQ")]
+        public virtual void Join_navigation_translated_to_subquery_composite_key()
+        {
+            List<Gear> gears;
+            List<CogTag> tags;
+            using (var context = CreateContext())
+            {
+                gears = context.Gears.ToList();
+                tags = context.Tags.Include(e => e.Gear).ToList();
+            }
+
+            ClearLog();
+
+            using (var context = CreateContext())
+            {
+                var query = from g in context.Gears
+                            join t in context.Tags on g.FullName equals t.Gear.FullName
+                            select new { g.FullName, t.Note };
+
+                var result = query.ToList();
+
+                var expected = (from g in gears
+                                join t in tags on g.FullName equals t.Gear?.FullName
+                                select new { g.FullName, t.Note }).ToList();
+
+                Assert.Equal(expected.Count, result.Count);
+                foreach (var resultItem in result)
+                {
+                    Assert.True(expected.Contains(resultItem));
+                }
+            }
+        }
+
+        [Fact]
+        public virtual void Collection_with_inheritance_and_join_include_joined()
+        {
+            using (var context = CreateContext())
+            {
+                var query = (from t in context.Tags
+                             join g in context.Gears.OfType<Officer>() on new { id1 = t.GearSquadId, id2 = t.GearNickName } 
+                                equals new { id1 = (int?)g.SquadId, id2 = g.Nickname }
+                             select g).Include(g => g.Tag);
+
+                var result = query.ToList();
+
+                Assert.NotNull(result);
+            }
+        }
+
+        [Fact]
+        public virtual void Collection_with_inheritance_and_join_include_source()
+        {
+            using (var context = CreateContext())
+            {
+                var query = (from g in context.Gears.OfType<Officer>()
+                             join t in context.Tags on new { id1 = (int?)g.SquadId, id2 = g.Nickname } 
+                                equals new { id1 = t.GearSquadId, id2 = t.GearNickName }
+                             select g).Include(g => g.Tag);
+
+                var result = query.ToList();
+
+                Assert.NotNull(result);
             }
         }
 

@@ -7,11 +7,20 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Entity.FunctionalTests.TestModels.Northwind;
+using Microsoft.Data.Entity.FunctionalTests.TestUtilities.Xunit;
+using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Tests;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+// ReSharper disable AccessToDisposedClosure
+// ReSharper disable StringStartsWithIsCultureSpecific
+// ReSharper disable AccessToModifiedClosure
+// ReSharper disable StringEndsWithIsCultureSpecific
 
 namespace Microsoft.Data.Entity.FunctionalTests
 {
+    [MonoVersionCondition(Min = "4.2.0", SkipReason = "Async queries will not work on Mono < 4.2.0 due to differences in the IQueryable interface")]
     public abstract class AsyncQueryTestBase<TFixture> : IClassFixture<TFixture>
         where TFixture : NorthwindQueryFixtureBase, new()
     {
@@ -21,7 +30,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.SingleAsync(c => c.CustomerID == "ALFKI", cancellationToken));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Mixed_sync_async_in_query_cache()
         {
             using (var context = CreateContext())
@@ -31,7 +40,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Queryable_simple()
         {
             await AssertQuery<Customer>(
@@ -39,7 +48,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Queryable_simple_anonymous()
         {
             await AssertQuery<Customer>(
@@ -47,7 +56,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Queryable_nested_simple()
         {
             await AssertQuery<Customer>(
@@ -56,7 +65,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Take_simple()
         {
             await AssertQuery<Customer>(
@@ -65,7 +74,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 10);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Take_simple_projection()
         {
             await AssertQuery<Customer>(
@@ -73,7 +82,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Skip()
         {
             await AssertQuery<Customer>(
@@ -82,7 +91,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 86);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Take_Skip()
         {
             await AssertQuery<Customer>(
@@ -91,7 +100,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 5);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Distinct_Skip()
         {
             await AssertQuery<Customer>(
@@ -100,7 +109,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 86);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Skip_Take()
         {
             await AssertQuery<Customer>(
@@ -109,7 +118,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 10);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Distinct_Skip_Take()
         {
             await AssertQuery<Customer>(
@@ -118,7 +127,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 10);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Skip_Distinct()
         {
             await AssertQuery<Customer>(
@@ -126,7 +135,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 86);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Skip_Take_Distinct()
         {
             await AssertQuery<Customer>(
@@ -134,7 +143,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 10);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Take_Skip_Distinct()
         {
             await AssertQuery<Customer>(
@@ -142,7 +151,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 5);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Take_Distinct()
         {
             await AssertQuery<Order>(
@@ -150,7 +159,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 5);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Distinct_Take()
         {
             await AssertQuery<Order>(
@@ -159,56 +168,56 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 5);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Distinct_Take_Count()
         {
             await AssertQuery<Order>(
                 os => os.Distinct().Take(5).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Take_Distinct_Count()
         {
             await AssertQuery<Order>(
                 os => os.Take(5).Distinct().CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Any_simple()
         {
             await AssertQuery<Customer>(
                 cs => cs.AnyAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Take_Count()
         {
             await AssertQuery<Order>(
                 os => os.OrderBy(o => o.OrderID).Take(5).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Take_OrderBy_Count()
         {
             await AssertQuery<Order>(
                 os => os.Take(5).OrderBy(o => o.OrderID).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Any_predicate()
         {
             await AssertQuery<Customer>(
                 cs => cs.AnyAsync(c => c.ContactName.StartsWith("A")));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task All_top_level()
         {
             await AssertQuery<Customer>(
                 cs => cs.AllAsync(c => c.ContactName.StartsWith("A")));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task All_top_level_subquery()
         {
             // ReSharper disable once PossibleUnintendedReferenceComparison
@@ -216,7 +225,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.AllAsync(c1 => cs.Any(c2 => cs.Any(c3 => c1 == c3))));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_into()
         {
             await AssertQuery<Customer>(
@@ -228,7 +237,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     select id);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Projection_when_arithmetic_expressions()
         {
             await AssertQuery<Order>(
@@ -245,7 +254,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 830);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Projection_when_arithmetic_mixed()
         {
             await AssertQuery<Order, Employee>((os, es) =>
@@ -262,7 +271,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Projection_when_arithmetic_mixed_subqueries()
         {
             await AssertQuery<Order, Employee>((os, es) =>
@@ -279,21 +288,21 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Projection_when_null_value()
         {
             await AssertQuery<Customer>(
                 cs => cs.Select(c => c.Region));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Take_with_single()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.CustomerID).Take(1).SingleAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Take_with_single_select_many()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -306,13 +315,13 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .SingleAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Cast_results_to_object()
         {
             await AssertQuery<Customer>(cs => from c in cs.Cast<object>() select c, entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple()
         {
             await AssertQuery<Customer>(
@@ -320,7 +329,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 6);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple_closure()
         {
             // ReSharper disable once ConvertToConstant.Local
@@ -331,7 +340,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 6);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple_closure_constant()
         {
             // ReSharper disable once ConvertToConstant.Local
@@ -342,7 +351,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple_closure_via_query_cache()
         {
             var city = "London";
@@ -385,7 +394,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_method_call_nullable_type_closure_via_query_cache()
         {
             var city = new City { Int = 2 };
@@ -401,7 +410,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 3);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_method_call_nullable_type_reverse_closure_via_query_cache()
         {
             var city = new City { NullableInt = 1 };
@@ -417,7 +426,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 4);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_method_call_closure_via_query_cache()
         {
             var city = new City { InstanceFieldValue = "London" };
@@ -433,7 +442,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_field_access_closure_via_query_cache()
         {
             var city = new City { InstanceFieldValue = "London" };
@@ -449,7 +458,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_property_access_closure_via_query_cache()
         {
             var city = new City { InstancePropertyValue = "London" };
@@ -465,7 +474,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_static_field_access_closure_via_query_cache()
         {
             City.StaticFieldValue = "London";
@@ -481,7 +490,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_static_property_access_closure_via_query_cache()
         {
             City.StaticPropertyValue = "London";
@@ -497,7 +506,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_nested_field_access_closure_via_query_cache()
         {
             var city = new City { Nested = new City { InstanceFieldValue = "London" } };
@@ -513,7 +522,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_nested_property_access_closure_via_query_cache()
         {
             var city = new City { Nested = new City { InstancePropertyValue = "London" } };
@@ -529,7 +538,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_nested_field_access_closure_via_query_cache_error_null()
         {
             var city = new City();
@@ -543,21 +552,21 @@ namespace Microsoft.Data.Entity.FunctionalTests
             }
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_nested_field_access_closure_via_query_cache_error_method_null()
         {
             var city = new City();
 
             using (var context = CreateContext())
             {
-                await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await Assert.ThrowsAsync<AggregateException>(async () =>
                     await context.Set<Customer>()
                         .Where(c => c.City == city.Throw().InstanceFieldValue)
                         .ToListAsync());
             }
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_new_instance_field_access_closure_via_query_cache()
         {
             await AssertQuery<Customer>(
@@ -569,7 +578,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple_closure_via_query_cache_nullable_type()
         {
             int? reportsTo = 2;
@@ -591,7 +600,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple_closure_via_query_cache_nullable_type_reverse()
         {
             int? reportsTo = null;
@@ -613,7 +622,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 5);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple_shadow()
         {
             await AssertQuery<Employee>(
@@ -621,7 +630,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 6);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple_shadow_projection()
         {
             await AssertQuery<Employee>(
@@ -637,7 +646,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 6);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple_shadow_subquery()
         {
             await AssertQuery<Employee>(
@@ -647,7 +656,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 3);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_shadow_subquery_first()
         {
             await AssertQuery<Employee>(es =>
@@ -658,7 +667,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_client()
         {
             await AssertQuery<Customer>(
@@ -666,14 +675,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 6);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task First_client_predicate()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.CustomerID).FirstAsync(c => c.IsLondon));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_equals_method_string()
         {
             await AssertQuery<Customer>(
@@ -681,7 +690,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 6);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_equals_method_int()
         {
             await AssertQuery<Employee>(
@@ -689,7 +698,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_comparison_nullable_type_not_null()
         {
             await AssertQuery<Employee>(
@@ -697,7 +706,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 5);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_comparison_nullable_type_null()
         {
             await AssertQuery<Employee>(
@@ -705,7 +714,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_string_length()
         {
             await AssertQuery<Customer>(
@@ -713,7 +722,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 20);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_simple_reversed()
         {
             await AssertQuery<Customer>(
@@ -721,14 +730,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 6);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_is_null()
         {
             await AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == null));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_null_is_null()
         {
             // ReSharper disable once EqualExpressionComparison
@@ -737,14 +746,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_constant_is_null()
         {
             await AssertQuery<Customer>(
                 cs => cs.Where(c => "foo" == null));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_is_not_null()
         {
             await AssertQuery<Customer>(
@@ -752,7 +761,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_null_is_not_null()
         {
             // ReSharper disable once EqualExpressionComparison
@@ -760,7 +769,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.Where(c => null != null));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_constant_is_not_null()
         {
             await AssertQuery<Customer>(
@@ -768,7 +777,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_identity_comparison()
         {
             // ReSharper disable once EqualExpressionComparison
@@ -777,7 +786,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_select_many_or()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -788,7 +797,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_select_many_or2()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -799,7 +808,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_select_many_or3()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -811,7 +820,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_select_many_or4()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -824,7 +833,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_select_many_or_with_parameter()
         {
             var london = "London";
@@ -840,7 +849,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_in_optimization_multiple()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -853,7 +862,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_not_in_optimization1()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -864,7 +873,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_not_in_optimization2()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -875,7 +884,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_not_in_optimization3()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -887,7 +896,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_not_in_optimization4()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -900,7 +909,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_select_many_and()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -911,14 +920,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_primitive()
         {
             await AssertQuery<Employee>(
                 es => es.Select(e => e.EmployeeID).Take(9).Where(i => i == 5));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_primitive_tracked()
         {
             await AssertQuery<Employee>(
@@ -926,7 +935,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_primitive_tracked2()
         {
             await AssertQuery<Employee>(
@@ -934,7 +943,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_subquery_anon()
         {
             await AssertQuery<Employee, Order>((es, os) =>
@@ -944,112 +953,114 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { e, o });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_member()
         {
             await AssertQuery<Product>(ps => ps.Where(p => p.Discontinued), entryCount: 8);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_member_false()
         {
             await AssertQuery<Product>(ps => ps.Where(p => !p.Discontinued), entryCount: 69);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_member_negated_twice()
         {
+            // ReSharper disable once DoubleNegationOperator
             await AssertQuery<Product>(ps => ps.Where(p => !!p.Discontinued), entryCount: 8);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_member_shadow()
         {
             await AssertQuery<Product>(ps => ps.Where(p => EF.Property<bool>(p, "Discontinued")), entryCount: 8);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_member_false_shadow()
         {
             await AssertQuery<Product>(ps => ps.Where(p => !EF.Property<bool>(p, "Discontinued")), entryCount: 69);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_member_equals_constant()
         {
             await AssertQuery<Product>(ps => ps.Where(p => p.Discontinued.Equals(true)), entryCount: 8);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_member_in_complex_predicate()
         {
             // ReSharper disable once RedundantBoolCompare
             await AssertQuery<Product>(ps => ps.Where(p => p.ProductID > 100 && p.Discontinued || (p.Discontinued == true)), entryCount: 8);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_member_compared_to_binary_expression()
         {
             await AssertQuery<Product>(ps => ps.Where(p => p.Discontinued == (p.ProductID > 50)), entryCount: 44);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_not_bool_member_compared_to_not_bool_member()
         {
+            // ReSharper disable once EqualExpressionComparison
             await AssertQuery<Product>(ps => ps.Where(p => !p.Discontinued == !p.Discontinued), entryCount: 77);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_negated_boolean_expression_compared_to_another_negated_boolean_expression()
         {
             await AssertQuery<Product>(ps => ps.Where(p => !(p.ProductID > 50) == !(p.ProductID > 20)), entryCount: 47);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_not_bool_member_compared_to_binary_expression()
         {
             await AssertQuery<Product>(ps => ps.Where(p => !p.Discontinued == (p.ProductID > 50)), entryCount: 33);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_parameter_compared_to_binary_expression()
         {
             var prm = true;
             await AssertQuery<Product>(ps => ps.Where(p => (p.ProductID > 50) != prm), entryCount: 50);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_member_and_parameter_compared_to_binary_expression_nested()
         {
             var prm = true;
             await AssertQuery<Product>(ps => ps.Where(p => p.Discontinued == ((p.ProductID > 50) != prm)), entryCount: 33);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_de_morgan_or_optimizated()
         {
             await AssertQuery<Product>(ps => ps.Where(p => !(p.Discontinued || (p.ProductID < 20))), entryCount: 53);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_de_morgan_and_optimizated()
         {
             await AssertQuery<Product>(ps => ps.Where(p => !(p.Discontinued && (p.ProductID < 20))), entryCount: 74);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_complex_negated_expression_optimized()
         {
             await AssertQuery<Product>(ps => ps.Where(p => !(!(!p.Discontinued && (p.ProductID < 60)) || !(p.ProductID > 30))), entryCount: 27);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_short_member_comparison()
         {
             await AssertQuery<Product>(ps => ps.Where(p => p.UnitsInStock > 10), entryCount: 63);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_true()
         {
             await AssertQuery<Customer>(
@@ -1057,14 +1068,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_false()
         {
             await AssertQuery<Customer>(
                 cs => cs.Where(c => false));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_bool_closure()
         {
             var boolean = false;
@@ -1079,7 +1090,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_bool_closure()
         {
             var boolean = false;
@@ -1095,7 +1106,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
         // TODO: Re-write entity ref equality to identity equality.
         //
-        // [Fact]
+        // [ConditionalFact]
         // public virtual async Task Where_compare_entity_equal()
         // {
         //     var alfki = NorthwindData.Customers.SingleAsync(c => c.CustomerID == "ALFKI");
@@ -1105,7 +1116,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //         AssertQuery<Customer>(cs => cs.Where(c => c == alfki)));
         // }
         //
-        // [Fact]
+        // [ConditionalFact]
         // public virtual async Task Where_compare_entity_not_equal()
         // {
         //     var alfki = new Customer { CustomerID = "ALFKI" };
@@ -1114,7 +1125,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //         // ReSharper disable once PossibleUnintendedReferenceComparison
         //         AssertQuery<Customer>(cs => cs.Where(c => c != alfki)));
         //
-        // [Fact]
+        // [ConditionalFact]
         // public virtual async Task Project_compare_entity_equal()
         // {
         //     var alfki = NorthwindData.Customers.SingleAsync(c => c.CustomerID == "ALFKI");
@@ -1124,7 +1135,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //         AssertQuery<Customer>(cs => cs.Select(c => c == alfki)));
         // }
         //
-        // [Fact]
+        // [ConditionalFact]
         // public virtual async Task Project_compare_entity_not_equal()
         // {
         //     var alfki = new Customer { CustomerID = "ALFKI" };
@@ -1134,21 +1145,21 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //         AssertQuery<Customer>(cs => cs.Select(c => c != alfki)));
         // }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_compare_constructed_equal()
         {
             await AssertQuery<Customer>(
                 cs => cs.Where(c => new { x = c.City } == new { x = "London" }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_compare_constructed_multi_value_equal()
         {
             await AssertQuery<Customer>(
                 cs => cs.Where(c => new { x = c.City, y = c.Country } == new { x = "London", y = "UK" }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_compare_constructed_multi_value_not_equal()
         {
             await AssertQuery<Customer>(
@@ -1156,56 +1167,56 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_compare_constructed()
         {
             await AssertQuery<Customer>(
                 cs => cs.Where(c => new { x = c.City } == new { x = "London" }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_compare_null()
         {
             await AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == null && c.Country == "UK"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_projection()
         {
             await AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == "London").Select(c => c.CompanyName));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_scalar()
         {
             await AssertQuery<Customer>(
                 cs => cs.Select(c => c.City));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_anonymous_one()
         {
             await AssertQuery<Customer>(
                 cs => cs.Select(c => new { c.City }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_anonymous_two()
         {
             await AssertQuery<Customer>(
                 cs => cs.Select(c => new { c.City, c.Phone }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_anonymous_three()
         {
             await AssertQuery<Customer>(
                 cs => cs.Select(c => new { c.City, c.Phone, c.Country }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_customer_table()
         {
             await AssertQuery<Customer>(
@@ -1213,7 +1224,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_customer_identity()
         {
             await AssertQuery<Customer>(
@@ -1221,7 +1232,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_anonymous_with_object()
         {
             await AssertQuery<Customer>(
@@ -1229,39 +1240,39 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_anonymous_nested()
         {
             await AssertQuery<Customer>(
                 cs => cs.Select(c => new { c.City, Country = new { c.Country } }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_anonymous_empty()
         {
             await AssertQuery<Customer>(
                 cs => cs.Select(c => new { }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_anonymous_literal()
         {
             await AssertQuery<Customer>(cs => cs.Select(c => new { X = 10 }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_constant_int()
         {
             await AssertQuery<Customer>(cs => cs.Select(c => 0));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_constant_null_string()
         {
             await AssertQuery<Customer>(cs => cs.Select(c => (string)null));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_local()
         {
             // ReSharper disable once ConvertToConstant.Local
@@ -1270,21 +1281,21 @@ namespace Microsoft.Data.Entity.FunctionalTests
             await AssertQuery<Customer>(cs => cs.Select(c => x));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_scalar_primitive()
         {
             await AssertQuery<Employee>(
                 es => es.Select(e => e.EmployeeID));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_scalar_primitive_after_take()
         {
             await AssertQuery<Employee>(
                 es => es.Take(9).Select(e => e.EmployeeID));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_project_filter()
         {
             await AssertQuery<Customer>(
@@ -1294,7 +1305,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     select c.CompanyName);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_project_filter2()
         {
             await AssertQuery<Customer>(
@@ -1304,7 +1315,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     select c.City);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_nested_collection()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1331,7 +1342,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_correlated_subquery_projection()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1355,7 +1366,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_correlated_subquery_ordered()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1380,7 +1391,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
 
         // TODO: Re-linq parser
-        // [Fact]
+        // [ConditionalFact]
         // public virtual async Task Select_nested_ordered_enumerable_collection()
         // {
         //     AssertQuery<Customer>(cs =>
@@ -1388,7 +1399,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //         assertOrder: true);
         // }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_nested_collection_in_anonymous_type()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1416,7 +1427,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_subquery_recursive_trivial()
         {
             await AssertQuery<Employee>(
@@ -1443,7 +1454,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     });
         }
 
-        // TODO: [Fact] See #153
+        // TODO: [ConditionalFact] See #153
         public virtual async Task Where_subquery_on_collection()
         {
             await AssertQuery<Product, OrderDetail>((pr, od) =>
@@ -1452,7 +1463,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select p);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_query_composition()
         {
             await AssertQuery<Employee>(
@@ -1463,7 +1474,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_subquery_recursive_trivial()
         {
             await AssertQuery<Employee>(
@@ -1480,7 +1491,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 9);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_nested_collection_deep()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1512,7 +1523,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_scalar_primitive()
         {
             await AssertQuery<Employee>(
@@ -1521,7 +1532,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_mixed()
         {
             await AssertQuery<Employee, Customer>(
@@ -1531,7 +1542,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                             select new { e1, s, c });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_simple1()
         {
             await AssertQuery<Employee, Customer>(
@@ -1540,7 +1551,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                             select new { c, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_simple2()
         {
             await AssertQuery<Employee, Customer>(
@@ -1550,7 +1561,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                             select new { e1, c, e2.FirstName });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_entity_deep()
         {
             await AssertQuery<Employee>(
@@ -1562,7 +1573,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 9);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_projection1()
         {
             await AssertQuery<Employee>(
@@ -1571,7 +1582,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                       select new { e1.City, e2.Country });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_projection2()
         {
             await AssertQuery<Employee>(
@@ -1581,7 +1592,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                       select new { e1.City, e2.Country, e3.FirstName });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_nested_simple()
         {
             await AssertQuery<Customer>(
@@ -1595,7 +1606,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_correlated_simple()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -1607,7 +1618,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_correlated_subquery_simple()
         {
             await AssertQuery<Customer, Employee>(
@@ -1619,7 +1630,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_correlated_subquery_hard()
         {
             await AssertQuery<Customer, Employee>(
@@ -1633,7 +1644,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     select new { c1, e1 });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_cartesian_product_with_ordering()
         {
             await AssertQuery<Customer, Employee>(
@@ -1646,7 +1657,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_primitive()
         {
             await AssertQuery<Employee>(
@@ -1656,7 +1667,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     select i);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_primitive_select_subquery()
         {
             await AssertQuery<Employee>(
@@ -1666,7 +1677,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     select es.Any());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_customers_orders_projection()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1675,7 +1686,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c.ContactName, o.OrderID });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_customers_orders_entities()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1684,7 +1695,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, o });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_select_many()
         {
             await AssertQuery<Customer, Order, Employee>((cs, os, es) =>
@@ -1694,7 +1705,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, o, e });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_customers_orders_select()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1705,7 +1716,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select p);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_customers_orders_with_subquery()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1716,7 +1727,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c.ContactName, o1.OrderID });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_customers_orders_with_subquery_anonymous_property_method()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1727,7 +1738,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { o1, o1.o2, Shadow = EF.Property<DateTime?>(o1.o2, "OrderDate") });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_customers_orders_with_subquery_predicate()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1738,7 +1749,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c.ContactName, o1.OrderID });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_composite_key()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1748,7 +1759,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, o });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_client_new_expression()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1757,7 +1768,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, o });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_Where_Count()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1767,7 +1778,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                  select c).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Multiple_joins_Where_Order_Any()
         {
             await AssertQuery<Customer, Order, OrderDetail>((cs, os, ods) =>
@@ -1777,7 +1788,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .AnyAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_OrderBy_Count()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1793,7 +1804,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             public string Bar { get; set; }
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupJoin_customers_orders()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1812,7 +1823,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupJoin_customers_orders_count()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1821,7 +1832,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { cust = c, ords = orders.Count() });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Default_if_empty_top_level()
         {
             await AssertQuery<Employee>(cs =>
@@ -1829,15 +1840,16 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select c);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Default_if_empty_top_level_arg()
         {
             await AssertQuery<Employee>(cs =>
                 from c in cs.Where(c => c.EmployeeID == -1).DefaultIfEmpty(new Employee())
-                select c);
+                select c,
+                entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupJoin_customers_employees_shadow()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -1853,7 +1865,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupJoin_customers_employees_subquery_shadow()
         {
             await AssertQuery<Customer, Employee>((cs, es) =>
@@ -1869,7 +1881,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_customer_orders()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1879,7 +1891,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c.ContactName, o.OrderID });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_Count()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1888,7 +1900,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                  select c.CustomerID).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_LongCount()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1897,7 +1909,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                  select c.CustomerID).LongCountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_OrderBy_ThenBy_Any()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1909,7 +1921,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
         // TODO: Composite keys, slow..
 
-        //        [Fact]
+        //        [ConditionalFact]
         //        public virtual async Task Multiple_joins_with_join_conditions_in_where()
         //        {
         //            AssertQuery<Customer, Order, OrderDetail>((cs, os, ods) =>
@@ -1922,7 +1934,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //                select od.ProductID,
         //                assertOrder: true);
         //        }
-        //        [Fact]
+        //        [ConditionalFact]
         //
         //        public virtual async Task TestMultipleJoinsWithMissingJoinCondition()
         //        {
@@ -1936,7 +1948,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //                );
         //        }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy()
         {
             await AssertQuery<Customer>(
@@ -1945,7 +1957,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_client_mixed()
         {
             await AssertQuery<Customer>(
@@ -1954,7 +1966,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_multiple_queries()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -1964,7 +1976,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, o });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_shadow()
         {
             await AssertQuery<Employee>(
@@ -1973,7 +1985,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 9);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_ThenBy_predicate()
         {
             await AssertQuery<Customer>(
@@ -1984,7 +1996,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 6);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_correlated_subquery_lol()
         {
             await AssertQuery<Customer>(
@@ -1994,7 +2006,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Select()
         {
             await AssertQuery<Customer>(
@@ -2004,7 +2016,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_multiple()
         {
             await AssertQuery<Customer>(
@@ -2016,7 +2028,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_ThenBy()
         {
             await AssertQuery<Customer>(
@@ -2025,7 +2037,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderByDescending()
         {
             await AssertQuery<Customer>(
@@ -2034,7 +2046,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderByDescending_ThenBy()
         {
             await AssertQuery<Customer>(
@@ -2043,7 +2055,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderByDescending_ThenByDescending()
         {
             await AssertQuery<Customer>(
@@ -2052,14 +2064,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_ThenBy_Any()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.CustomerID).ThenBy(c => c.ContactName).AnyAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Join()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -2068,7 +2080,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c.CustomerID, o.OrderID });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_SelectMany()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -2080,7 +2092,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
 
         // TODO: Need to figure out how to do this 
-        //        [Fact]
+        //        [ConditionalFact]
         //        public virtual async Task GroupBy_anonymous()
         //        {
         //            AssertQuery<Customer>(cs =>
@@ -2089,7 +2101,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //                assertOrder: true);
         //        }
         //
-        //        [Fact]
+        //        [ConditionalFact]
         //        public virtual async Task GroupBy_anonymous_subquery()
         //        {
         //            AssertQuery<Customer>(cs =>
@@ -2098,7 +2110,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //                assertOrder: true);
         //        }
         //
-        //        [Fact]
+        //        [ConditionalFact]
         //        public virtual async Task GroupBy_nested_order_by_enumerable()
         //        {
         //            AssertQuery<Customer>(cs =>
@@ -2109,7 +2121,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         //                assertOrder: true);
         //        }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_SelectMany()
         {
             await AssertQuery<Customer>(
@@ -2117,7 +2129,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_simple()
         {
             await AssertQuery<Order>(
@@ -2136,7 +2148,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_simple2()
         {
             await AssertQuery<Order>(
@@ -2155,7 +2167,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_first()
         {
             await AssertQuery<Order>(
@@ -2171,28 +2183,28 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 6);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_Sum()
         {
             await AssertQuery<Order>(os =>
                 os.GroupBy(o => o.CustomerID).Select(g => g.Sum(o => o.OrderID)));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_Count()
         {
             await AssertQuery<Order>(os =>
                 os.GroupBy(o => o.CustomerID).Select(g => g.Count()));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_LongCount()
         {
             await AssertQuery<Order>(os =>
                 os.GroupBy(o => o.CustomerID).Select(g => g.LongCount()));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_Shadow()
         {
             await AssertQuery<Employee>(es =>
@@ -2202,7 +2214,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .Select(g => EF.Property<string>(g.First(), "Title")));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_Shadow2()
         {
             await AssertQuery<Employee>(es =>
@@ -2212,7 +2224,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .Select(g => g.First()));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_Shadow3()
         {
             await AssertQuery<Employee>(es =>
@@ -2221,7 +2233,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .Select(g => EF.Property<string>(g.First(), "Title")));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_Sum_Min_Max_Avg()
         {
             await AssertQuery<Order>(os =>
@@ -2235,7 +2247,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_with_result_selector()
         {
             await AssertQuery<Order>(os =>
@@ -2249,14 +2261,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_with_element_selector_sum()
         {
             await AssertQuery<Order>(os =>
                 os.GroupBy(o => o.CustomerID, o => o.OrderID).Select(g => g.Sum()));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_with_element_selector()
         {
             await AssertQuery<Order>(os =>
@@ -2278,7 +2290,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_with_element_selector2()
         {
             await AssertQuery<Order>(os =>
@@ -2300,7 +2312,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_with_element_selector3()
         {
             await AssertQuery<Employee>(es =>
@@ -2310,7 +2322,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_with_element_selector_sum_max()
         {
             await AssertQuery<Order>(os =>
@@ -2318,7 +2330,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .Select(g => new { Sum = g.Sum(), MaxAsync = g.Max() }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_with_anonymous_element()
         {
             await AssertQuery<Order>(os =>
@@ -2326,7 +2338,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .Select(g => g.Sum(x => x.OrderID)));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_with_two_part_key()
         {
             await AssertQuery<Order>(os =>
@@ -2334,7 +2346,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .Select(g => g.Sum(o => o.OrderID)));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_GroupBy()
         {
             await AssertQuery<Order>(os =>
@@ -2343,7 +2355,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .Select(g => g.Sum(o => o.OrderID)));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_GroupBy_SelectMany()
         {
             await AssertQuery<Order>(os =>
@@ -2353,7 +2365,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 830);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_GroupBy_SelectMany_shadow()
         {
             await AssertQuery<Employee>(es =>
@@ -2363,146 +2375,146 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     .Select(g => EF.Property<string>(g, "Title")));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Sum_with_no_arg()
         {
             await AssertQuery<Order>(os => os.Select(o => o.OrderID).SumAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Sum_with_binary_expression()
         {
             await AssertQuery<Order>(os => os.Select(o => o.OrderID * 2).SumAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Sum_with_no_arg_empty()
         {
             await AssertQuery<Order>(os => os.Where(o => o.OrderID == 42).Select(o => o.OrderID).SumAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Sum_with_arg()
         {
             await AssertQuery<Order>(os => os.SumAsync(o => o.OrderID));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Sum_with_arg_expression()
         {
             await AssertQuery<Order>(os => os.SumAsync(o => o.OrderID + o.OrderID));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Min_with_no_arg()
         {
             await AssertQuery<Order>(os => os.Select(o => o.OrderID).MinAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Min_with_arg()
         {
             await AssertQuery<Order>(os => os.MinAsync(o => o.OrderID));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Max_with_no_arg()
         {
             await AssertQuery<Order>(os => os.Select(o => o.OrderID).MaxAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Max_with_arg()
         {
             await AssertQuery<Order>(os => os.MaxAsync(o => o.OrderID));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Count_with_no_predicate()
         {
             await AssertQuery<Order>(os => os.CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Count_with_predicate()
         {
             await AssertQuery<Order>(os =>
                 os.CountAsync(o => o.CustomerID == "ALFKI"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Count_with_order_by()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => o.CustomerID).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_OrderBy_Count()
         {
             await AssertQuery<Order>(os => os.Where(o => o.CustomerID == "ALFKI").OrderBy(o => o.OrderID).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Where_Count()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => o.OrderID).Where(o => o.CustomerID == "ALFKI").CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Count_with_predicate()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => o.OrderID).CountAsync(o => o.CustomerID == "ALFKI"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Where_Count_with_predicate()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => o.OrderID).Where(o => o.OrderID > 10).CountAsync(o => o.CustomerID != "ALFKI"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_OrderBy_Count_client_eval()
         {
             await AssertQuery<Order>(os => os.Where(o => ClientEvalPredicate(o)).OrderBy(o => ClientEvalSelectorStateless()).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_OrderBy_Count_client_eval_mixed()
         {
             await AssertQuery<Order>(os => os.Where(o => o.OrderID > 10).OrderBy(o => ClientEvalPredicate(o)).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Where_Count_client_eval()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => ClientEvalSelectorStateless()).Where(o => ClientEvalPredicate(o)).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Where_Count_client_eval_mixed()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => o.OrderID).Where(o => ClientEvalPredicate(o)).CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Count_with_predicate_client_eval()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => ClientEvalSelectorStateless()).CountAsync(o => ClientEvalPredicate(o)));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Count_with_predicate_client_eval_mixed()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => o.OrderID).CountAsync(o => ClientEvalPredicateStateless()));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Where_Count_with_predicate_client_eval()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => ClientEvalSelectorStateless()).Where(o => ClientEvalPredicateStateless()).CountAsync(o => ClientEvalPredicate(o)));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Where_Count_with_predicate_client_eval_mixed()
         {
             await AssertQuery<Order>(os => os.OrderBy(o => o.OrderID).Where(o => ClientEvalPredicate(o)).CountAsync(o => o.CustomerID != "ALFKI"));
@@ -2528,7 +2540,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             return order.EmployeeID.HasValue ? order.EmployeeID.Value % 10 : 0;
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Distinct()
         {
             await AssertQuery<Customer>(
@@ -2536,7 +2548,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Distinct_Scalar()
         {
             await AssertQuery<Customer>(
@@ -2544,7 +2556,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     cs.Select(c => c.City).Distinct());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task OrderBy_Distinct()
         {
             await AssertQuery<Customer>(
@@ -2552,7 +2564,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     cs.OrderBy(c => c.CustomerID).Select(c => c.City).Distinct());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Distinct_OrderBy()
         {
             await AssertQuery<Customer>(
@@ -2561,7 +2573,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Distinct_GroupBy()
         {
             await AssertQuery<Order>(os =>
@@ -2572,21 +2584,21 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 assertOrder: true);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupBy_Distinct()
         {
             await AssertQuery<Order>(os =>
                 os.GroupBy(o => o.CustomerID).Distinct().Select(g => g.Key));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Distinct_Count()
         {
             await AssertQuery<Customer>(
                 cs => cs.Distinct().CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_Distinct_Count()
         {
             await AssertQuery<Customer>(
@@ -2594,7 +2606,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     cs.Select(c => c.City).Distinct().CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_Select_Distinct_Count()
         {
             await AssertQuery<Customer>(
@@ -2602,7 +2614,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     cs.Select(c => c.City).Select(c => c).Distinct().CountAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Single_Throws()
         {
             await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -2610,14 +2622,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     cs => cs.SingleAsync()));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Single_Predicate()
         {
             await AssertQuery<Customer>(
                 cs => cs.SingleAsync(c => c.CustomerID == "ALFKI"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_Single()
         {
             await AssertQuery<Customer>(
@@ -2625,7 +2637,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.Where(c => c.CustomerID == "ALFKI").SingleAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SingleOrDefault_Throws()
         {
             await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -2633,14 +2645,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     cs => cs.SingleOrDefaultAsync()));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SingleOrDefault_Predicate()
         {
             await AssertQuery<Customer>(
                 cs => cs.SingleOrDefaultAsync(c => c.CustomerID == "ALFKI"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_SingleOrDefault()
         {
             await AssertQuery<Customer>(
@@ -2648,21 +2660,21 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.Where(c => c.CustomerID == "ALFKI").SingleOrDefaultAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task FirstAsync()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.ContactName).FirstAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task First_Predicate()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.ContactName).FirstAsync(c => c.City == "London"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_First()
         {
             await AssertQuery<Customer>(
@@ -2670,21 +2682,21 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.OrderBy(c => c.ContactName).Where(c => c.City == "London").FirstAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task FirstOrDefault()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.ContactName).FirstOrDefaultAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task FirstOrDefault_Predicate()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.ContactName).FirstOrDefaultAsync(c => c.City == "London"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_FirstOrDefault()
         {
             await AssertQuery<Customer>(
@@ -2692,14 +2704,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.OrderBy(c => c.ContactName).Where(c => c.City == "London").FirstOrDefaultAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Last()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.ContactName).LastAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Last_when_no_order_by()
         {
             await AssertQuery<Customer>(
@@ -2707,14 +2719,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.Where(c => c.CustomerID == "ALFKI").LastAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Last_Predicate()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.ContactName).LastAsync(c => c.City == "London"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_Last()
         {
             await AssertQuery<Customer>(
@@ -2722,21 +2734,21 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.OrderBy(c => c.ContactName).Where(c => c.City == "London").LastAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task LastOrDefault()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.ContactName).LastOrDefaultAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task LastOrDefault_Predicate()
         {
             await AssertQuery<Customer>(
                 cs => cs.OrderBy(c => c.ContactName).LastOrDefaultAsync(c => c.City == "London"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_LastOrDefault()
         {
             await AssertQuery<Customer>(
@@ -2744,7 +2756,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs => cs.OrderBy(c => c.ContactName).Where(c => c.City == "London").LastOrDefaultAsync());
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_StartsWith_Literal()
         {
             await AssertQuery<Customer>(
@@ -2752,7 +2764,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 12);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_StartsWith_Identity()
         {
             await AssertQuery<Customer>(
@@ -2760,7 +2772,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_StartsWith_Column()
         {
             await AssertQuery<Customer>(
@@ -2768,7 +2780,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_StartsWith_MethodCall()
         {
             await AssertQuery<Customer>(
@@ -2776,7 +2788,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 12);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_EndsWith_Literal()
         {
             await AssertQuery<Customer>(
@@ -2784,7 +2796,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_EndsWith_Identity()
         {
             await AssertQuery<Customer>(
@@ -2792,7 +2804,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_EndsWith_Column()
         {
             await AssertQuery<Customer>(
@@ -2800,7 +2812,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_EndsWith_MethodCall()
         {
             await AssertQuery<Customer>(
@@ -2808,7 +2820,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_Contains_Literal()
         {
             await AssertQuery<Customer>(
@@ -2816,7 +2828,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 19);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_Contains_Identity()
         {
             await AssertQuery<Customer>(
@@ -2824,7 +2836,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_Contains_Column()
         {
             await AssertQuery<Customer>(
@@ -2832,7 +2844,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task String_Contains_MethodCall()
         {
             await AssertQuery<Customer>(
@@ -2850,7 +2862,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             return "m";
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupJoin_simple()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -2860,7 +2872,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select o);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupJoin_projection()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -2870,7 +2882,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, o });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupJoin_DefaultIfEmpty()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -2880,7 +2892,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c, o });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupJoin_DefaultIfEmpty2()
         {
             await AssertQuery<Employee, Order>((es, os) =>
@@ -2890,7 +2902,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { e, o });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task GroupJoin_DefaultIfEmpty3()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -2900,7 +2912,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select o);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_Joined()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -2909,7 +2921,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c.ContactName, o.OrderDate });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_Joined_DefaultIfEmpty()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -2918,7 +2930,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select new { c.ContactName, o });
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task SelectMany_Joined_DefaultIfEmpty2()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
@@ -2927,35 +2939,35 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 select o);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Select_many_cross_join_same_collection()
         {
             await AssertQuery<Customer, Customer>((cs1, cs2) =>
                 cs1.SelectMany(c => cs2));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_same_collection_multiple()
         {
             await AssertQuery<Customer, Customer, Customer>((cs1, cs2, cs3) =>
                 cs1.Join(cs2, o => o.CustomerID, i => i.CustomerID, (c1, c2) => new { c1, c2 }).Join(cs3, o => o.c1.CustomerID, i => i.CustomerID, (c12, c3) => c3));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Join_same_collection_force_alias_uniquefication()
         {
             await AssertQuery<Order, Order>((os1, os2) =>
                 os1.Join(os2, o => o.CustomerID, i => i.CustomerID, (_, o) => new { _, o }));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_subquery()
         {
             await AssertQuery<Customer, Order>((cs, os) =>
                 cs.Where(c => os.Select(o => o.CustomerID).Contains(c.CustomerID)));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_array_closure()
         {
             string[] ids = { "ABCDE", "ALFKI" };
@@ -2963,14 +2975,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => ids.Contains(c.CustomerID)), entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_array_inline()
         {
             await AssertQuery<Customer>(cs =>
                 cs.Where(c => new[] { "ABCDE", "ALFKI" }.Contains(c.CustomerID)), entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_list_closure()
         {
             var ids = new List<string> { "ABCDE", "ALFKI" };
@@ -2978,14 +2990,14 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => ids.Contains(c.CustomerID)), entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_list_inline()
         {
             await AssertQuery<Customer>(cs =>
                 cs.Where(c => new List<string> { "ABCDE", "ALFKI" }.Contains(c.CustomerID)), entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_list_inline_closure_mix()
         {
             var alfki = "ALFKI";
@@ -2993,7 +3005,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => new List<string> { "ABCDE", alfki }.Contains(c.CustomerID)), entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_collection_false()
         {
             string[] ids = { "ABCDE", "ALFKI" };
@@ -3001,7 +3013,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => !ids.Contains(c.CustomerID)), entryCount: 90);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_collection_complex_predicate_and()
         {
             string[] ids = { "ABCDE", "ALFKI" };
@@ -3009,7 +3021,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => (c.CustomerID == "ALFKI" || c.CustomerID == "ABCDE") && ids.Contains(c.CustomerID)), entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_collection_complex_predicate_or()
         {
             string[] ids = { "ABCDE", "ALFKI" };
@@ -3017,7 +3029,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => ids.Contains(c.CustomerID) || (c.CustomerID == "ALFKI" || c.CustomerID == "ABCDE")), entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_collection_complex_predicate_not_matching_ins1()
         {
             string[] ids = { "ABCDE", "ALFKI" };
@@ -3025,7 +3037,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => (c.CustomerID == "ALFKI" || c.CustomerID == "ABCDE") || !ids.Contains(c.CustomerID)), entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_collection_complex_predicate_not_matching_ins2()
         {
             string[] ids = { "ABCDE", "ALFKI" };
@@ -3033,7 +3045,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => ids.Contains(c.CustomerID) && (c.CustomerID != "ALFKI" && c.CustomerID != "ABCDE")));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_collection_sql_injection()
         {
             string[] ids = { "ALFKI", "ABC')); GO; DROP TABLE Orders; GO; --" };
@@ -3041,7 +3053,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => ids.Contains(c.CustomerID) || (c.CustomerID == "ALFKI" || c.CustomerID == "ABCDE")), entryCount: 1);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_collection_empty_closure()
         {
             var ids = new string[0];
@@ -3050,26 +3062,58 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 cs.Where(c => ids.Contains(c.CustomerID)));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_with_local_collection_empty_inline()
         {
             await AssertQuery<Customer>(cs =>
                 cs.Where(c => !(new List<string>().Contains(c.CustomerID))), entryCount: 91);
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Contains_top_level()
         {
             await AssertQuery<Customer>(cs =>
                 cs.Select(c => c.CustomerID).ContainsAsync("ALFKI"));
         }
 
-        [Fact]
+        [ConditionalFact]
         public virtual async Task Where_chain()
         {
             await AssertQuery<Order>(order => order
                 .Where(o => o.CustomerID == "QUICK")
                 .Where(o => o.OrderDate > new DateTime(1998, 1, 1)), entryCount: 8);
+        }
+
+        [ConditionalFact]
+        public virtual async Task Throws_on_concurrent_query_list()
+        {
+            using (var context = CreateContext())
+            {
+                ((IInfrastructure<IServiceProvider>)context).Instance.GetService<IConcurrencyDetector>().EnterCriticalSection();
+
+                var ex = await Assert.ThrowsAsync<AggregateException>(
+                    async () => await context.Customers.ToListAsync());
+
+                Assert.Equal(
+                    CoreStrings.ConcurrentMethodInvocation,
+                    ex.InnerException.Message);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual async Task Throws_on_concurrent_query_first()
+        {
+            using (var context = CreateContext())
+            {
+                ((IInfrastructure<IServiceProvider>)context).Instance.GetService<IConcurrencyDetector>().EnterCriticalSection();
+
+                var ex = await Assert.ThrowsAsync<AggregateException>(
+                    async () => await context.Customers.FirstAsync());
+
+                Assert.Equal(
+                    CoreStrings.ConcurrentMethodInvocation,
+                    ex.InnerException.Message);
+            }
         }
 
         protected NorthwindContext CreateContext()

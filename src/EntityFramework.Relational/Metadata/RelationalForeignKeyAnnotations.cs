@@ -1,8 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Metadata
@@ -33,8 +35,28 @@ namespace Microsoft.Data.Entity.Metadata
             => Annotations.SetAnnotation(RelationalAnnotationNames.Name, Check.NullButNotEmpty(value, nameof(value)));
 
         protected virtual string GetDefaultName()
-            => "FK_" + ForeignKey.DeclaringEntityType.DisplayName() +
-               "_" + ForeignKey.PrincipalEntityType.DisplayName() +
-               "_" + string.Join("_", ForeignKey.Properties.Select(p => p.Name));
+        {
+            var entityType = new RelationalEntityTypeAnnotations(ForeignKey.DeclaringEntityType, Annotations.ProviderPrefix);
+            var principalEntityType = new RelationalEntityTypeAnnotations(
+                ForeignKey.PrincipalEntityType,
+                Annotations.ProviderPrefix);
+
+            return GetDefaultForeignKeyName(entityType.TableName,
+                principalEntityType.TableName, ForeignKey.Properties.Select(p => p.Name));
+        }
+
+        public static string GetDefaultForeignKeyName(
+            [NotNull] string dependentTableName,
+            [NotNull] string principalTableName,
+            [NotNull] IEnumerable<string> dependentEndPropertyNames)
+        {
+            Check.NotEmpty(dependentTableName, nameof(dependentTableName));
+            Check.NotEmpty(principalTableName, nameof(principalTableName));
+            Check.NotNull(dependentEndPropertyNames, nameof(dependentEndPropertyNames));
+
+            return "FK_" + dependentTableName +
+                "_" + principalTableName +
+                "_" + string.Join("_", dependentEndPropertyNames);
+        }
     }
 }

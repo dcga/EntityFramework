@@ -6,7 +6,8 @@
     "url": "git://github.com/aspnet/entityframework"
   },
   "compilationOptions": {
-    "warningsAsErrors": true
+    "warningsAsErrors": true,
+    "keyFile": "../../tools/Key.snk"
   },
   "dependencies": {
     "EntityFramework.Relational": "7.0.0-*",
@@ -14,15 +15,20 @@
   },
   "compile": "..\\Shared\\*.cs",
   "namedResource": {
-    "EntityFramework.Sqlite.Strings": "Properties/Strings.resx"
+    "EntityFramework.Sqlite.SqliteStrings": "Properties/SqliteStrings.resx"
   },
-  "resource": ["Properties/EntityFramework.Sqlite.rd.xml"],
+  "resource": [ "Properties/EntityFramework.Sqlite.rd.xml" ],
   "frameworks": {
-    "net45": { },
-    "dotnet": {
+    "net451": { },
+    "dotnet5.4": {
       "dependencies": {
-        "System.IO.FileSystem": "4.0.1-beta-*",
-        "Microsoft.CSharp": "4.0.1-beta-*"
+        "System.IO.FileSystem": "4.0.1-*",
+        "Microsoft.CSharp": "4.0.1-*"
+      }
+    },
+    "netcore50": {
+      "dependencies": {
+        "System.IO.FileSystem": "4.0.0"
       }
     }
   }

@@ -10,6 +10,7 @@ using Xunit;
 
 namespace EntityFramework.Microbenchmarks.Query
 {
+    [SqlServerRequired]
     public class SimpleQueryTests : IClassFixture<SimpleQueryTests.SimpleQueryFixture>
     {
         private readonly SimpleQueryFixture _fixture;
@@ -20,25 +21,31 @@ namespace EntityFramework.Microbenchmarks.Query
         }
 
         [Benchmark]
-        [BenchmarkVariation("Tracking On", true)]
-        [BenchmarkVariation("Tracking Off", false)]
-        public void LoadAll(MetricCollector collector, bool tracking)
+        [BenchmarkVariation("Tracking On (1 query)", true, 1)]
+        [BenchmarkVariation("Tracking Off (10 queries)", false, 10)]
+        public void LoadAll(IMetricCollector collector, bool tracking, int queriesPerIteration)
         {
             using (var context = _fixture.CreateContext())
             {
                 var query = context.Products.ApplyTracking(tracking);
 
-                collector.StartCollection();
-                var result = query.ToList();
-                collector.StopCollection();
-                Assert.Equal(1000, result.Count);
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < queriesPerIteration; i++)
+                    {
+                        query.ToList();
+                    }
+                }
+
+                Assert.Equal(1000, query.Count());
+                Assert.False(tracking && (queriesPerIteration != 1), "Multiple queries per iteration not valid for tracking queries");
             }
         }
 
         [Benchmark]
-        [BenchmarkVariation("Tracking On", true)]
-        [BenchmarkVariation("Tracking Off", false)]
-        public void Where(MetricCollector collector, bool tracking)
+        [BenchmarkVariation("Tracking On (1 query)", true, 1)]
+        [BenchmarkVariation("Tracking Off (10 queries)", false, 10)]
+        public void Where(IMetricCollector collector, bool tracking, int queriesPerIteration)
         {
             using (var context = _fixture.CreateContext())
             {
@@ -46,17 +53,23 @@ namespace EntityFramework.Microbenchmarks.Query
                     .ApplyTracking(tracking)
                     .Where(p => p.Retail < 15);
 
-                collector.StartCollection();
-                var result = query.ToList();
-                collector.StopCollection();
-                Assert.Equal(500, result.Count);
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < queriesPerIteration; i++)
+                    {
+                        query.ToList();
+                    }
+                }
+
+                Assert.Equal(500, query.Count());
+                Assert.False(tracking && (queriesPerIteration != 1), "Multiple queries per iteration not valid for tracking queries");
             }
         }
 
         [Benchmark]
-        [BenchmarkVariation("Tracking On", true)]
-        [BenchmarkVariation("Tracking Off", false)]
-        public void OrderBy(MetricCollector collector, bool tracking)
+        [BenchmarkVariation("Tracking On (1 query)", true, 1)]
+        [BenchmarkVariation("Tracking Off (10 queries)", false, 10)]
+        public void OrderBy(IMetricCollector collector, bool tracking, int queriesPerIteration)
         {
             using (var context = _fixture.CreateContext())
             {
@@ -64,31 +77,43 @@ namespace EntityFramework.Microbenchmarks.Query
                     .ApplyTracking(tracking)
                     .OrderBy(p => p.Retail);
 
-                collector.StartCollection();
-                var result = query.ToList();
-                collector.StopCollection();
-                Assert.Equal(1000, result.Count);
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < queriesPerIteration; i++)
+                    {
+                        query.ToList();
+                    }
+                }
+
+                Assert.Equal(1000, query.Count());
+                Assert.False(tracking && (queriesPerIteration != 1), "Multiple queries per iteration not valid for tracking queries");
             }
         }
 
         [Benchmark]
-        public void Count(MetricCollector collector)
+        [BenchmarkVariation("Default (100 queries)", 100)]
+        public void Count(IMetricCollector collector, int queriesPerIteration)
         {
             using (var context = _fixture.CreateContext())
             {
                 var query = context.Products;
 
-                collector.StartCollection();
-                var result = query.Count();
-                collector.StopCollection();
-                Assert.Equal(1000, result);
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < queriesPerIteration; i++)
+                    {
+                        query.Count();
+                    }
+                }
+
+                Assert.Equal(1000, query.Count());
             }
         }
 
         [Benchmark]
-        [BenchmarkVariation("Tracking On", true)]
-        [BenchmarkVariation("Tracking Off", false)]
-        public void SkipTake(MetricCollector collector, bool tracking)
+        [BenchmarkVariation("Tracking On (1 query)", true, 1)]
+        [BenchmarkVariation("Tracking Off (10 queries)", false, 10)]
+        public void SkipTake(IMetricCollector collector, bool tracking, int queriesPerIteration)
         {
             using (var context = _fixture.CreateContext())
             {
@@ -97,15 +122,22 @@ namespace EntityFramework.Microbenchmarks.Query
                     .OrderBy(p => p.ProductId)
                     .Skip(500).Take(500);
 
-                collector.StartCollection();
-                var result = query.ToList();
-                collector.StopCollection();
-                Assert.Equal(500, result.Count);
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < queriesPerIteration; i++)
+                    {
+                        query.ToList();
+                    }
+                }
+
+                Assert.Equal(500, query.Count());
+                Assert.False(tracking && (queriesPerIteration != 1), "Multiple queries per iteration not valid for tracking queries");
             }
         }
 
         [Benchmark]
-        public void GroupBy(MetricCollector collector)
+        [BenchmarkVariation("Default (10 queries)", 10)]
+        public void GroupBy(IMetricCollector collector, int queriesPerIteration)
         {
             using (var context = _fixture.CreateContext())
             {
@@ -117,18 +149,24 @@ namespace EntityFramework.Microbenchmarks.Query
                         Products = g
                     });
 
-                collector.StartCollection();
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < queriesPerIteration; i++)
+                    {
+                        query.ToList();
+                    }
+                }
+
                 var result = query.ToList();
-                collector.StopCollection();
                 Assert.Equal(10, result.Count);
                 Assert.All(result, g => Assert.Equal(100, g.Products.Count()));
             }
         }
 
-        [Benchmark(Iterations = 2)]
-        [BenchmarkVariation("Tracking On", true)]
-        [BenchmarkVariation("Tracking Off", false)]
-        public void Include(MetricCollector collector, bool tracking)
+        [Benchmark]
+        [BenchmarkVariation("Tracking On (1 query)", true, 1)]
+        [BenchmarkVariation("Tracking Off (1 query)", false, 1)]
+        public void Include(IMetricCollector collector, bool tracking, int queriesPerIteration)
         {
             using (var context = _fixture.CreateContext())
             {
@@ -136,50 +174,85 @@ namespace EntityFramework.Microbenchmarks.Query
                     .ApplyTracking(tracking)
                     .Include(c => c.Orders);
 
-                collector.StartCollection();
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < queriesPerIteration; i++)
+                    {
+                        query.ToList();
+                    }
+                }
+
                 var result = query.ToList();
-                collector.StopCollection();
                 Assert.Equal(1000, result.Count);
                 Assert.Equal(2000, result.SelectMany(c => c.Orders).Count());
+                Assert.False(tracking && (queriesPerIteration != 1), "Multiple queries per iteration not valid for tracking queries");
             }
         }
 
         [Benchmark]
-        public void Projection(MetricCollector collector)
+        [BenchmarkVariation("Default (10 queries)", 10)]
+        public void Projection(IMetricCollector collector, int queriesPerIteration)
         {
             using (var context = _fixture.CreateContext())
             {
                 var query = context.Products
-                    .Select(p => new { p.Name, p.Retail });
+                    .Select(p => new
+                    {
+                        p.ProductId,
+                        p.Name,
+                        p.Description,
+                        p.SKU,
+                        p.Retail,
+                        p.CurrentPrice,
+                        p.ActualStockLevel
+                    });
 
-                collector.StartCollection();
-                var result = query.ToList();
-                collector.StopCollection();
-                Assert.Equal(1000, result.Count);
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < queriesPerIteration; i++)
+                    {
+                        query.ToList();
+                    }
+                }
+
+                Assert.Equal(1000, query.Count());
             }
         }
 
         [Benchmark]
-        public void ProjectionAcrossNavigation(MetricCollector collector)
+        [BenchmarkVariation("Default (10 queries)", 10)]
+        public void ProjectionAcrossNavigation(IMetricCollector collector, int queriesPerIteration)
         {
             using (var context = _fixture.CreateContext())
             {
-                // TODO Use navigation for projection when supported (#325)
-                var query = context.Orders.Join(
-                    context.Customers,
-                    o => o.CustomerId,
-                    c => c.CustomerId,
-                    (o, c) => new { CustomerName = c.Name, OrderDate = o.Date });
+                var query = context.Orders
+                    .Select(o => new
+                    {
+                        CustomerTitle = o.Customer.Title,
+                        CustomerFirstName = o.Customer.FirstName,
+                        CustomerLastName = o.Customer.LastName,
+                        OrderDate = o.Date, o.OrderDiscount,
+                        OrderDiscountReason = o.DiscountReason,
+                        OrderTax = o.Tax,
+                        OrderSpecialRequests = o.SpecialRequests
+                    });
 
-                collector.StartCollection();
-                var result = query.ToList();
-                collector.StopCollection();
-                Assert.Equal(2000, result.Count);
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < queriesPerIteration; i++)
+                    {
+                        query.ToList();
+                    }
+                }
+
+                Assert.Equal(2000, query.Count());
             }
         }
 
         public class SimpleQueryFixture : OrdersFixture
         {
+            private readonly IServiceProvider _noQueryCacheServiceProvider;
+
             public SimpleQueryFixture()
                 : base("Perf_Query_Simple", 1000, 1000, 2, 2)
             { }

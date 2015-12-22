@@ -3,7 +3,9 @@
 
 using System.Diagnostics;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.ValueGeneration;
 
 namespace Microsoft.Data.Entity.ChangeTracking.Internal
@@ -28,7 +30,7 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
                 var isForeignKey = property.IsForeignKey(entry.EntityType);
 
                 if ((property.RequiresValueGenerator || isForeignKey)
-                    && property.IsSentinelValue(entry[property]))
+                    && property.ClrType.IsDefaultValue(entry[property]))
                 {
                     if (isForeignKey)
                     {
@@ -36,12 +38,13 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
                     }
                     else
                     {
-                        var valueGenerator = _valueGeneratorSelector.Select(property, entry.EntityType);
+                        var valueGenerator = _valueGeneratorSelector.Select(property, property.IsKey()
+                            ? property.DeclaringEntityType
+                            : entry.EntityType);
 
                         Debug.Assert(valueGenerator != null);
 
-                        var generatedValue = valueGenerator.NextSkippingSentinel(property);
-                        SetGeneratedValue(entry, property, generatedValue, valueGenerator.GeneratesTemporaryValues);
+                        SetGeneratedValue(entry, property, valueGenerator.Next(), valueGenerator.GeneratesTemporaryValues);
                     }
                 }
             }

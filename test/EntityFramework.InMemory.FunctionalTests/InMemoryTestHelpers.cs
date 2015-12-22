@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.Data.Entity.Tests
 {
@@ -14,7 +14,7 @@ namespace Microsoft.Data.Entity.Tests
 
         public new static InMemoryTestHelpers Instance { get; } = new InMemoryTestHelpers();
 
-        public override EntityFrameworkServicesBuilder AddProviderServices(EntityFrameworkServicesBuilder builder) 
+        public override EntityFrameworkServicesBuilder AddProviderServices(EntityFrameworkServicesBuilder builder)
             => builder.AddInMemoryDatabase();
 
         protected override void UseProviderOptions(DbContextOptionsBuilder optionsBuilder)

@@ -2,7 +2,6 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using Microsoft.Data.Entity.FunctionalTests;
-using Microsoft.Data.Entity.Metadata;
 using Xunit;
 
 namespace Microsoft.Data.Entity.InMemory.FunctionalTests
@@ -18,7 +17,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                Assert.True(context.Model.GetEntityType(typeof(One)).GetProperty("RowVersion").IsConcurrencyToken);
+                Assert.True(context.Model.FindEntityType(typeof(One)).FindProperty("RowVersion").IsConcurrencyToken);
             }
         }
 
@@ -26,7 +25,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(10, context.Model.GetEntityType(typeof(One)).GetProperty("MaxLengthProperty").GetMaxLength());
+                Assert.Equal(10, context.Model.FindEntityType(typeof(One)).FindProperty("MaxLengthProperty").GetMaxLength());
             }
         }
 
@@ -34,7 +33,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                Assert.True(context.Model.GetEntityType(typeof(BookDetail)).FindNavigation("Book").ForeignKey.IsRequired);
+                Assert.True(context.Model.FindEntityType(typeof(BookDetail)).FindNavigation("Book").ForeignKey.IsRequired);
             }
         }
 
@@ -42,7 +41,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                Assert.False(context.Model.GetEntityType(typeof(One)).GetProperty("RequiredColumn").IsNullable);
+                Assert.False(context.Model.FindEntityType(typeof(One)).FindProperty("RequiredColumn").IsNullable);
             }
         }
 
@@ -50,7 +49,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                Assert.Equal(16, context.Model.GetEntityType(typeof(Two)).GetProperty("Data").GetMaxLength());
+                Assert.Equal(16, context.Model.FindEntityType(typeof(Two)).FindProperty("Data").GetMaxLength());
             }
         }
 
@@ -58,7 +57,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
         {
             using (var context = CreateContext())
             {
-                Assert.True(context.Model.GetEntityType(typeof(Two)).GetProperty("Timestamp").IsConcurrencyToken);
+                Assert.True(context.Model.FindEntityType(typeof(Two)).FindProperty("Timestamp").IsConcurrencyToken);
             }
         }
     }

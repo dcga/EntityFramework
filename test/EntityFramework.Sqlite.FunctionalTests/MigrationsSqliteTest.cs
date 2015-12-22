@@ -25,7 +25,7 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
 
             Assert.Equal(
                 @"CREATE TABLE IF NOT EXISTS ""__EFMigrationsHistory"" (
-    ""MigrationId"" TEXT NOT NULL CONSTRAINT ""PK_HistoryRow"" PRIMARY KEY,
+    ""MigrationId"" TEXT NOT NULL CONSTRAINT ""PK___EFMigrationsHistory"" PRIMARY KEY,
     ""ProductVersion"" TEXT NOT NULL
 );
 
@@ -74,6 +74,13 @@ WHERE ""MigrationId"" = '00000000000001_Migration1';
             Assert.Throws<NotSupportedException>(() => base.Can_generate_idempotent_down_scripts());
         }
 
+        public override void Can_get_active_provider()
+        {
+            base.Can_get_active_provider();
+
+            Assert.Equal("EntityFramework.Sqlite", ActiveProvider);
+        }
+
         protected override void AssertFirstMigration(DbConnection connection)
         {
             var sql = GetDatabaseSchemaAsync(connection);
@@ -91,7 +98,7 @@ CreatedTable
         {
             base.BuildSecondMigration(migrationBuilder);
 
-            for (int i = migrationBuilder.Operations.Count - 1; i >= 0; i--)
+            for (var i = migrationBuilder.Operations.Count - 1; i >= 0; i--)
             {
                 var operation = migrationBuilder.Operations[i];
                 if (operation is AlterColumnOperation

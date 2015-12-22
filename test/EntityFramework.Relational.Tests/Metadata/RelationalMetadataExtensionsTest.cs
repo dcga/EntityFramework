@@ -2,8 +2,9 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata.Conventions;
-using Microsoft.Data.Entity.Relational.Internal;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Metadata.Tests
@@ -167,7 +168,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             var key = modelBuilder
                 .Entity<Customer>()
-                .Key(e => e.Id)
+                .HasKey(e => e.Id)
                 .Metadata;
 
             Assert.Equal("PK_Customer", key.Relational().Name);
@@ -188,13 +189,13 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             modelBuilder
                 .Entity<Customer>()
-                .Key(e => e.Id);
+                .HasKey(e => e.Id);
 
             var foreignKey = modelBuilder
                 .Entity<Order>()
-                .Reference<Customer>()
-                .InverseReference()
-                .ForeignKey<Order>(e => e.CustomerId)
+                .HasOne<Customer>()
+                .WithOne()
+                .HasForeignKey<Order>(e => e.CustomerId)
                 .Metadata;
 
             Assert.Equal("FK_Order_Customer_CustomerId", foreignKey.Relational().Name);
@@ -215,7 +216,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             var index = modelBuilder
                 .Entity<Customer>()
-                .Index(e => e.Id)
+                .HasIndex(e => e.Id)
                 .Metadata;
 
             Assert.Equal("IX_Customer_Id", index.Relational().Name);
@@ -266,7 +267,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Metadata;
             derivedType.BaseType = entityType;
 
-            Assert.Equal(Strings.DiscriminatorPropertyMustBeOnRoot(typeof(SpecialCustomer).FullName),
+            Assert.Equal(RelationalStrings.DiscriminatorPropertyMustBeOnRoot(typeof(SpecialCustomer).FullName),
                 Assert.Throws<InvalidOperationException>(() => derivedType.Relational().DiscriminatorProperty = property).Message);
         }
 
@@ -285,7 +286,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
 
             var property = entityType.AddProperty("D");
 
-            Assert.Equal(Strings.DiscriminatorPropertyNotFound("D", typeof(SpecialCustomer).FullName),
+            Assert.Equal(RelationalStrings.DiscriminatorPropertyNotFound("D", typeof(SpecialCustomer).FullName),
                 Assert.Throws<InvalidOperationException>(() => otherType.Relational().DiscriminatorProperty = property).Message);
         }
 
@@ -322,7 +323,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
                 .Entity<Customer>()
                 .Metadata;
 
-            Assert.Equal(Strings.NoDiscriminatorForValue("Customer", "Customer"),
+            Assert.Equal(RelationalStrings.NoDiscriminatorForValue("Customer", "Customer"),
                 Assert.Throws<InvalidOperationException>(() =>
                     entityType.Relational().DiscriminatorValue = "V").Message);
         }
@@ -340,7 +341,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             property.ClrType = typeof(int);
             entityType.Relational().DiscriminatorProperty = property;
 
-            Assert.Equal(Strings.DiscriminitatorValueIncompatible("V", "D", typeof(int)),
+            Assert.Equal(RelationalStrings.DiscriminatorValueIncompatible("V", "D", typeof(int)),
                 Assert.Throws<InvalidOperationException>(() =>
                     entityType.Relational().DiscriminatorValue = "V").Message);
 
@@ -363,6 +364,24 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             extensions.DefaultSchema = null;
 
             Assert.Null(extensions.DefaultSchema);
+        }
+
+        [Fact]
+        public void Can_get_and_set_database_name_on_model()
+        {
+            var modelBuilder = new ModelBuilder(new ConventionSet());
+            var model = modelBuilder.Model;
+            var extensions = model.Relational();
+
+            Assert.Null(extensions.DefaultSchema);
+
+            extensions.DatabaseName = "Northwind";
+
+            Assert.Equal("Northwind", extensions.DatabaseName);
+
+            extensions.DatabaseName = null;
+
+            Assert.Null(extensions.DatabaseName);
         }
 
         [Fact]

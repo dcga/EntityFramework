@@ -7,7 +7,7 @@ using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.Data.Entity.Internal
 {
@@ -47,7 +47,7 @@ namespace Microsoft.Data.Entity.Internal
         {
             if (_inOnModelCreating)
             {
-                throw new InvalidOperationException(Strings.RecursiveOnModelCreating);
+                throw new InvalidOperationException(CoreStrings.RecursiveOnModelCreating);
             }
 
             try
@@ -84,7 +84,5 @@ namespace Microsoft.Data.Entity.Internal
         }
 
         public virtual IServiceProvider ServiceProvider => _provider;
-
-        public virtual void Dispose() => (_provider as IDisposable)?.Dispose();
     }
 }

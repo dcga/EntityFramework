@@ -16,9 +16,9 @@ namespace Microsoft.Data.Entity.Query.Sql
         Expression VisitLiteral([NotNull] LiteralExpression literalExpression);
         Expression VisitSelect([NotNull] SelectExpression selectExpression);
         Expression VisitTable([NotNull] TableExpression tableExpression);
-        Expression VisitRawSqlDerivedTable([NotNull] RawSqlDerivedTableExpression rawSqlDerivedTableExpression);
+        Expression VisitFromSql([NotNull] FromSqlExpression fromSqlExpression);
         Expression VisitCrossJoin([NotNull] CrossJoinExpression crossJoinExpression);
-        Expression VisitCrossApply([NotNull] CrossApplyExpression crossApplyExpression);
+        Expression VisitLateralJoin([NotNull] LateralJoinExpression lateralJoinExpression);
         Expression VisitInnerJoin([NotNull] InnerJoinExpression innerJoinExpression);
         Expression VisitOuterJoin([NotNull] LeftOuterJoinExpression leftOuterJoinExpression);
         Expression VisitExists([NotNull] ExistsExpression existsExpression);
@@ -29,5 +29,6 @@ namespace Microsoft.Data.Entity.Query.Sql
         Expression VisitIn([NotNull] InExpression inExpression);
         Expression VisitSqlFunction([NotNull] SqlFunctionExpression sqlFunctionExpression);
         Expression VisitStringCompare([NotNull] StringCompareExpression stringCompareExpression);
+        Expression VisitExplicitCast([NotNull] ExplicitCastExpression explicitCastExpression);
     }
 }

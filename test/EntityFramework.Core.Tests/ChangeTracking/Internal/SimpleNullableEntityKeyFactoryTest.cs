@@ -1,12 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
+using System.Linq;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
-using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Storage;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
+
+// ReSharper disable UnusedAutoPropertyAccessor.Local
 
 namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 {
@@ -16,14 +18,16 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
         public void Creates_a_new_key_for_values_in_the_given_entry()
         {
             var model = BuildModel();
-            var type = model.GetEntityType(typeof(Banana));
+            var type = model.FindEntityType(typeof(Banana));
             var stateManager = TestHelpers.Instance.CreateContextServices(model).GetRequiredService<IStateManager>();
 
             var entity = new Banana { P1 = 7 };
             var entry = stateManager.GetOrCreateEntry(entity);
 
-            var key = (SimpleEntityKey<int>)new SimpleEntityKeyFactory<int>(type.GetPrimaryKey(), 0)
-                .Create(type.GetPrimaryKey().Properties, entry);
+            var property = type.FindPrimaryKey().Properties.Single();
+
+            var key = (KeyValue<int>)new SimpleKeyValueFactory<int>(type.FindPrimaryKey())
+                .Create(entry[property]);
 
             Assert.Equal(7, key.Value);
         }
@@ -32,24 +36,26 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
         public void Returns_null_if_key_value_is_null()
         {
             var model = BuildModel();
-            var type = model.GetEntityType(typeof(Banana));
+            var type = model.FindEntityType(typeof(Banana));
             var stateManager = TestHelpers.Instance.CreateContextServices(model).GetRequiredService<IStateManager>();
 
             var entity = new Banana { P1 = 7, P2 = null };
             var entry = stateManager.GetOrCreateEntry(entity);
 
-            Assert.Equal(EntityKey.InvalidEntityKey, new SimpleEntityKeyFactory<int>(type.GetPrimaryKey(), 0)
-                .Create(new[] { type.GetProperty("P2") }, entry));
+            var property = type.FindProperty("P2");
+
+            Assert.True(new SimpleKeyValueFactory<int>(type.FindPrimaryKey())
+                .Create(entry[property]).IsInvalid);
         }
 
         [Fact]
         public void Creates_a_new_key_for_non_primary_key_values_in_the_given_value_buffer()
         {
             var model = BuildModel();
-            var type = model.GetEntityType(typeof(Banana));
+            var type = model.FindEntityType(typeof(Banana));
 
-            var key = (SimpleEntityKey<int>)new SimpleEntityKeyFactory<int>(type.GetPrimaryKey(), 0)
-                .Create(new[] { type.GetProperty("P2") }, new ValueBuffer(new object[] { 7, 77 }));
+            var key = (KeyValue<int>)new SimpleKeyValueFactory<int>(type.FindPrimaryKey())
+                .Create(new[] { type.FindProperty("P2") }, new ValueBuffer(new object[] { 7, 77 }));
 
             Assert.Equal(77, key.Value);
         }
@@ -58,49 +64,11 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
         public void Returns_null_if_value_in_buffer_is_null()
         {
             var model = BuildModel();
-            var type = model.GetEntityType(typeof(Banana));
+            var type = model.FindEntityType(typeof(Banana));
 
-            Assert.Equal(
-                EntityKey.InvalidEntityKey,
-                new SimpleEntityKeyFactory<int>(type.GetPrimaryKey(), 0)
-                .Create(new[] { type.GetProperty("P2") }, new ValueBuffer(new object[] { 7, null })));
-        }
-
-        [Fact]
-        public void Creates_a_new_key_from_a_sidecar_value()
-        {
-            var model = BuildModel();
-            var type = model.GetEntityType(typeof(Banana));
-            var stateManager = TestHelpers.Instance.CreateContextServices(model).GetRequiredService<IStateManager>();
-
-            var entity = new Banana { P1 = 7, P2 = 77 };
-            var entry = stateManager.GetOrCreateEntry(entity);
-
-            var sidecar = new RelationshipsSnapshot(entry);
-            sidecar[type.GetProperty("P2")] = 78;
-
-            var key = (SimpleEntityKey<int>)new SimpleEntityKeyFactory<int>(type.GetPrimaryKey(), 0)
-                .Create(new[] { type.GetProperty("P2") }, sidecar);
-
-            Assert.Equal(78, key.Value);
-        }
-
-        [Fact]
-        public void Creates_a_new_key_from_current_value_when_value_not_yet_set_in_sidecar()
-        {
-            var model = BuildModel();
-            var type = model.GetEntityType(typeof(Banana));
-            var stateManager = TestHelpers.Instance.CreateContextServices(model).GetRequiredService<IStateManager>();
-
-            var entity = new Banana { P1 = 7, P2 = 77 };
-            var entry = stateManager.GetOrCreateEntry(entity);
-
-            var sidecar = new RelationshipsSnapshot(entry);
-
-            var key = (SimpleEntityKey<int>)new SimpleEntityKeyFactory<int>(type.GetPrimaryKey(), 0)
-                .Create(new[] { type.GetProperty("P2") }, sidecar);
-
-            Assert.Equal(77, key.Value);
+            Assert.True(
+                new SimpleKeyValueFactory<int>(type.FindPrimaryKey())
+                    .Create(new[] { type.FindProperty("P2") }, new ValueBuffer(new object[] { 7, null })).IsInvalid);
         }
 
         private static Model BuildModel()
@@ -114,7 +82,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
             property2.IsShadowProperty = false;
 
             entityType.GetOrSetPrimaryKey(property1);
-            entityType.GetOrAddForeignKey(property2, entityType.GetPrimaryKey(), entityType);
+            entityType.GetOrAddForeignKey(property2, entityType.FindPrimaryKey(), entityType);
 
             return model;
         }

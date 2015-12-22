@@ -8,9 +8,9 @@
     <ProjectGuid>{38F9AD16-B3B4-48A5-B814-77660CF409AE}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Microsoft.Data.Entity.Commands</RootNamespace>
+    <RootNamespace>Microsoft.Data.Entity</RootNamespace>
     <AssemblyName>EntityFramework.Commands.Tests</AssemblyName>
-    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -18,7 +18,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DefineConstants>TRACE;DEBUG;OMIT_HANDLER_INTERFACES;ENABLE_HANDLERS</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -26,22 +26,28 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <DefineConstants>TRACE;OMIT_HANDLER_INTERFACES;ENABLE_HANDLERS</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="System" />
     <Reference Include="System.Data" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\..\src\EntityFramework.Commands\tools\Handlers.cs">
-      <Link>Handlers.cs</Link>
+    <Compile Include="..\..\src\EntityFramework.Commands\Design\OperationHandlers.cs">
+      <Link>Design\OperationHandlers.cs</Link>
     </Compile>
     <Compile Include="ApiConsistencyTest.cs" />
-    <Compile Include="ExecutorTest.cs" />
-    <Compile Include="HandlerTest.cs" />
-    <Compile Include="Migrations\MigrationScaffolderTest.cs" />
-    <Compile Include="Utilities\CSharpHelperTest.cs" />
+    <Compile Include="Design\Internal\StartupInvokerTest.cs" />
+    <Compile Include="Design\OperationResultHandlerTest.cs" />
+    <Compile Include="Design\OperationExecutorTest.cs" />
+    <Compile Include="Design\OperationLogHandlerTest.cs" />
+    <Compile Include="Migrations\Design\CSharpMigrationOperationGeneratorTest.cs" />
+    <Compile Include="Migrations\Design\MigrationScaffolderTest.cs" />
+    <Compile Include="Migrations\Design\CSharpHelperTest.cs" />
+    <Compile Include="Scaffolding\Internal\ReverseEngineeringConfigurationTests.cs" />
+    <Compile Include="Scaffolding\Internal\ReverseEngineeringGeneratorTests.cs" />
     <None Include="project.json" />
   </ItemGroup>
   <ItemGroup>
@@ -56,6 +62,10 @@
     <ProjectReference Include="..\..\src\EntityFramework.Core\EntityFramework.Core.csproj">
       <Project>{71415cec-8111-4c73-8751-512d22f10602}</Project>
       <Name>EntityFramework.Core</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\EntityFramework.Core.FunctionalTests\EntityFramework.Core.FunctionalTests.csproj">
+      <Project>{6AB933C7-DE2A-45F2-BDC6-E71A01EF7756}</Project>
+      <Name>EntityFramework.Core.FunctionalTests</Name>
     </ProjectReference>
     <ProjectReference Include="..\EntityFramework.Core.Tests\EntityFramework.Core.Tests.csproj">
       <Project>{ef361118-7d0d-453e-ada4-2f24fbee196c}</Project>

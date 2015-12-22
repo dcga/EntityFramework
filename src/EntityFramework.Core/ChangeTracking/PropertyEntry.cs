@@ -1,9 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
+using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
+using Microsoft.Data.Entity.Update;
 using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.ChangeTracking
@@ -17,14 +22,18 @@ namespace Microsoft.Data.Entity.ChangeTracking
     ///         not designed to be directly constructed in your application code.
     ///     </para>
     /// </summary>
-    public class PropertyEntry
+    public class PropertyEntry : IInfrastructure<InternalEntityEntry>
     {
         private readonly InternalEntityEntry _internalEntry;
 
         /// <summary>
-        ///     Initializes a new instance of the <see cref="PropertyEntry" /> class. Instances of this class
-        ///     are returned from methods when using the <see cref="ChangeTracker" /> API and it is not designed
-        ///     to be directly constructed in your application code.
+        ///     <para>
+        ///         Initializes a new instance of the <see cref="PropertyEntry" /> class.
+        ///     </para>
+        ///     <para>
+        ///         Instances of this class are returned from methods when using the <see cref="ChangeTracker" /> API and it is
+        ///         not designed to be directly constructed in your application code.
+        ///     </para>
         /// </summary>
         /// <param name="internalEntry">  The internal entry tracking information about the entity the property belongs to. </param>
         /// <param name="name"> The name of the property. </param>
@@ -34,7 +43,12 @@ namespace Microsoft.Data.Entity.ChangeTracking
             Check.NotEmpty(name, nameof(name));
 
             _internalEntry = internalEntry;
-            Metadata = internalEntry.EntityType.GetProperty(name);
+            var property = internalEntry.EntityType.FindProperty(name);
+            if (property == null)
+            {
+                throw new InvalidOperationException(CoreStrings.PropertyNotFound(name, internalEntry.EntityType.DisplayName()));
+            }
+            Metadata = property;
         }
 
         /// <summary>
@@ -44,19 +58,19 @@ namespace Microsoft.Data.Entity.ChangeTracking
         /// </summary>
         public virtual bool IsModified
         {
-            get { return _internalEntry.IsPropertyModified(Metadata); }
+            get { return _internalEntry.IsModified(Metadata); }
             set { _internalEntry.SetPropertyModified(Metadata, value); }
         }
 
         /// <summary>
-        ///     Gets the metadata the context is using to reason about this property.
+        ///     Gets the metadata that describes the facets of this property and how it maps to the database.
         /// </summary>
         public virtual IProperty Metadata { get; }
 
         /// <summary>
         ///     Gets or sets the value currently assigned to this property. If the current value is set using this property,
         ///     the change tracker is aware of the change and <see cref="ChangeTracker.DetectChanges" /> is not required
-        ///     for the context to be aware of the change.
+        ///     for the context to detect the change.
         /// </summary>
         public virtual object CurrentValue
         {
@@ -72,8 +86,10 @@ namespace Microsoft.Data.Entity.ChangeTracking
         /// </summary>
         public virtual object OriginalValue
         {
-            get { return _internalEntry.OriginalValues[Metadata]; }
-            [param: CanBeNull] set { _internalEntry.OriginalValues[Metadata] = value; }
+            get { return _internalEntry.GetOriginalValue(Metadata); }
+            [param: CanBeNull] set { _internalEntry.SetOriginalValue(Metadata, value); }
         }
+
+        InternalEntityEntry IInfrastructure<InternalEntityEntry>.Instance => _internalEntry;
     }
 }

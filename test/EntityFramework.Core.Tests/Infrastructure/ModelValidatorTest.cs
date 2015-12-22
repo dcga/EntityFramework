@@ -1,8 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.Collections.Generic;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Tests.Infrastructure
@@ -15,7 +17,7 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
             var model = new Model();
             model.AddEntityType("A");
 
-            VerifyError(Strings.ShadowEntity("A"), model);
+            VerifyError(CoreStrings.ShadowEntity("A"), model);
         }
 
         [Fact]
@@ -23,59 +25,20 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
         {
             var model = new Model();
             var entityType = model.AddEntityType(typeof(A));
-            var keyProperty = entityType.AddProperty("Id", typeof(int));
+            SetPrimaryKey(entityType);
+            var keyProperty = entityType.AddProperty("Key", typeof(int));
             entityType.AddKey(keyProperty);
 
-            VerifyWarning(Strings.ShadowKey("{'Id'}", typeof(A).FullName, "{'Id'}"), model);
+            VerifyWarning(CoreStrings.ShadowKey("{'Key'}", typeof(A).FullName, "{'Key'}"), model);
         }
 
         [Fact]
-        public virtual void Detects_a_non_shadow_property_that_doesnt_match_a_CLR_property()
+        public virtual void Detects_a_null_primary_key()
         {
             var model = new Model();
-            var entityType = model.AddEntityType(typeof(A));
-            var property = entityType.AddProperty("Id", typeof(int));
-            property.IsShadowProperty = false;
+            model.AddEntityType(typeof(A));
 
-            VerifyError(Strings.NoClrProperty("Id", typeof(A).FullName), model);
-        }
-
-        [Fact]
-        public virtual void Detects_a_non_shadow_property_that_doesnt_match_the_CLR_property_type()
-        {
-            var model = new Model();
-            var entityType = model.AddEntityType(typeof(A));
-            var property = entityType.AddProperty("P0", typeof(string));
-            property.IsShadowProperty = false;
-
-            VerifyError(Strings.PropertyWrongClrType("P0", typeof(A).FullName), model);
-        }
-
-        [Fact]
-        public virtual void Detects_self_referencing_properties()
-        {
-            var model = new Model();
-            var entityA = model.AddEntityType(typeof(A));
-            var keyA = CreateKey(entityA);
-
-            CreateForeignKey(keyA, keyA);
-
-            VerifyError(Strings.CircularDependency("'A' {'P0'} -> 'A' {'P0'}"), model);
-        }
-
-        [Fact]
-        public virtual void Detects_foreign_key_cycles()
-        {
-            var model = new Model();
-            var entityA = model.AddEntityType(typeof(A));
-            var keyA = CreateKey(entityA);
-            var entityB = model.AddEntityType(typeof(B));
-            var keyB = CreateKey(entityB);
-
-            CreateForeignKey(keyA, keyB);
-            CreateForeignKey(keyB, keyA);
-
-            VerifyError(Strings.CircularDependency("'A' {'P0'} -> 'B' {'P0'}, 'B' {'P0'} -> 'A' {'P0'}"), model);
+            VerifyError(CoreStrings.EntityRequiresKey(typeof(A).FullName), model);
         }
 
         [Fact]
@@ -83,9 +46,11 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
         {
             var model = new Model();
             var entityA = model.AddEntityType(typeof(A));
+            SetPrimaryKey(entityA);
             var keyA1 = CreateKey(entityA);
             var keyA2 = CreateKey(entityA, startingPropertyIndex: 0, propertyCount: 2);
             var entityB = model.AddEntityType(typeof(B));
+            SetPrimaryKey(entityB);
             var keyB1 = CreateKey(entityB);
             var keyB2 = CreateKey(entityB, startingPropertyIndex: 1, propertyCount: 2);
 
@@ -101,9 +66,11 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
         {
             var model = new Model();
             var entityA = model.AddEntityType(typeof(A));
+            SetPrimaryKey(entityA);
             var keyA1 = CreateKey(entityA);
             var keyA2 = CreateKey(entityA, startingPropertyIndex: 1, propertyCount: 2);
             var entityB = model.AddEntityType(typeof(B));
+            SetPrimaryKey(entityB);
             var keyB1 = CreateKey(entityB);
             var keyB2 = CreateKey(entityB, startingPropertyIndex: 0, propertyCount: 2);
 
@@ -119,8 +86,10 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
         {
             var model = new Model();
             var entityA = model.AddEntityType(typeof(A));
+            SetPrimaryKey(entityA);
             var keyA = CreateKey(entityA);
             var entityB = model.AddEntityType(typeof(B));
+            SetPrimaryKey(entityB);
             var keyB = CreateKey(entityB);
 
             CreateForeignKey(keyA, keyB);
@@ -132,98 +101,15 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
         }
 
         [Fact]
-        public virtual void Detects_foreign_key_cycle_with_two_GenerateOnAdd()
-        {
-            var model = new Model();
-            var entityA = model.AddEntityType(typeof(A));
-            var keyA = CreateKey(entityA);
-            var entityB = model.AddEntityType(typeof(B));
-            var keyB = CreateKey(entityB);
-
-            CreateForeignKey(keyA, keyB);
-            CreateForeignKey(keyB, keyA);
-
-            keyA.Properties[0].RequiresValueGenerator = true;
-            keyB.Properties[0].RequiresValueGenerator = true;
-
-            VerifyError(Strings.ForeignKeyValueGenerationOnAdd("P0", "A", "{'P0'}"), model);
-        }
-
-        [Fact]
-        public virtual void Detects_GenerateOnAdd_on_foreign_key_properties()
-        {
-            var model = new Model();
-            var entityA = model.AddEntityType(typeof(A));
-            var keyA = CreateKey(entityA);
-            var entityB = model.AddEntityType(typeof(B));
-            var keyB = CreateKey(entityB);
-
-            CreateForeignKey(keyA, keyB);
-
-            keyA.Properties[0].RequiresValueGenerator = true;
-
-            VerifyError(Strings.ForeignKeyValueGenerationOnAdd("P0", "A", "{'P0'}"), model);
-        }
-
-        [Fact]
-        public virtual void Detects_GenerateOnAdd_on_referenced_foreign_key_properties()
-        {
-            var model = new Model();
-            var entityA = model.AddEntityType(typeof(A));
-            var keyA1 = CreateKey(entityA);
-            var keyA2 = CreateKey(entityA);
-            var entityB = model.AddEntityType(typeof(B));
-            var keyB = CreateKey(entityB);
-
-            CreateForeignKey(keyA1, keyB);
-            CreateForeignKey(keyB, keyA2);
-
-            keyB.Properties[0].RequiresValueGenerator = true;
-
-            VerifyError(Strings.ForeignKeyValueGenerationOnAdd("P0", "B", "{'P0'}"), model);
-        }
-
-        [Fact]
-        public virtual void Detects_GenerateOnAdd_not_set_on_principal_key_properties()
-        {
-            var model = new Model();
-            var entityA = model.AddEntityType(typeof(A));
-            var keyA = CreateKey(entityA);
-            var entityB = model.AddEntityType(typeof(B));
-            var keyB = CreateKey(entityB);
-
-            CreateForeignKey(keyA, keyB);
-
-            keyB.Properties[0].RequiresValueGenerator = false;
-
-            VerifyError(Strings.PrincipalKeyNoValueGenerationOnAdd("P0", "B"), model);
-        }
-
-        [Fact]
-        public virtual void Detects_multiple_root_principal_properties()
-        {
-            var model = new Model();
-            var entityA = model.AddEntityType(typeof(A));
-            var keyA1 = CreateKey(entityA);
-            var keyA2 = CreateKey(entityA, startingPropertyIndex: 0, propertyCount: 2);
-            var entityB = model.AddEntityType(typeof(B));
-            var keyB1 = CreateKey(entityB);
-            var keyB2 = CreateKey(entityB, startingPropertyIndex: 1, propertyCount: 2);
-
-            CreateForeignKey(keyA1, keyB1);
-            CreateForeignKey(keyA2, keyB2);
-
-            VerifyWarning(Strings.MultipleRootPrincipals("A", "{'P0'}", "B", "P0", "{'P0', 'P1'}", "B", "P1"), model);
-        }
-
-        [Fact]
         public virtual void Pases_on_double_reference_to_root_principal_property()
         {
             var model = new Model();
             var entityA = model.AddEntityType(typeof(A));
+            SetPrimaryKey(entityA);
             var keyA1 = CreateKey(entityA);
             var keyA2 = CreateKey(entityA, startingPropertyIndex: 0, propertyCount: 2);
             var entityB = model.AddEntityType(typeof(B));
+            SetPrimaryKey(entityB);
             var keyB1 = CreateKey(entityB);
             var keyB2 = CreateKey(entityB, startingPropertyIndex: 0, propertyCount: 2);
 
@@ -238,11 +124,13 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
         {
             var model = new Model();
             var entityA = model.AddEntityType(typeof(A));
+            SetPrimaryKey(entityA);
             var keyA1 = CreateKey(entityA);
             var keyA2 = CreateKey(entityA, startingPropertyIndex: 0, propertyCount: 2);
             var keyA3 = CreateKey(entityA);
             var keyA4 = CreateKey(entityA, startingPropertyIndex: 2, propertyCount: 2);
             var entityB = model.AddEntityType(typeof(B));
+            SetPrimaryKey(entityB);
             var keyB1 = CreateKey(entityB);
             var keyB2 = CreateKey(entityB, startingPropertyIndex: 1, propertyCount: 2);
 
@@ -255,11 +143,37 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
             Validate(model);
         }
 
-        private Key CreateKey(EntityType entityType, int startingPropertyIndex = -1, int propertyCount = 1)
+        [Fact]
+        public virtual void Pases_on_correct_inheritance()
+        {
+            var model = new Model();
+            var entityA = model.AddEntityType(typeof(A));
+            SetPrimaryKey(entityA);
+            var entityD = model.AddEntityType(typeof(D));
+            SetBaseType(entityD, entityA);
+
+            Validate(model);
+        }
+
+        protected virtual void SetBaseType(EntityType entityType, EntityType baseEntityType) => entityType.HasBaseType(baseEntityType);
+
+        [Fact]
+        public virtual void Detects_base_type_not_set()
+        {
+            var model = new Model();
+            var entityA = model.AddEntityType(typeof(A));
+            SetPrimaryKey(entityA);
+            var entityD = model.AddEntityType(typeof(D));
+            SetPrimaryKey(entityD);
+
+            VerifyError(CoreStrings.InconsistentInheritance(entityD.DisplayName(), entityA.DisplayName()), model);
+        }
+
+        protected Key CreateKey(EntityType entityType, int startingPropertyIndex = -1, int propertyCount = 1)
         {
             if (startingPropertyIndex == -1)
             {
-                startingPropertyIndex = entityType.PropertyCount;
+                startingPropertyIndex = entityType.PropertyCount() - 1;
             }
             var keyProperties = new Property[propertyCount];
             for (var i = 0; i < propertyCount; i++)
@@ -269,16 +183,26 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
                 property.IsShadowProperty = false;
                 keyProperties[i] = property;
                 keyProperties[i].RequiresValueGenerator = true;
+                keyProperties[i].IsNullable = false;
             }
             return entityType.AddKey(keyProperties);
         }
 
-        private ForeignKey CreateForeignKey(Key dependentKey, Key principalKey)
+        public void SetPrimaryKey(EntityType entityType)
         {
-            var foreignKey = dependentKey.DeclaringEntityType.AddForeignKey(dependentKey.Properties, principalKey, principalKey.DeclaringEntityType);
+            var property = entityType.AddProperty("Id", typeof(int));
+            property.IsShadowProperty = false;
+            entityType.SetPrimaryKey(property);
+        }
+
+        protected ForeignKey CreateForeignKey(Key dependentKey, Key principalKey)
+            => CreateForeignKey(dependentKey.DeclaringEntityType, dependentKey.Properties, principalKey);
+
+        protected ForeignKey CreateForeignKey(EntityType dependEntityType, IReadOnlyList<Property> dependentProperties, Key principalKey)
+        {
+            var foreignKey = dependEntityType.AddForeignKey(dependentProperties, principalKey, principalKey.DeclaringEntityType);
             foreignKey.IsUnique = true;
-            foreignKey.IsRequired = false;
-            foreach (var property in dependentKey.Properties)
+            foreach (var property in dependentProperties)
             {
                 property.RequiresValueGenerator = false;
             }
@@ -288,6 +212,8 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
 
         protected class A
         {
+            public int Id { get; set; }
+
             public int? P0 { get; set; }
             public int? P1 { get; set; }
             public int? P2 { get; set; }
@@ -296,10 +222,16 @@ namespace Microsoft.Data.Entity.Tests.Infrastructure
 
         protected class B
         {
+            public int Id { get; set; }
+
             public int? P0 { get; set; }
             public int? P1 { get; set; }
             public int? P2 { get; set; }
             public int? P3 { get; set; }
+        }
+
+        protected class D : A
+        {
         }
 
         protected virtual void Validate(IModel model) => CreateModelValidator().Validate(model);

@@ -4,45 +4,41 @@
 using System.Diagnostics;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Storage;
 
 namespace Microsoft.Data.Entity.ChangeTracking.Internal
 {
     public class InternalShadowEntityEntry : InternalEntityEntry
     {
-        private readonly object[] _propertyValues;
+        private readonly ISnapshot _propertyValues;
 
         public override object Entity => null;
 
         public InternalShadowEntityEntry(
             [NotNull] IStateManager stateManager,
-            [NotNull] IEntityType entityType,
-            [NotNull] IEntityEntryMetadataServices metadataServices)
-            : base(stateManager, entityType, metadataServices)
+            [NotNull] IEntityType entityType)
+            : base(stateManager, entityType)
         {
-            _propertyValues = new object[entityType.ShadowPropertyCount()];
+            _propertyValues = entityType.GetEmptyShadowValuesFactory()();
         }
 
         public InternalShadowEntityEntry(
             [NotNull] IStateManager stateManager,
             [NotNull] IEntityType entityType,
-            [NotNull] IEntityEntryMetadataServices metadataServices,
             ValueBuffer valueBuffer)
-            : base(stateManager, entityType, metadataServices)
+            : base(stateManager, entityType)
         {
-            _propertyValues = new object[valueBuffer.Count];
-
-            var index = 0;
-            foreach (var property in entityType.GetProperties())
-            {
-                _propertyValues[index++] = valueBuffer[property.Index];
-            }
+            _propertyValues = entityType.GetShadowValuesFactory()(valueBuffer);
         }
+
+        protected override T ReadShadowValue<T>(int shadowIndex)
+            => _propertyValues.GetValue<T>(shadowIndex);
 
         protected override object ReadPropertyValue(IPropertyBase propertyBase)
         {
             var property = propertyBase as IProperty;
-            Debug.Assert(property != null && property.IsShadowProperty);
+            Debug.Assert((property != null) && property.IsShadowProperty);
 
             return _propertyValues[property.GetShadowIndex()];
         }
@@ -50,7 +46,7 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
         protected override void WritePropertyValue(IPropertyBase propertyBase, object value)
         {
             var property = propertyBase as IProperty;
-            Debug.Assert(property != null && property.IsShadowProperty);
+            Debug.Assert((property != null) && property.IsShadowProperty);
 
             _propertyValues[property.GetShadowIndex()] = value;
         }

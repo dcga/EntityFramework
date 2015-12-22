@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata;
-using Microsoft.Data.Entity.Sqlite.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 
 namespace Microsoft.Data.Entity.Migrations
 {
@@ -13,7 +13,7 @@ namespace Microsoft.Data.Entity.Migrations
     {
         public override IEnumerable<IAnnotation> For(IProperty property)
         {
-            if (property.ValueGenerated == ValueGenerated.OnAdd
+            if ((property.ValueGenerated == ValueGenerated.OnAdd)
                 && property.ClrType.UnwrapNullableType().IsInteger())
             {
                 yield return new Annotation(SqliteAnnotationNames.Prefix + SqliteAnnotationNames.Autoincrement, true);

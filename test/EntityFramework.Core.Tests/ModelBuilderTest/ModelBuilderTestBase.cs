@@ -5,18 +5,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
 using Microsoft.Data.Entity.FunctionalTests.TestUtilities;
+using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Builders;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Xunit;
 
 // ReSharper disable once CheckNamespace
+
 namespace Microsoft.Data.Entity.Tests
 {
     public abstract partial class ModelBuilderTest
     {
-        // TODO: add convention-less tests
-        // Issue #2410
-
         public abstract class ModelBuilderTestBase
         {
             protected void AssertEqual(
@@ -91,17 +91,15 @@ namespace Microsoft.Data.Entity.Tests
                     indexComparer);
             }
 
-            protected TestModelBuilder CreateModelBuilder() => CreateModelBuilder(new Model());
-
-            protected virtual TestModelBuilder CreateModelBuilder(Model model)
-                => CreateTestModelBuilder(TestHelpers.Instance.CreateConventionBuilder(model));
+            protected virtual TestModelBuilder CreateModelBuilder()
+                => CreateTestModelBuilder(TestHelpers.Instance.CreateConventionBuilder());
 
             protected TestModelBuilder HobNobBuilder()
             {
-                var builder = CreateModelBuilder(new Model());
+                var builder = CreateModelBuilder();
 
-                builder.Entity<Hob>().Key(e => new { e.Id1, e.Id2 });
-                builder.Entity<Nob>().Key(e => new { e.Id1, e.Id2 });
+                builder.Entity<Hob>().HasKey(e => new { e.Id1, e.Id2 });
+                builder.Entity<Nob>().HasKey(e => new { e.Id1, e.Id2 });
 
                 return builder;
             }
@@ -116,7 +114,7 @@ namespace Microsoft.Data.Entity.Tests
                 ModelBuilder = modelBuilder;
             }
 
-            public virtual Model Model => ModelBuilder.Model;
+            public virtual IMutableModel Model => ModelBuilder.Model;
             protected ModelBuilder ModelBuilder { get; }
 
             public abstract TestEntityTypeBuilder<TEntity> Entity<TEntity>()
@@ -127,22 +125,25 @@ namespace Microsoft.Data.Entity.Tests
 
             public abstract TestModelBuilder Ignore<TEntity>()
                 where TEntity : class;
+
+            public virtual TestModelBuilder Validate()
+                => ((IInfrastructure<InternalModelBuilder>)ModelBuilder).Instance.Validate() == null ? null : this;
         }
 
         public abstract class TestEntityTypeBuilder<TEntity>
             where TEntity : class
         {
-            public abstract EntityType Metadata { get; }
-            public abstract TestEntityTypeBuilder<TEntity> Annotation(string annotation, object value);
+            public abstract IMutableEntityType Metadata { get; }
+            public abstract TestEntityTypeBuilder<TEntity> HasAnnotation(string annotation, object value);
 
-            public abstract TestEntityTypeBuilder<TEntity> BaseEntity<TBaseEntity>()
+            public abstract TestEntityTypeBuilder<TEntity> HasBaseType<TBaseEntity>()
                 where TBaseEntity : class;
 
-            public abstract TestEntityTypeBuilder<TEntity> BaseEntity(string baseEntityTypeName);
-            public abstract TestKeyBuilder Key(Expression<Func<TEntity, object>> keyExpression);
-            public abstract TestKeyBuilder Key(params string[] propertyNames);
-            public abstract TestKeyBuilder AlternateKey(Expression<Func<TEntity, object>> keyExpression);
-            public abstract TestKeyBuilder AlternateKey(params string[] propertyNames);
+            public abstract TestEntityTypeBuilder<TEntity> HasBaseType(string baseEntityTypeName);
+            public abstract TestKeyBuilder HasKey(Expression<Func<TEntity, object>> keyExpression);
+            public abstract TestKeyBuilder HasKey(params string[] propertyNames);
+            public abstract TestKeyBuilder HasAlternateKey(Expression<Func<TEntity, object>> keyExpression);
+            public abstract TestKeyBuilder HasAlternateKey(params string[] propertyNames);
 
             public abstract TestPropertyBuilder<TProperty> Property<TProperty>(
                 Expression<Func<TEntity, TProperty>> propertyExpression);
@@ -154,14 +155,14 @@ namespace Microsoft.Data.Entity.Tests
 
             public abstract TestEntityTypeBuilder<TEntity> Ignore(string propertyName);
 
-            public abstract TestIndexBuilder Index(Expression<Func<TEntity, object>> indexExpression);
-            public abstract TestIndexBuilder Index(params string[] propertyNames);
+            public abstract TestIndexBuilder HasIndex(Expression<Func<TEntity, object>> indexExpression);
+            public abstract TestIndexBuilder HasIndex(params string[] propertyNames);
 
-            public abstract TestReferenceNavigationBuilder<TEntity, TRelatedEntity> Reference<TRelatedEntity>(
+            public abstract TestReferenceNavigationBuilder<TEntity, TRelatedEntity> HasOne<TRelatedEntity>(
                 Expression<Func<TEntity, TRelatedEntity>> reference = null)
                 where TRelatedEntity : class;
 
-            public abstract TestCollectionNavigationBuilder<TEntity, TRelatedEntity> Collection<TRelatedEntity>(
+            public abstract TestCollectionNavigationBuilder<TEntity, TRelatedEntity> HasMany<TRelatedEntity>(
                 Expression<Func<TEntity, IEnumerable<TRelatedEntity>>> collection = null)
                 where TRelatedEntity : class;
         }
@@ -174,12 +175,10 @@ namespace Microsoft.Data.Entity.Tests
             }
 
             private KeyBuilder KeyBuilder { get; }
-            public Key Metadata => KeyBuilder.Metadata;
+            public IMutableKey Metadata => KeyBuilder.Metadata;
 
-            public virtual TestKeyBuilder Annotation(string annotation, object value)
-            {
-                return new TestKeyBuilder(KeyBuilder.Annotation(annotation, value));
-            }
+            public virtual TestKeyBuilder HasAnnotation(string annotation, object value)
+                => new TestKeyBuilder(KeyBuilder.HasAnnotation(annotation, value));
         }
 
         public class TestIndexBuilder
@@ -190,26 +189,22 @@ namespace Microsoft.Data.Entity.Tests
             }
 
             private IndexBuilder IndexBuilder { get; }
-            public Index Metadata => IndexBuilder.Metadata;
+            public IMutableIndex Metadata => IndexBuilder.Metadata;
 
-            public virtual TestIndexBuilder Annotation(string annotation, object value)
-            {
-                return new TestIndexBuilder(IndexBuilder.Annotation(annotation, value));
-            }
+            public virtual TestIndexBuilder HasAnnotation(string annotation, object value)
+                => new TestIndexBuilder(IndexBuilder.HasAnnotation(annotation, value));
 
-            public virtual TestIndexBuilder Unique(bool isUnique = true)
-            {
-                return new TestIndexBuilder(IndexBuilder.Unique(isUnique));
-            }
+            public virtual TestIndexBuilder IsUnique(bool isUnique = true)
+                => new TestIndexBuilder(IndexBuilder.IsUnique(isUnique));
         }
 
         public abstract class TestPropertyBuilder<TProperty>
         {
-            public abstract Property Metadata { get; }
-            public abstract TestPropertyBuilder<TProperty> Annotation(string annotation, object value);
-            public abstract TestPropertyBuilder<TProperty> Required(bool isRequired = true);
-            public abstract TestPropertyBuilder<TProperty> MaxLength(int maxLength);
-            public abstract TestPropertyBuilder<TProperty> ConcurrencyToken(bool isConcurrencyToken = true);
+            public abstract IMutableProperty Metadata { get; }
+            public abstract TestPropertyBuilder<TProperty> HasAnnotation(string annotation, object value);
+            public abstract TestPropertyBuilder<TProperty> IsRequired(bool isRequired = true);
+            public abstract TestPropertyBuilder<TProperty> HasMaxLength(int maxLength);
+            public abstract TestPropertyBuilder<TProperty> IsConcurrencyToken(bool isConcurrencyToken = true);
 
             public abstract TestPropertyBuilder<TProperty> ValueGeneratedNever();
             public abstract TestPropertyBuilder<TProperty> ValueGeneratedOnAdd();
@@ -220,7 +215,7 @@ namespace Microsoft.Data.Entity.Tests
             where TEntity : class
             where TRelatedEntity : class
         {
-            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> InverseReference(
+            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> WithOne(
                 Expression<Func<TRelatedEntity, TEntity>> reference = null);
         }
 
@@ -228,10 +223,10 @@ namespace Microsoft.Data.Entity.Tests
             where TEntity : class
             where TRelatedEntity : class
         {
-            public abstract TestReferenceCollectionBuilder<TRelatedEntity, TEntity> InverseCollection(
+            public abstract TestReferenceCollectionBuilder<TRelatedEntity, TEntity> WithMany(
                 Expression<Func<TRelatedEntity, IEnumerable<TEntity>>> collection = null);
 
-            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> InverseReference(
+            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> WithOne(
                 Expression<Func<TRelatedEntity, TEntity>> reference = null);
         }
 
@@ -239,48 +234,52 @@ namespace Microsoft.Data.Entity.Tests
             where TEntity : class
             where TRelatedEntity : class
         {
-            public abstract ForeignKey Metadata { get; }
+            public abstract IMutableForeignKey Metadata { get; }
 
-            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> ForeignKey(
+            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasForeignKey(
                 Expression<Func<TRelatedEntity, object>> foreignKeyExpression);
 
-            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> PrincipalKey(
+            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasPrincipalKey(
                 Expression<Func<TEntity, object>> keyExpression);
 
-            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> ForeignKey(
+            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasForeignKey(
                 params string[] foreignKeyPropertyNames);
 
-            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> PrincipalKey(
+            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasPrincipalKey(
                 params string[] keyPropertyNames);
 
-            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> Annotation(
+            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasAnnotation(
                 string annotation, object value);
 
-            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> Required(bool isRequired = true);
+            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> IsRequired(bool isRequired = true);
+
+            public abstract TestReferenceCollectionBuilder<TEntity, TRelatedEntity> OnDelete(DeleteBehavior deleteBehavior);
         }
 
         public abstract class TestReferenceReferenceBuilder<TEntity, TRelatedEntity>
             where TEntity : class
             where TRelatedEntity : class
         {
-            public abstract ForeignKey Metadata { get; }
+            public abstract IMutableForeignKey Metadata { get; }
 
-            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> Annotation(
+            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasAnnotation(
                 string annotation, object value);
 
-            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> ForeignKey<TDependentEntity>(
+            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasForeignKey<TDependentEntity>(
                 Expression<Func<TDependentEntity, object>> foreignKeyExpression);
 
-            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> PrincipalKey<TPrincipalEntity>(
+            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasPrincipalKey<TPrincipalEntity>(
                 Expression<Func<TPrincipalEntity, object>> keyExpression);
 
-            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> ForeignKey(
+            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasForeignKey(
                 Type dependentEntityType, params string[] foreignKeyPropertyNames);
 
-            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> PrincipalKey(
+            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasPrincipalKey(
                 Type principalEntityType, params string[] keyPropertyNames);
 
-            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> Required(bool isRequired = true);
+            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> IsRequired(bool isRequired = true);
+
+            public abstract TestReferenceReferenceBuilder<TEntity, TRelatedEntity> OnDelete(DeleteBehavior deleteBehavior);
         }
     }
 }

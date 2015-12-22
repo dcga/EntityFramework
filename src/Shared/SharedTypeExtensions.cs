@@ -21,7 +21,7 @@ namespace System
 
             return !typeInfo.IsValueType
                    || (typeInfo.IsGenericType
-                       && typeInfo.GetGenericTypeDefinition() == typeof(Nullable<>));
+                       && (typeInfo.GetGenericTypeDefinition() == typeof(Nullable<>)));
         }
 
         public static Type MakeNullable(this Type type)
@@ -33,15 +33,15 @@ namespace System
         {
             type = type.UnwrapNullableType();
 
-            return type == typeof(int)
-                   || type == typeof(long)
-                   || type == typeof(short)
-                   || type == typeof(byte)
-                   || type == typeof(uint)
-                   || type == typeof(ulong)
-                   || type == typeof(ushort)
-                   || type == typeof(sbyte)
-                   || type == typeof(char);
+            return (type == typeof(int))
+                   || (type == typeof(long))
+                   || (type == typeof(short))
+                   || (type == typeof(byte))
+                   || (type == typeof(uint))
+                   || (type == typeof(ulong))
+                   || (type == typeof(ushort))
+                   || (type == typeof(sbyte))
+                   || (type == typeof(char));
         }
 
         public static PropertyInfo GetAnyProperty(this Type type, string name)
@@ -59,23 +59,23 @@ namespace System
         {
             type = type.UnwrapNullableType();
 
-            return type == typeof(bool)
-                   || type == typeof(byte[])
-                   || type == typeof(DateTime)
-                   || type == typeof(DateTimeOffset)
-                   || type == typeof(decimal)
-                   || type == typeof(double)
-                   || type == typeof(float)
-                   || type == typeof(Guid)
-                   || type == typeof(string)
-                   || type == typeof(TimeSpan)
+            return (type == typeof(bool))
+                   || (type == typeof(byte[]))
+                   || (type == typeof(DateTime))
+                   || (type == typeof(DateTimeOffset))
+                   || (type == typeof(decimal))
+                   || (type == typeof(double))
+                   || (type == typeof(float))
+                   || (type == typeof(Guid))
+                   || (type == typeof(string))
+                   || (type == typeof(TimeSpan))
                    || type.GetTypeInfo().IsEnum;
         }
 
         public static bool IsPrimitive(this Type type)
             => type.IsInteger() || type.IsNonIntegerPrimitive();
 
-        public static bool IsInstantiable(this Type type)=> IsInstantiable(type.GetTypeInfo());
+        public static bool IsInstantiable(this Type type) => IsInstantiable(type.GetTypeInfo());
 
         private static bool IsInstantiable(TypeInfo type)
             => !type.IsAbstract
@@ -127,7 +127,7 @@ namespace System
                     .Union(new[] { type })
                     .Where(
                         t => t.GetTypeInfo().IsGenericType
-                             && t.GetGenericTypeDefinition() == interfaceOrBaseType);
+                             && (t.GetGenericTypeDefinition() == interfaceOrBaseType));
             }
 
             return Enumerable.Empty<Type>();
@@ -161,7 +161,7 @@ namespace System
             {
                 var typeInfo = type.GetTypeInfo();
                 var propertyInfo = typeInfo.GetDeclaredProperty(name);
-                if (propertyInfo != null
+                if ((propertyInfo != null)
                     && !(propertyInfo.GetMethod ?? propertyInfo.SetMethod).IsStatic)
                 {
                     yield return propertyInfo;
@@ -172,23 +172,23 @@ namespace System
         }
 
         private static readonly Dictionary<Type, object> _commonTypeDictionary = new Dictionary<Type, object>
-            {
-                { typeof(int), default(int) },
-                { typeof(Guid), default(Guid) },
-                { typeof(DateTime), default(DateTime) },
-                { typeof(DateTimeOffset), default(DateTimeOffset) },
-                { typeof(long), default(long) },
-                { typeof(bool), default(bool) },
-                { typeof(double), default(double) },
-                { typeof(short), default(short) },
-                { typeof(float), default(float) },
-                { typeof(byte), default(byte) },
-                { typeof(char), default(char) },
-                { typeof(uint), default(uint) },
-                { typeof(ushort), default(ushort) },
-                { typeof(ulong), default(ulong) },
-                { typeof(sbyte), default(sbyte) }
-            };
+        {
+            { typeof(int), default(int) },
+            { typeof(Guid), default(Guid) },
+            { typeof(DateTime), default(DateTime) },
+            { typeof(DateTimeOffset), default(DateTimeOffset) },
+            { typeof(long), default(long) },
+            { typeof(bool), default(bool) },
+            { typeof(double), default(double) },
+            { typeof(short), default(short) },
+            { typeof(float), default(float) },
+            { typeof(byte), default(byte) },
+            { typeof(char), default(char) },
+            { typeof(uint), default(uint) },
+            { typeof(ushort), default(ushort) },
+            { typeof(ulong), default(ulong) },
+            { typeof(sbyte), default(sbyte) }
+        };
 
         public static object GetDefaultValue(this Type type)
         {
@@ -209,7 +209,6 @@ namespace System
         public static IEnumerable<TypeInfo> GetConstructibleTypes(this Assembly assembly)
             => assembly.DefinedTypes.Where(
                 t => !t.IsAbstract
-                    && !t.IsGenericType
-                    && t.DeclaredConstructors.Any(c => c.GetParameters().Length == 0 && c.IsPublic));
+                    && !t.IsGenericTypeDefinition);
     }
 }

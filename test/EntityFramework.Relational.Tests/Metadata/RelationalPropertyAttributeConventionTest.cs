@@ -5,6 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.Data.Entity.Metadata.Conventions;
 using Microsoft.Data.Entity.Metadata.Conventions.Internal;
 using Microsoft.Data.Entity.Metadata.Internal;
+using Microsoft.Data.Entity.Tests;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Metadata
@@ -14,7 +15,7 @@ namespace Microsoft.Data.Entity.Metadata
         [Fact]
         public void ColumnAttribute_sets_column_name_and_type_with_conventional_builder()
         {
-            var modelBuilder = new ModelBuilder(new TestConventionalSetBuilder().AddConventions(new CoreConventionSetBuilder().CreateConventionSet()));
+            var modelBuilder = new ModelBuilder(TestConventionalSetBuilder.Build());
 
             var entityBuilder = modelBuilder.Entity<A>();
 
@@ -29,8 +30,8 @@ namespace Microsoft.Data.Entity.Metadata
 
             var propertyBuilder = entityBuilder.Property("Name", typeof(string), ConfigurationSource.Explicit);
 
-            propertyBuilder.Annotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.ColumnName, "ConventionalName", ConfigurationSource.Convention);
-            propertyBuilder.Annotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.ColumnType, "BYTE", ConfigurationSource.Convention);
+            propertyBuilder.HasAnnotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.ColumnName, "ConventionalName", ConfigurationSource.Convention);
+            propertyBuilder.HasAnnotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.ColumnType, "BYTE", ConfigurationSource.Convention);
 
             new RelationalColumnAttributeConvention().Apply(propertyBuilder);
 
@@ -45,8 +46,8 @@ namespace Microsoft.Data.Entity.Metadata
 
             var propertyBuilder = entityBuilder.Property("Name", typeof(string), ConfigurationSource.Explicit);
 
-            propertyBuilder.Annotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.ColumnName, "ExplicitName", ConfigurationSource.Explicit);
-            propertyBuilder.Annotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.ColumnType, "BYTE", ConfigurationSource.Explicit);
+            propertyBuilder.HasAnnotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.ColumnName, "ExplicitName", ConfigurationSource.Explicit);
+            propertyBuilder.HasAnnotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.ColumnType, "BYTE", ConfigurationSource.Explicit);
 
             new RelationalColumnAttributeConvention().Apply(propertyBuilder);
 
@@ -59,7 +60,7 @@ namespace Microsoft.Data.Entity.Metadata
             var conventionSet = new ConventionSet();
             conventionSet.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention());
 
-            var modelBuilder = new InternalModelBuilder(new Model(), conventionSet);
+            var modelBuilder = new InternalModelBuilder(new Model(conventionSet));
 
             return modelBuilder.Entity(typeof(T), ConfigurationSource.Explicit);
         }
@@ -70,10 +71,6 @@ namespace Microsoft.Data.Entity.Metadata
 
             [Column("Post Name", Order = 1, TypeName = "DECIMAL")]
             public string Name { get; set; }
-        }
-
-        private class TestConventionalSetBuilder : RelationalConventionSetBuilder
-        {
         }
     }
 }

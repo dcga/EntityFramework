@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Microsoft.Data.Entity.FunctionalTests.TestModels.ConcurrencyModel
 {
@@ -30,15 +31,10 @@ namespace Microsoft.Data.Entity.FunctionalTests.TestModels.ConcurrencyModel
 
         public virtual Chassis Chassis { get; set; }
 
-        public virtual ICollection<Driver> Drivers
-        {
-            get { return _drivers; }
-        }
+        public virtual ICollection<Driver> Drivers => _drivers;
 
-        public virtual ICollection<Sponsor> Sponsors
-        {
-            get { return _sponsors; }
-        }
+        [NotMapped]
+        public virtual ICollection<Sponsor> Sponsors => _sponsors;
 
         public int? GearboxId { get; set; }
         public virtual Gearbox Gearbox { get; set; } // Uni-directional

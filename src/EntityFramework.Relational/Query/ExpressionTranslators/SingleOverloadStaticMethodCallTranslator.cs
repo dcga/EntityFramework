@@ -16,7 +16,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionTranslators
         private readonly string _clrMethodName;
         private readonly string _sqlFunctionName;
 
-        public SingleOverloadStaticMethodCallTranslator([NotNull] Type declaringType, [NotNull] string clrMethodName, [NotNull] string sqlFunctionName)
+        protected SingleOverloadStaticMethodCallTranslator([NotNull] Type declaringType, [NotNull] string clrMethodName, [NotNull] string sqlFunctionName)
         {
             _declaringType = declaringType;
             _clrMethodName = clrMethodName;
@@ -28,7 +28,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionTranslators
             var methodInfo = _declaringType.GetTypeInfo().GetDeclaredMethods(_clrMethodName).SingleOrDefault();
             if (methodInfo == methodCallExpression.Method)
             {
-                return new SqlFunctionExpression(_sqlFunctionName, methodCallExpression.Arguments, methodCallExpression.Type);
+                return new SqlFunctionExpression(_sqlFunctionName, methodCallExpression.Type, methodCallExpression.Arguments);
             }
 
             return null;

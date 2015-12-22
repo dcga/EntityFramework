@@ -2,14 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Data.Entity;
-using System.Linq;
 using EntityFramework.Microbenchmarks.Core;
-using EntityFramework.Microbenchmarks.Core.Models.Orders;
 using EntityFramework.Microbenchmarks.EF6.Models.Orders;
 using Xunit;
 
 namespace EntityFramework.Microbenchmarks.EF6.ChangeTracker
 {
+    [SqlServerRequired]
     public class DbSetOperationTests : IClassFixture<DbSetOperationTests.DbSetOperationFixture>
     {
         private readonly DbSetOperationFixture _fixture;
@@ -22,17 +21,13 @@ namespace EntityFramework.Microbenchmarks.EF6.ChangeTracker
         [Benchmark]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
-        public void Add(MetricCollector collector, bool autoDetectChanges)
+        public void Add(IMetricCollector collector, bool autoDetectChanges)
         {
             using (var context = _fixture.CreateContext())
             {
                 context.Configuration.AutoDetectChangesEnabled = autoDetectChanges;
 
-                var customers = new Customer[1000];
-                for (var i = 0; i < customers.Length; i++)
-                {
-                    customers[i] = new Customer { Name = "Customer " + i };
-                }
+                var customers = _fixture.CreateCustomers(1000, setPrimaryKeys: false);
 
                 using (collector.StartCollection())
                 {
@@ -47,17 +42,13 @@ namespace EntityFramework.Microbenchmarks.EF6.ChangeTracker
         [Benchmark]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
-        public void AddCollection(MetricCollector collector, bool autoDetectChanges)
+        public void AddRange(IMetricCollector collector, bool autoDetectChanges)
         {
             using (var context = _fixture.CreateContext())
             {
                 context.Configuration.AutoDetectChangesEnabled = autoDetectChanges;
 
-                var customers = new Customer[1000];
-                for (var i = 0; i < customers.Length; i++)
-                {
-                    customers[i] = new Customer { Name = "Customer " + i };
-                }
+                var customers = _fixture.CreateCustomers(1000, setPrimaryKeys: false);
 
                 using (collector.StartCollection())
                 {
@@ -69,15 +60,14 @@ namespace EntityFramework.Microbenchmarks.EF6.ChangeTracker
         [Benchmark]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
-        public void Attach(MetricCollector collector, bool autoDetectChanges)
+        public void Attach(IMetricCollector collector, bool autoDetectChanges)
         {
             using (var context = _fixture.CreateContext())
             {
                 context.Configuration.AutoDetectChangesEnabled = autoDetectChanges;
 
-                var customers = GetAllCustomersFromDatabase();
-                Assert.Equal(1000, customers.Length);
-                
+                var customers = _fixture.CreateCustomers(1000, setPrimaryKeys: true);
+
                 using (collector.StartCollection())
                 {
                     foreach (var customer in customers)
@@ -88,20 +78,20 @@ namespace EntityFramework.Microbenchmarks.EF6.ChangeTracker
             }
         }
 
-        // Note: AttachCollection() not implemented because there is no
+        // Note: AttachRange() not implemented because there is no
         //       API for bulk attach in EF6.x
 
         [Benchmark]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
-        public void Remove(MetricCollector collector, bool autoDetectChanges)
+        public void Remove(IMetricCollector collector, bool autoDetectChanges)
         {
             using (var context = _fixture.CreateContext())
             {
                 context.Configuration.AutoDetectChangesEnabled = autoDetectChanges;
 
-                var customers = context.Customers.ToArray();
-                Assert.Equal(1000, customers.Length);
+                var customers = _fixture.CreateCustomers(1000, setPrimaryKeys: true);
+                customers.ForEach(c => context.Customers.Attach(c));
 
                 using (collector.StartCollection())
                 {
@@ -116,14 +106,14 @@ namespace EntityFramework.Microbenchmarks.EF6.ChangeTracker
         [Benchmark]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
-        public void RemoveCollection(MetricCollector collector, bool autoDetectChanges)
+        public void RemoveRange(IMetricCollector collector, bool autoDetectChanges)
         {
             using (var context = _fixture.CreateContext())
             {
                 context.Configuration.AutoDetectChangesEnabled = autoDetectChanges;
 
-                var customers = context.Customers.ToArray();
-                Assert.Equal(1000, customers.Length);
+                var customers = _fixture.CreateCustomers(1000, setPrimaryKeys: true);
+                customers.ForEach(c => context.Customers.Attach(c));
 
                 using (collector.StartCollection())
                 {
@@ -135,14 +125,14 @@ namespace EntityFramework.Microbenchmarks.EF6.ChangeTracker
         [Benchmark]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
-        public void Update(MetricCollector collector, bool autoDetectChanges)
+        public void Update(IMetricCollector collector, bool autoDetectChanges)
         {
             using (var context = _fixture.CreateContext())
             {
                 context.Configuration.AutoDetectChangesEnabled = autoDetectChanges;
 
-                var customers = GetAllCustomersFromDatabase();
-                Assert.Equal(1000, customers.Length);
+                var customers = _fixture.CreateCustomers(1000, setPrimaryKeys: true);
+                customers.ForEach(c => context.Customers.Attach(c));
 
                 using (collector.StartCollection())
                 {
@@ -154,22 +144,15 @@ namespace EntityFramework.Microbenchmarks.EF6.ChangeTracker
             }
         }
 
-        // Note: UpdateCollection() not implemented because there is no
+        // Note: UpdateRange() not implemented because there is no
         //       API for bulk update in EF6.x
-
-        private Customer[] GetAllCustomersFromDatabase()
-        {
-            using (var context = _fixture.CreateContext())
-            {
-                return context.Customers.ToArray();
-            }
-        }
 
         public class DbSetOperationFixture : OrdersFixture
         {
             public DbSetOperationFixture()
-                : base("Perf_ChangeTracker_DbSetOperation_EF6", 0, 1000, 0, 0)
-            { }
+                : base("Perf_ChangeTracker_DbSetOperation_EF6", 0, 0, 0, 0)
+            {
+            }
         }
     }
 }

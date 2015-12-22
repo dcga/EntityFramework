@@ -1,10 +1,9 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using Moq;
+using System.Reflection;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Metadata.Tests
@@ -14,19 +13,18 @@ namespace Microsoft.Data.Entity.Metadata.Tests
         [Fact]
         public void Can_get_all_properties_and_navigations()
         {
-            var typeMock = new Mock<IEntityType>();
+            var entityType = new Model().AddEntityType(typeof(SelfRef));
+            var pk = entityType.GetOrSetPrimaryKey(entityType.AddProperty(SelfRef.IdProperty));
+            var fkProp = entityType.AddProperty(SelfRef.SelfRefIdProperty);
 
-            var property1 = Mock.Of<IProperty>();
-            var property2 = Mock.Of<IProperty>();
-            var navigation1 = Mock.Of<INavigation>();
-            var navigation2 = Mock.Of<INavigation>();
-
-            typeMock.Setup(m => m.GetProperties()).Returns(new List<IProperty> { property1, property2 });
-            typeMock.Setup(m => m.GetNavigations()).Returns(new List<INavigation> { navigation1, navigation2 });
+            var fk = entityType.AddForeignKey(new[] { fkProp }, pk, entityType);
+            fk.IsUnique = true;
+            var dependentToPrincipal = fk.HasDependentToPrincipal(nameof(SelfRef.SelfRefPrincipal));
+            var principalToDependent = fk.HasPrincipalToDependent(nameof(SelfRef.SelfRefDependent));
 
             Assert.Equal(
-                new IPropertyBase[] { property1, property2, navigation1, navigation2 },
-                typeMock.Object.GetPropertiesAndNavigations().ToArray());
+                new IPropertyBase[] { pk.Properties.Single(), fkProp, principalToDependent, dependentToPrincipal },
+                entityType.GetPropertiesAndNavigations().ToArray());
         }
 
         [Fact]
@@ -38,7 +36,7 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var fkProperty = entityType.AddProperty("fk", typeof(int));
             var fk = entityType.AddForeignKey(fkProperty, entityType.SetPrimaryKey(idProperty), entityType);
 
-            Assert.Same(fk, entityType.FindReferencingForeignKeys().Single());
+            Assert.Same(fk, entityType.GetReferencingForeignKeys().Single());
         }
 
         [Fact]
@@ -48,8 +46,8 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var a = model.AddEntityType("A");
             var b = model.AddEntityType("B");
             var c = model.AddEntityType("C");
-            b.BaseType = a;
-            c.BaseType = b;
+            b.HasBaseType(a);
+            c.HasBaseType(b);
 
             Assert.Same(a, a.RootType());
             Assert.Same(a, b.RootType());
@@ -64,11 +62,11 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var b = model.AddEntityType("B");
             var c = model.AddEntityType("C");
             var d = model.AddEntityType("D");
-            b.BaseType = a;
-            c.BaseType = b;
-            d.BaseType = a;
+            b.HasBaseType(a);
+            c.HasBaseType(b);
+            d.HasBaseType(a);
 
-            Assert.Equal(new[] { b, c, d }, a.GetDerivedTypes().ToArray());
+            Assert.Equal(new[] { b, d, c }, a.GetDerivedTypes().ToArray());
             Assert.Equal(new[] { c }, b.GetDerivedTypes().ToArray());
             Assert.Equal(new[] { b, d }, a.GetDirectlyDerivedTypes().ToArray());
         }
@@ -81,9 +79,9 @@ namespace Microsoft.Data.Entity.Metadata.Tests
             var b = model.AddEntityType("B");
             var c = model.AddEntityType("C");
             var d = model.AddEntityType("D");
-            b.BaseType = a;
-            c.BaseType = b;
-            d.BaseType = a;
+            b.HasBaseType(a);
+            c.HasBaseType(b);
+            d.HasBaseType(a);
 
             Assert.True(a.IsAssignableFrom(a));
             Assert.True(a.IsAssignableFrom(b));
@@ -96,17 +94,26 @@ namespace Microsoft.Data.Entity.Metadata.Tests
         [Fact]
         public void Can_get_proper_table_name_for_generic_entityType()
         {
-            var entityType = new EntityType(typeof(A<int>), new Model());
+            var entityType = new Model().AddEntityType(typeof(A<int>));
 
             Assert.Equal(
                 "A<int>",
                 ((IEntityType)entityType).DisplayName());
-
         }
 
         private class A<T>
         {
+        }
 
+        private class SelfRef
+        {
+            public static readonly PropertyInfo IdProperty = typeof(SelfRef).GetProperty("Id");
+            public static readonly PropertyInfo SelfRefIdProperty = typeof(SelfRef).GetProperty("SelfRefId");
+
+            public int Id { get; set; }
+            public SelfRef SelfRefPrincipal { get; set; }
+            public SelfRef SelfRefDependent { get; set; }
+            public int? SelfRefId { get; set; }
         }
     }
 }

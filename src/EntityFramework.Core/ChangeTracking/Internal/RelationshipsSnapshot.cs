@@ -1,65 +1,69 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using JetBrains.Annotations;
+using System.Diagnostics;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
-using Microsoft.Data.Entity.Utilities;
+using Microsoft.Data.Entity.Metadata.Internal;
 
 namespace Microsoft.Data.Entity.ChangeTracking.Internal
 {
-    // TODO: Consider using ArraySidecar with pre-defined indexes
-    // Issue #741
-    public class RelationshipsSnapshot : DictionarySidecar
+    public abstract partial class InternalEntityEntry
     {
-        public RelationshipsSnapshot([NotNull] InternalEntityEntry entry)
-            : base(entry, GetProperties(Check.NotNull(entry, nameof(entry))))
+        private struct RelationshipsSnapshot
         {
-        }
+            private readonly ISnapshot _values;
 
-        private static IEnumerable<IPropertyBase> GetProperties(InternalEntityEntry entry)
-        {
-            var entityType = entry.EntityType;
-
-            return entityType.GetKeys().SelectMany(k => k.Properties)
-                .Concat(entityType.GetForeignKeys().SelectMany(fk => fk.Properties))
-                .Distinct()
-                .Concat<IPropertyBase>(entityType.GetNavigations());
-        }
-
-        protected override object CopyValueFromEntry(IPropertyBase property)
-        {
-            var value = base.CopyValueFromEntry(property);
-
-            var navigation = property as INavigation;
-            if (value == null
-                || navigation == null
-                || !navigation.IsCollection())
+            public RelationshipsSnapshot(InternalEntityEntry entry)
             {
-                return value;
+                _values = entry.EntityType.GetRelationshipSnapshotFactory()(entry);
             }
 
-            // TODO: Perf: Consider updating the snapshot with what has changed rather than making a new snapshot every time.
-            // TODO: This may need to be strongly typed to entity type--not just object
-            var snapshot = new HashSet<object>(ReferenceEqualityComparer.Instance);
+            public object GetValue(InternalEntityEntry entry, IPropertyBase propertyBase)
+                => IsEmpty ? entry[propertyBase] : _values[propertyBase.GetRelationshipIndex()];
 
-            foreach (var entity in (IEnumerable)value)
+            public T GetValue<T>(InternalEntityEntry entry, IPropertyBase propertyBase, int index)
+                => IsEmpty
+                ? entry.GetCurrentValue<T>(propertyBase)
+                : _values.GetValue<T>(index);
+
+            public void SetValue(IPropertyBase propertyBase, object value)
             {
-                snapshot.Add(entity);
+                if (value == null)
+                {
+                    var property = propertyBase as IProperty;
+                    if ((property != null)
+                        && !property.IsNullable)
+                    {
+                        return;
+                    }
+                }
+
+                Debug.Assert(!IsEmpty);
+                Debug.Assert(!(propertyBase is INavigation) || !((INavigation)propertyBase).IsCollection());
+
+                _values[propertyBase.GetRelationshipIndex()] = value;
             }
 
-            return snapshot;
+            public void RemoveFromCollection(IPropertyBase propertyBase, object removedEntity)
+                => ((HashSet<object>)_values[propertyBase.GetRelationshipIndex()]).Remove(removedEntity);
+
+            public void AddToCollection(IPropertyBase propertyBase, object addedEntity)
+            {
+                var index = propertyBase.GetRelationshipIndex();
+
+                var snapshot = (HashSet<object>)_values[index];
+                if (snapshot == null)
+                {
+                    snapshot = new HashSet<object>(ReferenceEqualityComparer.Instance);
+                    _values[index] = snapshot;
+                }
+
+                snapshot.Add(addedEntity);
+            }
+
+            public bool IsEmpty => _values == null;
         }
-
-        public override string Name => WellKnownNames.RelationshipsSnapshot;
-
-        public override bool TransparentRead => false;
-
-        public override bool TransparentWrite => false;
-
-        public override bool AutoCommit => false;
     }
 }

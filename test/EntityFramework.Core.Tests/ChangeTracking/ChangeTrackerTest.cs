@@ -7,8 +7,8 @@ using System.Linq;
 using Microsoft.Data.Entity.ChangeTracking;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Data.Entity.Metadata;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Data.Entity.Internal;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Tests.ChangeTracking
@@ -58,7 +58,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             {
                 var stateManger = context.GetService<IStateManager>();
 
-                Assert.Same(stateManger, context.ChangeTracker.GetService());
+                Assert.Same(stateManger, context.ChangeTracker.GetInfrastructure());
             }
         }
 
@@ -77,17 +77,17 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new EarlyLearningCenter())
             {
                 var category = new Category
+                {
+                    Id = 1,
+                    Products = new List<Product>
                     {
-                        Id = 1,
-                        Products = new List<Product>
-                            {
-                                new Product { Id = 1 },
-                                new Product { Id = 2 },
-                                new Product { Id = 3 }
-                            }
-                    };
+                        new Product { Id = 1 },
+                        new Product { Id = 2 },
+                        new Product { Id = 3 }
+                    }
+                };
 
-                context.ChangeTracker.TrackGraph(category, e => e.State = EntityState.Modified);
+                context.ChangeTracker.TrackGraph(category, e => e.Entry.State = EntityState.Modified);
 
                 Assert.Equal(4, context.ChangeTracker.Entries().Count());
 
@@ -113,7 +113,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             {
                 var product = new Product { Id = 1, Category = new Category { Id = 1 } };
 
-                context.ChangeTracker.TrackGraph(product, e => e.State = EntityState.Modified);
+                context.ChangeTracker.TrackGraph(product, e => e.Entry.State = EntityState.Modified);
 
                 Assert.Equal(2, context.ChangeTracker.Entries().Count());
 
@@ -132,7 +132,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             {
                 var product = new Product { Id = 1, Details = new ProductDetails { Id = 1, Tag = new ProductDetailsTag { Id = 1 } } };
 
-                context.ChangeTracker.TrackGraph(product, e => e.State = EntityState.Unchanged);
+                context.ChangeTracker.TrackGraph(product, e => e.Entry.State = EntityState.Unchanged);
 
                 Assert.Equal(3, context.ChangeTracker.Entries().Count());
 
@@ -152,7 +152,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             {
                 var tag = new ProductDetailsTag { Id = 1, Details = new ProductDetails { Id = 1, Product = new Product { Id = 1 } } };
 
-                context.ChangeTracker.TrackGraph(tag, e => e.State = EntityState.Unchanged);
+                context.ChangeTracker.TrackGraph(tag, e => e.Entry.State = EntityState.Unchanged);
 
                 Assert.Equal(3, context.ChangeTracker.Entries().Count());
 
@@ -172,7 +172,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             {
                 var details = new ProductDetails { Id = 1, Product = new Product { Id = 1 }, Tag = new ProductDetailsTag { Id = 1 } };
 
-                context.ChangeTracker.TrackGraph(details, e => e.State = EntityState.Unchanged);
+                context.ChangeTracker.TrackGraph(details, e => e.Entry.State = EntityState.Unchanged);
 
                 Assert.Equal(3, context.ChangeTracker.Entries().Count());
 
@@ -193,17 +193,17 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
                 var existingProduct = context.Attach(new Product { Id = 2, CategoryId = 1 }).Entity;
 
                 var category = new Category
+                {
+                    Id = 1,
+                    Products = new List<Product>
                     {
-                        Id = 1,
-                        Products = new List<Product>
-                            {
-                                new Product { Id = 1 },
-                                existingProduct,
-                                new Product { Id = 3 }
-                            }
-                    };
+                        new Product { Id = 1 },
+                        existingProduct,
+                        new Product { Id = 3 }
+                    }
+                };
 
-                context.ChangeTracker.TrackGraph(category, e => e.State = EntityState.Modified);
+                context.ChangeTracker.TrackGraph(category, e => e.Entry.State = EntityState.Modified);
 
                 Assert.Equal(4, context.ChangeTracker.Entries().Count());
 
@@ -228,23 +228,23 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new EarlyLearningCenter())
             {
                 var category = new Category
+                {
+                    Id = 1,
+                    Products = new List<Product>
                     {
-                        Id = 1,
-                        Products = new List<Product>
-                            {
-                                new Product { Id = 1, CategoryId = 1, Details = new ProductDetails { Id = 1 } },
-                                new Product { Id = 2, CategoryId = 1, Details = new ProductDetails { Id = 2 } },
-                                new Product { Id = 3, CategoryId = 1, Details = new ProductDetails { Id = 3 } }
-                            }
-                    };
+                        new Product { Id = 1, CategoryId = 1, Details = new ProductDetails { Id = 1 } },
+                        new Product { Id = 2, CategoryId = 1, Details = new ProductDetails { Id = 2 } },
+                        new Product { Id = 3, CategoryId = 1, Details = new ProductDetails { Id = 3 } }
+                    }
+                };
 
                 context.ChangeTracker.TrackGraph(category, e =>
                     {
-                        var product = e.Entity as Product;
-                        if (product == null
-                            || product.Id != 2)
+                        var product = e.Entry.Entity as Product;
+                        if ((product == null)
+                            || (product.Id != 2))
                         {
-                            e.State = EntityState.Unchanged;
+                            e.Entry.State = EntityState.Unchanged;
                         }
                     });
 
@@ -295,8 +295,8 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
                         category,
                         e =>
                             {
-                                var product = e.Entity as Product;
-                                e.State = product != null && product.Id == 0 ? EntityState.Added : EntityState.Unchanged;
+                                var product = e.Entry.Entity as Product;
+                                e.Entry.State = (product != null) && (product.Id == 0) ? EntityState.Added : EntityState.Unchanged;
                             });
                 });
         }
@@ -322,15 +322,15 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new EarlyLearningCenter())
             {
                 var category = new Category
+                {
+                    Id = 77,
+                    Products = new List<Product>
                     {
-                        Id = 77,
-                        Products = new List<Product>
-                            {
-                                new Product { Id = 77, CategoryId = expectModified ? 0 : 77 },
-                                new Product { Id = 0, CategoryId = expectModified ? 0 : 77 },
-                                new Product { Id = 78, CategoryId = expectModified ? 0 : 77 }
-                            }
-                    };
+                        new Product { Id = 77, CategoryId = expectModified ? 0 : 77 },
+                        new Product { Id = 0, CategoryId = expectModified ? 0 : 77 },
+                        new Product { Id = 78, CategoryId = expectModified ? 0 : 77 }
+                    }
+                };
 
                 tracker(category, context.ChangeTracker);
 
@@ -365,15 +365,15 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new EarlyLearningCenter())
             {
                 var category = new Category
+                {
+                    Id = 77,
+                    Products = new List<Product>
                     {
-                        Id = 77,
-                        Products = new List<Product>
-                            {
-                                new Product { Id = 77, CategoryId = 77 },
-                                new Product { Id = 0, CategoryId = 77 },
-                                new Product { Id = 78, CategoryId = 77 }
-                            }
-                    };
+                        new Product { Id = 77, CategoryId = 77 },
+                        new Product { Id = 0, CategoryId = 77 },
+                        new Product { Id = 78, CategoryId = 77 }
+                    }
+                };
 
                 context.ChangeTracker.TrackGraph(category, tracker.TrackEntity);
 
@@ -409,7 +409,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             {
                 if (!entry.IsKeySet)
                 {
-                    entry.GetService()[entry.Metadata.GetPrimaryKey().Properties.Single()] = 777;
+                    entry.GetInfrastructure()[entry.Metadata.FindPrimaryKey().Properties.Single()] = 777;
                     return EntityState.Added;
                 }
 
@@ -423,25 +423,25 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new EarlyLearningCenter())
             {
                 var product1 = new Product
+                {
+                    Details = new ProductDetails
                     {
-                        Details = new ProductDetails
-                            {
-                                Tag = new ProductDetailsTag
-                                    {
-                                        TagDetails = new ProductDetailsTagDetails()
-                                    }
-                            }
-                    };
+                        Tag = new ProductDetailsTag
+                        {
+                            TagDetails = new ProductDetailsTagDetails()
+                        }
+                    }
+                };
                 var product2 = new Product
+                {
+                    Details = new ProductDetails
                     {
-                        Details = new ProductDetails
-                            {
-                                Tag = new ProductDetailsTag
-                                    {
-                                        TagDetails = new ProductDetailsTagDetails()
-                                    }
-                            }
-                    };
+                        Tag = new ProductDetailsTag
+                        {
+                            TagDetails = new ProductDetailsTagDetails()
+                        }
+                    }
+                };
 
                 context.Add(product1);
                 context.Add(product1.Details);
@@ -462,22 +462,22 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new EarlyLearningCenter())
             {
                 var tagDetails1 = new ProductDetailsTagDetails
+                {
+                    Tag = new ProductDetailsTag
                     {
-                        Tag = new ProductDetailsTag
-                            {
-                                Details = new ProductDetails
-                                    { Product = new Product() }
-                            }
-                    };
+                        Details = new ProductDetails
+                        { Product = new Product() }
+                    }
+                };
 
                 var tagDetails2 = new ProductDetailsTagDetails
+                {
+                    Tag = new ProductDetailsTag
                     {
-                        Tag = new ProductDetailsTag
-                            {
-                                Details = new ProductDetails
-                                    { Product = new Product() }
-                            }
-                    };
+                        Details = new ProductDetails
+                        { Product = new Product() }
+                    }
+                };
 
                 context.Add(tagDetails1);
                 context.Add(tagDetails1.Tag);
@@ -498,22 +498,22 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new EarlyLearningCenter())
             {
                 var tagDetails1 = new ProductDetailsTagDetails
+                {
+                    Tag = new ProductDetailsTag
                     {
-                        Tag = new ProductDetailsTag
-                            {
-                                Details = new ProductDetails
-                                    { Product = new Product() }
-                            }
-                    };
+                        Details = new ProductDetails
+                        { Product = new Product() }
+                    }
+                };
 
                 var tagDetails2 = new ProductDetailsTagDetails
+                {
+                    Tag = new ProductDetailsTag
                     {
-                        Tag = new ProductDetailsTag
-                            {
-                                Details = new ProductDetails
-                                    { Product = new Product() }
-                            }
-                    };
+                        Details = new ProductDetails
+                        { Product = new Product() }
+                    }
+                };
 
                 context.Add(tagDetails1);
                 context.Add(tagDetails2);
@@ -534,22 +534,22 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new EarlyLearningCenter())
             {
                 var tagDetails1 = new ProductDetailsTagDetails
+                {
+                    Tag = new ProductDetailsTag
                     {
-                        Tag = new ProductDetailsTag
-                            {
-                                Details = new ProductDetails
-                                    { Product = new Product() }
-                            }
-                    };
+                        Details = new ProductDetails
+                        { Product = new Product() }
+                    }
+                };
 
                 var tagDetails2 = new ProductDetailsTagDetails
+                {
+                    Tag = new ProductDetailsTag
                     {
-                        Tag = new ProductDetailsTag
-                            {
-                                Details = new ProductDetails
-                                    { Product = new Product() }
-                            }
-                    };
+                        Details = new ProductDetails
+                        { Product = new Product() }
+                    }
+                };
 
                 context.Add(tagDetails1.Tag);
                 context.Add(tagDetails2.Tag);
@@ -570,25 +570,25 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new EarlyLearningCenter())
             {
                 var product1 = new Product
+                {
+                    Details = new ProductDetails
                     {
-                        Details = new ProductDetails
-                            {
-                                Tag = new ProductDetailsTag
-                                    {
-                                        TagDetails = new ProductDetailsTagDetails()
-                                    }
-                            }
-                    };
+                        Tag = new ProductDetailsTag
+                        {
+                            TagDetails = new ProductDetailsTagDetails()
+                        }
+                    }
+                };
                 var product2 = new Product
+                {
+                    Details = new ProductDetails
                     {
-                        Details = new ProductDetails
-                            {
-                                Tag = new ProductDetailsTag
-                                    {
-                                        TagDetails = new ProductDetailsTagDetails()
-                                    }
-                            }
-                    };
+                        Tag = new ProductDetailsTag
+                        {
+                            TagDetails = new ProductDetailsTagDetails()
+                        }
+                    }
+                };
 
                 context.Add(product1.Details);
                 context.Add(product2.Details);
@@ -926,7 +926,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
 
                 changeDetector.DetectChangesCalled = false;
 
-                context.ChangeTracker.TrackGraph(CreateSimpleGraph(2), e => e.State = EntityState.Unchanged);
+                context.ChangeTracker.TrackGraph(CreateSimpleGraph(2), e => e.Entry.State = EntityState.Unchanged);
 
                 Assert.False(changeDetector.DetectChangesCalled);
 
@@ -936,15 +936,23 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             }
         }
 
-        private static Product CreateSimpleGraph(int id)
+        [Fact] // Issue #743
+        public void Throws_when_instance_of_unmapped_derived_type_is_used()
         {
-            return new Product { Id = id, Category = new Category { Id = id } };
+            using (var context = new EarlyLearningCenter())
+            {
+                Assert.Equal(CoreStrings.EntityTypeNotFound(typeof(SpecialProduct).Name),
+                    Assert.Throws<InvalidOperationException>(() => context.Add(new SpecialProduct())).Message);
+            }
         }
+
+        private static Product CreateSimpleGraph(int id)
+            => new Product { Id = id, Category = new Category { Id = id } };
 
         private class ChangeDetectorProxy : ChangeDetector
         {
-            public ChangeDetectorProxy(IModel model)
-                : base(model)
+            public ChangeDetectorProxy(IEntityGraphAttacher attacher)
+                : base(attacher)
             {
             }
 
@@ -982,6 +990,10 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             public ProductDetails Details { get; set; }
 
             public List<OrderDetails> OrderDetails { get; set; }
+        }
+
+        private class SpecialProduct : Product
+        {
         }
 
         private class ProductDetails
@@ -1040,29 +1052,29 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             protected internal override void OnModelCreating(ModelBuilder modelBuilder)
             {
                 modelBuilder
-                    .Entity<Category>().Collection(e => e.Products).InverseReference(e => e.Category);
+                    .Entity<Category>().HasMany(e => e.Products).WithOne(e => e.Category);
 
                 modelBuilder
-                    .Entity<ProductDetailsTag>().Reference(e => e.TagDetails).InverseReference(e => e.Tag)
-                    .ForeignKey<ProductDetailsTagDetails>(e => e.Id);
+                    .Entity<ProductDetailsTag>().HasOne(e => e.TagDetails).WithOne(e => e.Tag)
+                    .HasForeignKey<ProductDetailsTagDetails>(e => e.Id);
 
                 modelBuilder
-                    .Entity<ProductDetails>().Reference(e => e.Tag).InverseReference(e => e.Details)
-                    .ForeignKey<ProductDetailsTag>(e => e.Id);
+                    .Entity<ProductDetails>().HasOne(e => e.Tag).WithOne(e => e.Details)
+                    .HasForeignKey<ProductDetailsTag>(e => e.Id);
 
                 modelBuilder
-                    .Entity<Product>().Reference(e => e.Details).InverseReference(e => e.Product)
-                    .ForeignKey<ProductDetails>(e => e.Id);
+                    .Entity<Product>().HasOne(e => e.Details).WithOne(e => e.Product)
+                    .HasForeignKey<ProductDetails>(e => e.Id);
 
                 modelBuilder.Entity<OrderDetails>(b =>
                     {
-                        b.Key(e => new { e.OrderId, e.ProductId });
-                        b.Reference(e => e.Order).InverseCollection(e => e.OrderDetails).ForeignKey(e => e.OrderId);
-                        b.Reference(e => e.Product).InverseCollection(e => e.OrderDetails).ForeignKey(e => e.ProductId);
+                        b.HasKey(e => new { e.OrderId, e.ProductId });
+                        b.HasOne(e => e.Order).WithMany(e => e.OrderDetails).HasForeignKey(e => e.OrderId);
+                        b.HasOne(e => e.Product).WithMany(e => e.OrderDetails).HasForeignKey(e => e.ProductId);
                     });
             }
 
-            protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) 
+            protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                 => optionsBuilder.UseInMemoryDatabase();
         }
 
@@ -1075,8 +1087,8 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
                 _updateExistingEntities = updateExistingEntities;
             }
 
-            public virtual void TrackEntity(EntityEntry entry)
-                => entry.GetService().SetEntityState(DetermineState(entry), acceptChanges: true);
+            public virtual void TrackEntity(EntityEntryGraphNode node)
+                => node.Entry.GetInfrastructure().SetEntityState(DetermineState(node.Entry), acceptChanges: true);
 
             public virtual EntityState DetermineState(EntityEntry entry)
                 => entry.IsKeySet

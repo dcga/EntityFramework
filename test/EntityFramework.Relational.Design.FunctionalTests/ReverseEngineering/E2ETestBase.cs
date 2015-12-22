@@ -1,13 +1,13 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Globalization;
+using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
-using Microsoft.Data.Entity.Relational.Design.ReverseEngineering;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Data.Entity.Scaffolding;
+using Microsoft.Data.Entity.Scaffolding.Internal;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using Xunit.Abstractions;
 using Xunit.Sdk;
@@ -17,46 +17,36 @@ namespace Microsoft.Data.Entity.Relational.Design.FunctionalTests.ReverseEnginee
     public abstract class E2ETestBase
     {
         private readonly ITestOutputHelper _output;
-        private InMemoryCommandLogger _logger;
-
+        protected InMemoryCommandLogger _logger;
         protected InMemoryFileService InMemoryFiles;
         protected readonly ReverseEngineeringGenerator Generator;
-        protected readonly IDatabaseMetadataModelProvider MetadataModelProvider;
+        protected readonly IScaffoldingModelFactory ScaffoldingModelFactory;
 
-        public E2ETestBase(ITestOutputHelper output)
+        protected E2ETestBase(ITestOutputHelper output)
         {
             _output = output;
 
-            var serviceCollection = new ServiceCollection();
+            var serviceCollection = new ServiceCollection()
+                .AddLogging()
+                .AddScaffolding();
 
-            GetFactory().AddMetadataProviderServices(serviceCollection);
-            var serviceProvider = serviceCollection
-                .AddScoped(typeof(ILogger), sp => _logger = new InMemoryCommandLogger("E2ETest"))
-                .AddScoped(typeof(IFileService), sp => InMemoryFiles = new InMemoryFileService())
-                .BuildServiceProvider();
+            ConfigureDesignTimeServices(serviceCollection);
+
+            serviceCollection.AddSingleton(typeof(IFileService), sp => InMemoryFiles = new InMemoryFileService());
+
+            var serviceProvider = serviceCollection.BuildServiceProvider();
+
+            _logger = new InMemoryCommandLogger("E2ETest", _output);
+            serviceProvider.GetService<ILoggerFactory>().AddProvider(new TestLoggerProvider(_logger));
 
             Generator = serviceProvider.GetRequiredService<ReverseEngineeringGenerator>();
-            MetadataModelProvider = serviceProvider.GetRequiredService<IDatabaseMetadataModelProvider>();
-
-            // set current cultures to English because expected results for error messages
-            // (both those output to the Logger and those put in comments in the .cs files)
-            // are in English
-#if DNXCORE50
-            CultureInfo.CurrentCulture = new CultureInfo("en-US");
-            CultureInfo.CurrentUICulture = new CultureInfo("en-US");
-#else
-            Thread.CurrentThread.CurrentCulture = new CultureInfo("en-US");
-            Thread.CurrentThread.CurrentUICulture = new CultureInfo("en-US");
-#endif
+            ScaffoldingModelFactory = serviceProvider.GetRequiredService<IScaffoldingModelFactory>();
         }
 
         protected abstract E2ECompiler GetCompiler();
         protected abstract string ProviderName { get; }
-        protected abstract IDesignTimeMetadataProviderFactory GetFactory();
-        protected string ProviderDbContextTemplateName
-            => ProviderName + "." + ReverseEngineeringGenerator.DbContextTemplateFileName;
-        protected string ProviderEntityTypeTemplateName
-            => ProviderName + "." + ReverseEngineeringGenerator.EntityTypeTemplateFileName;
+
+        protected abstract void ConfigureDesignTimeServices(IServiceCollection services);
 
         protected virtual void AssertEqualFileContents(FileSet expected, FileSet actual)
         {
@@ -65,12 +55,21 @@ namespace Microsoft.Data.Entity.Relational.Design.FunctionalTests.ReverseEnginee
             for (var i = 0; i < expected.Files.Count; i++)
             {
                 Assert.True(actual.Exists(i), $"Could not find file '{actual.Files[i]}' in directory '{actual.Directory}'");
+                var expectedContents = expected.Contents(i);
+                var actualContents = actual.Contents(i);
+
                 try
                 {
-                    Assert.Equal(expected.Contents(i), actual.Contents(i));
+                    Assert.Equal(expectedContents, actualContents);
                 }
                 catch (EqualException e)
                 {
+                    var sep = new string('=', 60);
+                    _output.WriteLine($"Contents of actual: '{actual.Files[i]}'");
+                    _output.WriteLine(sep);
+                    _output.WriteLine(actualContents);
+                    _output.WriteLine(sep);
+
                     throw new XunitException($"Files did not match: '{expected.Files[i]}' and '{actual.Files[i]}'" + Environment.NewLine + $"{e.Message}");
                 }
             }
@@ -78,9 +77,33 @@ namespace Microsoft.Data.Entity.Relational.Design.FunctionalTests.ReverseEnginee
 
         protected virtual void AssertLog(LoggerMessages expected)
         {
-            Assert.Equal(expected.Warn, _logger.Messages.Warn);
-            Assert.Equal(expected.Info, _logger.Messages.Info);
-            Assert.Equal(expected.Verbose, _logger.Messages.Verbose);
+            AssertLoggerMessages(expected.Warn, _logger.Messages.Warn, "WARNING");
+            AssertLoggerMessages(expected.Error, _logger.Messages.Error, "ERROR");
+            AssertLoggerMessages(expected.Info, _logger.Messages.Info, "INFO");
+        }
+
+        protected virtual void AssertLoggerMessages(
+            List<string> expected, List<string> actual, string category)
+        {
+            try
+            {
+                foreach (var message in expected)
+                {
+                    Assert.Contains(message, actual);
+                }
+                
+                Assert.Equal(expected.Count, actual.Count);
+            }
+            catch (Exception)
+            {
+                var sep = new string('=', 60);
+                _output.WriteLine($"Contents of {category} logger messages:");
+                _output.WriteLine(sep);
+                _output.WriteLine(string.Join(Environment.NewLine, actual));
+                _output.WriteLine(sep);
+
+                throw;
+            }
         }
 
         protected virtual void AssertCompile(FileSet fileSet)
@@ -101,21 +124,21 @@ namespace Microsoft.Data.Entity.Relational.Design.FunctionalTests.ReverseEnginee
                 Assert.True(false, "Failed to compile: see Compilation Errors in Output.");
             }
         }
-        protected virtual void SetupTemplates(string templateOutputDir)
+
+        private class TestLoggerProvider : ILoggerProvider
         {
-            if (templateOutputDir == null)
+            private readonly ILogger _logger;
+
+            public TestLoggerProvider(ILogger logger)
             {
-                return;
+                _logger = logger;
             }
 
-            // use templates where the flag to use attributes instead of fluent API has been turned off
-            var dbContextTemplate = MetadataModelProvider.DbContextTemplate
-                .Replace("useAttributesOverFluentApi = true", "useAttributesOverFluentApi = false");
-            var entityTypeTemplate = MetadataModelProvider.EntityTypeTemplate
-                .Replace("useAttributesOverFluentApi = true", "useAttributesOverFluentApi = false");
-            InMemoryFiles.OutputFile(templateOutputDir, ProviderDbContextTemplateName, dbContextTemplate);
-            InMemoryFiles.OutputFile(templateOutputDir, ProviderEntityTypeTemplateName, entityTypeTemplate);
-        }
+            public ILogger CreateLogger(string name) => _logger;
 
+            public void Dispose()
+            {
+            }
+        }
     }
 }

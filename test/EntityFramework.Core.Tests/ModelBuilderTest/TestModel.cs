@@ -8,6 +8,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Reflection;
 
 // ReSharper disable once CheckNamespace
+
 namespace Microsoft.Data.Entity.Tests
 {
     public abstract partial class ModelBuilderTest
@@ -24,7 +25,7 @@ namespace Microsoft.Data.Entity.Tests
 
         private class Ingredient
         {
-            public readonly static PropertyInfo BurgerIdProperty = typeof(Ingredient).GetProperty("BurgerId");
+            public static readonly PropertyInfo BurgerIdProperty = typeof(Ingredient).GetProperty("BurgerId");
 
             public int Id { get; set; }
             public int BurgerId { get; set; }
@@ -94,6 +95,11 @@ namespace Microsoft.Data.Entity.Tests
             public CustomerDetails Details { get; set; }
         }
 
+        private class SpecialCustomer : Customer
+        {
+            public ICollection<SpecialOrder> SpecialOrders { get; set; }
+        }
+
         private class CustomerDetails
         {
             public int Id { get; set; }
@@ -112,8 +118,18 @@ namespace Microsoft.Data.Entity.Tests
             public OrderDetails Details { get; set; }
         }
 
+        private class SpecialOrder : Order
+        {
+        }
+
+        private class BackOrder : Order
+        {
+        }
+
         private class OrderDetails
         {
+            public static readonly PropertyInfo OrderIdProperty = typeof(OrderDetails).GetProperty("OrderId");
+
             public int Id { get; set; }
 
             public int OrderId { get; set; }
@@ -181,76 +197,72 @@ namespace Microsoft.Data.Entity.Tests
             public BookDetails Details { get; set; }
         }
 
-        private class BookDetails
+        private abstract class BookDetailsBase
         {
             public int Id { get; set; }
+            public Book AnotherBook { get; set; }
+        }
 
+        private class BookDetails : BookDetailsBase
+        {
             [NotMapped]
             public Book Book { get; set; }
-
-            public Book AnotherBook { get; set; }
         }
 
         private class BookLabel
         {
             public int Id { get; set; }
-            public int BookId { get; set; }
 
             [InverseProperty("Label")]
             public Book Book { get; set; }
+
+            public int BookId { get; set; }
+
+            public SpecialBookLabel SpecialBookLabel { get; set; }
+
+            public AnotherBookLabel AnotherBookLabel { get; set; }
+        }
+
+        private class SpecialBookLabel : BookLabel
+        {
+            public ICollection<BookLabel> BookLabels { get; set; }
+        }
+
+        private class AnotherBookLabel : BookLabel
+        {
         }
 
         private class Post
         {
             public int Id { get; set; }
 
-            [ForeignKey("Author")]
-            public int AuthorCode { get; set; }
+            [ForeignKey("PostDetails")]
+            public int PostDetailsId { get; set; }
 
-            public Author Author { get; set; }
-
-            [ForeignKey("PostWrongFk")]
             public PostDetails PostDetails { get; set; }
 
+            [ForeignKey("AuthorId")]
+            public Author Author { get; set; }
         }
 
         private class PostDetails
         {
             public int Id { get; set; }
 
+            [ForeignKey("Post")]
             public int PostId { get; set; }
 
-            public int PostWrongFk { get; set; }
-
-            public int PostFk { get; set; }
-
-            public int AuthorId { get; set; }
-
-            [ForeignKey("Author")]
-            public int AuthorAuthorId { get; set; }
-
-            [ForeignKey("Author")]
-            public int AuthorPostId { get; set; }
-
-            [ForeignKey("PostFk")]
             public Post Post { get; set; }
-
-            public Author Author { get; set; }
-
-            public AuthorDetails AuthorDetails { get; set; }
         }
 
         private class Author
         {
             public int Id { get; set; }
 
-            [ForeignKey("Post")]
-            public int PostNumber { get; set; }
-
+            [ForeignKey("PostId")]
             public Post Post { get; set; }
 
-            public PostDetails PostDetails { get; set; }
-
+            [ForeignKey("AuthorDetailsId")]
             public AuthorDetails AuthorDetails { get; set; }
         }
 
@@ -258,22 +270,164 @@ namespace Microsoft.Data.Entity.Tests
         {
             public int Id { get; set; }
 
+            [ForeignKey("Author")]
             public int AuthorId { get; set; }
 
-            public int PostDetailsId { get; set; }
-
-            public int PostDetailsFk { get; set; }
-
-            [ForeignKey("Author")]
-            public int AuthorFkProp { get; set; }
-
-            public int AuthorFkNav { get; set; }
-
-            [ForeignKey("AuthorFkNav")]
             public Author Author { get; set; }
+        }
 
-            [ForeignKey("PostDetailsFk,")]
-            public PostDetails PostDetails { get; set; }
+        private class A
+        {
+            public int Id { get; set; }
+
+            [ForeignKey("B")]
+            public int BId { get; set; }
+
+            public B B { get; set; }
+        }
+
+        private class B
+        {
+            public int Id { get; set; }
+
+            [ForeignKey("A")]
+            public int AId { get; set; }
+
+            [InverseProperty("B")]
+            public A A { get; set; }
+        }
+
+        private class C
+        {
+            public int Id { get; set; }
+
+            [ForeignKey("DId")]
+            [InverseProperty("C")]
+            public D D { get; set; }
+        }
+
+        private class D
+        {
+            public int Id { get; set; }
+
+            [ForeignKey("CId")]
+            public C C { get; set; }
+        }
+
+        private class EntityWithoutId
+        {
+            public string Name { get; set; }
+        }
+
+        protected class PrincipalEntity
+        {
+            public int Id { get; set; }
+
+            public List<DependentEntity> InverseNav { get; set; }
+        }
+
+        protected class DependentEntity
+        {
+            public int Id { get; set; }
+
+            [NotMapped]
+            public int PrincipalEntityId { get; set; }
+
+            public PrincipalEntity Nav { get; set; }
+        }
+
+        protected class Alpha
+        {
+            public int Id { get; set; }
+
+            public Delta NavDelta { get; set; }
+            public IList<Epsilon> Epsilons { get; set; }
+            public IList<Eta> Etas { get; set; }
+            [ForeignKey("Id")]
+            public IList<Theta> Thetas { get; set; }
+
+        }
+
+        protected class Beta
+        {
+            public int Id { get; set; }
+
+            public Alpha FirstNav { get; set; }
+            public Alpha SecondNav { get; set; }
+        }
+
+        protected class Gamma
+        {
+            public int Id { get; set; }
+
+            public List<Alpha> Alphas { get; set; }
+        }
+
+        protected class Delta
+        {
+            [ForeignKey("Alpha")]
+            public int Id { get; set; }
+
+            public Alpha Alpha { get; set; }
+        }
+
+        protected class Epsilon
+        {
+            [ForeignKey("Alpha")]
+            public int Id { get; set; }
+
+            public Alpha Alpha { get; set; }
+        }
+
+        protected class Eta
+        {
+            public int Id { get; set; }
+
+            [ForeignKey("Id")]
+            public Alpha Alpha { get; set; }
+        }
+
+        protected class Zeta
+        {
+            public int Id { get; set; }
+
+            public int CommonFkProperty { get; set; }
+
+            [ForeignKey("CommonFkProperty")]
+            public Alpha AlphaOne { get; set; }
+            [ForeignKey("CommonFkProperty")]
+            public Alpha AlphaTwo { get; set; }
+        }
+
+        protected class Theta
+        {
+            public int Id { get; set; }
+
+            public Alpha Alpha { get; set; }
+        }
+
+        protected interface IEntityBase
+        {
+            int Target { get; }
+        }
+
+        protected class EntityBase : IEntityBase
+        {
+            public static readonly PropertyInfo TargetProperty = typeof(EntityBase).GetProperty("Target");
+
+            public int Target { get; set; }
+
+            int IEntityBase.Target => Target;
+        }
+
+        protected class EntityAnnotationBase : IEntityBase
+        {
+            public static readonly PropertyInfo TargetProperty = typeof(EntityAnnotationBase).GetProperty("Target");
+
+            public int Target { get; set; }
+
+            [NotMapped]
+            int IEntityBase.Target => Target;
         }
     }
 }

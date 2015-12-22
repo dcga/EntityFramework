@@ -1,60 +1,75 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Collections.Generic;
+using System.Diagnostics;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Data.Entity.Internal;
 
 namespace Microsoft.Data.Entity.Metadata.Internal
 {
     public abstract class InternalMetadataBuilder
     {
-        private readonly LazyRef<Dictionary<string, ConfigurationSource>> _annotationSources =
-            new LazyRef<Dictionary<string, ConfigurationSource>>(() => new Dictionary<string, ConfigurationSource>());
-
-        protected InternalMetadataBuilder([NotNull] Annotatable metadata)
+        protected InternalMetadataBuilder([NotNull] ConventionalAnnotatable metadata)
         {
             Metadata = metadata;
         }
 
-        public virtual bool Annotation(
-            [NotNull] string annotation, [CanBeNull] object value, ConfigurationSource configurationSource)
+        public virtual ConventionalAnnotatable Metadata { get; }
+        public abstract InternalModelBuilder ModelBuilder { get; }
+
+        public virtual bool HasAnnotation(
+            [NotNull] string name, [CanBeNull] object value, ConfigurationSource configurationSource)
+            => HasAnnotation(name, value, configurationSource, canOverrideSameSource: true);
+
+        private bool HasAnnotation(
+            string name, object value, ConfigurationSource configurationSource, bool canOverrideSameSource)
         {
-            var existingValue = Metadata[annotation];
-            if (existingValue != null)
+            var existingAnnotation = Metadata.FindAnnotation(name);
+            if (existingAnnotation != null)
             {
-                ConfigurationSource existingConfigurationSource;
-                if (!_annotationSources.Value.TryGetValue(annotation, out existingConfigurationSource))
+                if (existingAnnotation.Value.Equals(value))
                 {
-                    existingConfigurationSource = ConfigurationSource.Explicit;
+                    existingAnnotation.UpdateConfigurationSource(configurationSource);
+                    return true;
                 }
 
-                if ((value == null || existingValue != value)
-                    && !configurationSource.Overrides(existingConfigurationSource))
+                var existingConfigurationSource = existingAnnotation.GetConfigurationSource();
+                if (!configurationSource.Overrides(existingConfigurationSource)
+                    || ((configurationSource == existingConfigurationSource) && !canOverrideSameSource))
                 {
                     return false;
                 }
 
-                configurationSource = configurationSource.Max(existingConfigurationSource);
+                if (value == null)
+                {
+                    var removed = Metadata.RemoveAnnotation(name);
+                    Debug.Assert(removed == existingAnnotation);
+                }
+                else
+                {
+                    Metadata.SetAnnotation(name, value, configurationSource);
+                }
+
+                return true;
             }
 
             if (value != null)
             {
-                _annotationSources.Value[annotation] = configurationSource;
-                Metadata[annotation] = value;
-            }
-            else
-            {
-                _annotationSources.Value.Remove(annotation);
-                Metadata.RemoveAnnotation(new Annotation(annotation, "_"));
+                Metadata.AddAnnotation(name, value, configurationSource);
             }
 
             return true;
         }
 
-        public virtual Annotatable Metadata { get; }
-
-        public abstract InternalModelBuilder ModelBuilder { get; }
+        protected virtual void MergeAnnotationsFrom([NotNull] InternalMetadataBuilder annotatableBuilder)
+        {
+            foreach (var annotation in annotatableBuilder.Metadata.GetAnnotations())
+            {
+                HasAnnotation(
+                    annotation.Name,
+                    annotation.Value,
+                    annotation.GetConfigurationSource(),
+                    canOverrideSameSource: false);
+            }
+        }
     }
 }

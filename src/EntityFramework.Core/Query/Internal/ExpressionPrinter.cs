@@ -2,11 +2,12 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
-using Microsoft.Data.Entity.Internal;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Internal;
 
 namespace Microsoft.Data.Entity.Query.Internal
 {
@@ -26,23 +27,18 @@ namespace Microsoft.Data.Entity.Query.Internal
             { ExpressionType.LessThan, " < " },
             { ExpressionType.LessThanOrEqual, " <= " },
             { ExpressionType.OrElse, " || " },
-            { ExpressionType.AndAlso,  " && " },
+            { ExpressionType.AndAlso, " && " },
+            { ExpressionType.Coalesce, " ?? " },
         };
 
         protected static Action<IndentedStringBuilder, string> Append
         {
-            get
-            {
-                return (sb, s) => sb.Append(s);
-            }
+            get { return (sb, s) => sb.Append(s); }
         }
 
         protected static Action<IndentedStringBuilder, string> AppendLine
         {
-            get
-            {
-                return (sb, s) => sb.AppendLine(s);
-            }
+            get { return (sb, s) => sb.AppendLine(s); }
         }
 
         public virtual string Print(Expression expression)
@@ -86,6 +82,7 @@ namespace Microsoft.Data.Entity.Query.Internal
                 case ExpressionType.LessThanOrEqual:
                 case ExpressionType.NotEqual:
                 case ExpressionType.OrElse:
+                case ExpressionType.Coalesce:
                     VisitBinary((BinaryExpression)node);
                     break;
 
@@ -140,6 +137,10 @@ namespace Microsoft.Data.Entity.Query.Internal
                 case ExpressionType.Convert:
                 case ExpressionType.Throw:
                     VisitUnary((UnaryExpression)node);
+                    break;
+
+                case ExpressionType.Default:
+                    VisitDefault((DefaultExpression)node);
                     break;
 
                 default:
@@ -247,7 +248,7 @@ namespace Microsoft.Data.Entity.Query.Internal
 
         protected override Expression VisitGoto(GotoExpression node)
         {
-            _stringBuilder.AppendLine("return (" + node.Target.Type.DisplayName(fullName: false) + ")" + node.Target.ToString() + " {");
+            _stringBuilder.AppendLine("return (" + node.Target.Type.DisplayName(fullName: false) + ")" + node.Target + " {");
             _stringBuilder.IncrementIndent();
 
             Visit(node.Value);
@@ -269,25 +270,12 @@ namespace Microsoft.Data.Entity.Query.Internal
         {
             _stringBuilder.Append("(");
 
-            foreach (var prm in node.Parameters)
+            foreach (var parameter in node.Parameters)
             {
-                string prmName = null;
+                _parametersInScope.Add(parameter, parameter.Name);
+                _stringBuilder.Append(parameter.Type.DisplayName(fullName: false) + " " + parameter.Name);
 
-                // we seem to be reusing the parameters when building the query 
-                // so we need to check whether the parameter is already in the scope before adding it
-                if (_parametersInScope.ContainsKey(prm))
-                {
-                    prmName = _parametersInScope[prm];
-                }
-                else
-                {
-                    prmName = "prm" + _parametersInScope.Count;
-                    _parametersInScope.Add(prm, prmName);
-                }
-
-                _stringBuilder.Append(prm.Type.DisplayName(fullName: false) + " " + prmName);
-
-                if (prm != node.Parameters.Last())
+                if (parameter != node.Parameters.Last())
                 {
                     _stringBuilder.Append(", ");
                 }
@@ -297,12 +285,10 @@ namespace Microsoft.Data.Entity.Query.Internal
 
             Visit(node.Body);
 
-            // we seem to be reusing the parameters when building the query 
-            // so it is not safe to remove parameters after processing the body
-            ////foreach (var prm in node.Parameters)
-            ////{
-            ////    _parametersInScope.Remove(prm);
-            ////}
+            foreach (var parameter in node.Parameters)
+            {
+                _parametersInScope.Remove(parameter);
+            }
 
             return node;
         }
@@ -331,7 +317,7 @@ namespace Microsoft.Data.Entity.Query.Internal
             appendAction(_stringBuilder, "{ ");
             _stringBuilder.IncrementIndent();
 
-            for (int i = 0; i < node.Bindings.Count; i++)
+            for (var i = 0; i < node.Bindings.Count; i++)
             {
                 var assignment = node.Bindings[i] as MemberAssignment;
                 if (assignment != null)
@@ -341,7 +327,8 @@ namespace Microsoft.Data.Entity.Query.Internal
                 }
                 else
                 {
-                    UnhandledOperation("MemberInitExpression binding is not a MemberAssignment");
+                    ////throw new NotSupportedException(CoreStrings.InvalidMemberInitBinding);
+                    _stringBuilder.AppendLine(CoreStrings.InvalidMemberInitBinding);
                 }
             }
 
@@ -355,7 +342,7 @@ namespace Microsoft.Data.Entity.Query.Internal
         {
             var simpleMethods = new List<string>
             {
-                "get_Item",
+                "get_Item"
             };
 
             if (node.Method.Name == "_InterceptExceptions")
@@ -395,7 +382,7 @@ namespace Microsoft.Data.Entity.Query.Internal
                 var argumentNames = showArgumentNames ? node.Method.GetParameters().Select(p => p.Name).ToList() : new List<string>();
 
                 _stringBuilder.IncrementIndent();
-                for (int i = 0; i < node.Arguments.Count; i++)
+                for (var i = 0; i < node.Arguments.Count; i++)
                 {
                     var argument = node.Arguments[i];
 
@@ -426,7 +413,7 @@ namespace Microsoft.Data.Entity.Query.Internal
             appendAction(_stringBuilder, "(");
             _stringBuilder.IncrementIndent();
 
-            for (int i = 0; i < node.Arguments.Count; i++)
+            for (var i = 0; i < node.Arguments.Count; i++)
             {
                 Visit(node.Arguments[i]);
                 appendAction(_stringBuilder, i == node.Arguments.Count - 1 ? "" : ", ");
@@ -445,7 +432,7 @@ namespace Microsoft.Data.Entity.Query.Internal
             appendAction(_stringBuilder, "{ ");
             _stringBuilder.IncrementIndent();
 
-            for (int i = 0; i < node.Expressions.Count; i++)
+            for (var i = 0; i < node.Expressions.Count; i++)
             {
                 Visit(node.Expressions[i]);
                 appendAction(_stringBuilder, i == node.Expressions.Count - 1 ? " " : ", ");
@@ -459,7 +446,14 @@ namespace Microsoft.Data.Entity.Query.Internal
 
         protected override Expression VisitParameter(ParameterExpression node)
         {
-            _stringBuilder.Append(_parametersInScope[node]);
+            if (_parametersInScope.ContainsKey(node))
+            {
+                _stringBuilder.Append(_parametersInScope[node]);
+            }
+            else
+            {
+                _stringBuilder.Append("Unhandled parameter: " + node);
+            }
 
             return node;
         }
@@ -483,7 +477,14 @@ namespace Microsoft.Data.Entity.Query.Internal
                 return node;
             }
 
-            _stringBuilder.AppendLine("Unhandled node type: " + node.NodeType);
+            _stringBuilder.AppendLine(CoreStrings.UnhandledNodeType(node.NodeType));
+
+            return node;
+        }
+
+        protected override Expression VisitDefault(DefaultExpression node)
+        {
+            _stringBuilder.Append("default(" + node.Type + ")");
 
             return node;
         }
@@ -500,17 +501,11 @@ namespace Microsoft.Data.Entity.Query.Internal
 
         private void UnhandledExpressionType(ExpressionType expressionType)
         {
-            ////throw new NotSupportedException("Unhandled expression type: " + expressionType);
-            _stringBuilder.AppendLine("Unhandled expression type: " + expressionType);
+            ////throw new NotSupportedException(CoreStrings.UnhandledExpressionType(expressionType));
+            _stringBuilder.AppendLine(CoreStrings.UnhandledExpressionType(expressionType));
         }
 
-        private void UnhandledOperation(string operation)
-        {
-            ////throw new NotSupportedException("Unhandled operation: " + operation);
-            _stringBuilder.AppendLine("Unhandled operation: " + operation);
-        }
-
-        public interface IConstantPrinter
+        protected interface IConstantPrinter
         {
             bool TryPrintConstant([NotNull] object value, [NotNull] IndentedStringBuilder stringBuilder);
         }
@@ -519,8 +514,9 @@ namespace Microsoft.Data.Entity.Query.Internal
         {
             public bool TryPrintConstant(object value, IndentedStringBuilder stringBuilder)
             {
-                var enumerable = value as System.Collections.IEnumerable;
-                if (enumerable != null && !(value is string))
+                var enumerable = value as IEnumerable;
+                if ((enumerable != null)
+                    && !(value is string))
                 {
                     var appendAction = value is byte[] ? Append : AppendLine;
 
@@ -529,7 +525,7 @@ namespace Microsoft.Data.Entity.Query.Internal
                     stringBuilder.IncrementIndent();
                     foreach (var item in enumerable)
                     {
-                        appendAction(stringBuilder, item.ToString() + ", ");
+                        appendAction(stringBuilder, item + ", ");
                     }
 
                     stringBuilder.DecrementIndent();
@@ -561,4 +557,3 @@ namespace Microsoft.Data.Entity.Query.Internal
         }
     }
 }
-

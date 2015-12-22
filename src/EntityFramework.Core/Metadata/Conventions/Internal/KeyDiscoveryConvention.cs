@@ -10,7 +10,7 @@ using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
 {
-    public class KeyDiscoveryConvention : IEntityTypeConvention
+    public class KeyDiscoveryConvention : IEntityTypeConvention, IPropertyConvention, IBaseTypeConvention
     {
         private const string KeySuffix = "Id";
 
@@ -19,9 +19,13 @@ namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
             Check.NotNull(entityTypeBuilder, nameof(entityTypeBuilder));
             var entityType = entityTypeBuilder.Metadata;
 
-            if (entityType.BaseType == null)
+            if (entityType.BaseType == null
+                && entityType.FindPrimaryKey() == null)
             {
-                var keyProperties = DiscoverKeyProperties(entityType);
+                var candidateProperties = entityType.GetProperties().Where(p =>
+                    !p.IsShadowProperty
+                    || !ConfigurationSource.Convention.Overrides(p.GetConfigurationSource())).ToList();
+                var keyProperties = DiscoverKeyProperties(entityType, candidateProperties);
                 if (keyProperties.Count != 0)
                 {
                     entityTypeBuilder.PrimaryKey(keyProperties.Select(p => p.Name).ToList(), ConfigurationSource.Convention);
@@ -31,17 +35,16 @@ namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
             return entityTypeBuilder;
         }
 
-        public virtual IReadOnlyList<Property> DiscoverKeyProperties([NotNull] EntityType entityType)
+        public virtual IReadOnlyList<Property> DiscoverKeyProperties([NotNull] EntityType entityType, [NotNull] IReadOnlyList<Property> candidateProperties)
         {
             Check.NotNull(entityType, nameof(entityType));
 
-            var keyProperties = entityType.Properties
-                .Where(p => string.Equals(p.Name, KeySuffix, StringComparison.OrdinalIgnoreCase))
+            var keyProperties = candidateProperties.Where(p => string.Equals(p.Name, KeySuffix, StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
             if (keyProperties.Count == 0)
             {
-                keyProperties = entityType.Properties.Where(
+                keyProperties = candidateProperties.Where(
                     p => string.Equals(p.Name, entityType.DisplayName() + KeySuffix, StringComparison.OrdinalIgnoreCase))
                     .ToList();
             }
@@ -53,6 +56,18 @@ namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
             }
 
             return keyProperties;
+        }
+
+        public virtual bool Apply(InternalEntityTypeBuilder entityTypeBuilder, EntityType oldBaseType)
+            => Apply(entityTypeBuilder) != null;
+
+        public virtual InternalPropertyBuilder Apply(InternalPropertyBuilder propertyBuilder)
+        {
+            Check.NotNull(propertyBuilder, nameof(propertyBuilder));
+
+            Apply(propertyBuilder.Metadata.DeclaringEntityType.Builder);
+
+            return propertyBuilder;
         }
     }
 }

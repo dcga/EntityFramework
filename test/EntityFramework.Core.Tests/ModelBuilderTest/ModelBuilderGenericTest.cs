@@ -3,7 +3,9 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Builders;
 using Microsoft.Data.Entity.Metadata.Conventions;
@@ -12,28 +14,11 @@ using Microsoft.Data.Entity.Metadata.Internal;
 using Xunit;
 
 // ReSharper disable once CheckNamespace
+
 namespace Microsoft.Data.Entity.Tests
 {
     public class ModelBuilderGenericTest : ModelBuilderTest
     {
-        [Fact]
-        public void Can_create_a_model_builder_with_given_conventions_and_model()
-        {
-            var convention = new TestConvention();
-            var conventions = new ConventionSet();
-            conventions.EntityTypeAddedConventions.Add(convention);
-
-            var model = new Model();
-            var modelBuilder = new ModelBuilder(conventions, model);
-
-            Assert.Same(model, modelBuilder.Model);
-
-            modelBuilder.Entity<Random>();
-
-            Assert.True(convention.Applied);
-            Assert.NotNull(model.GetEntityType(typeof(Random)));
-        }
-
         [Fact]
         public void Can_create_a_model_builder_with_given_conventions_only()
         {
@@ -46,7 +31,7 @@ namespace Microsoft.Data.Entity.Tests
             modelBuilder.Entity<Random>();
 
             Assert.True(convention.Applied);
-            Assert.NotNull(modelBuilder.Model.GetEntityType(typeof(Random)));
+            Assert.NotNull(modelBuilder.Model.FindEntityType(typeof(Random)));
         }
 
         private class TestConvention : IEntityTypeConvention
@@ -63,12 +48,38 @@ namespace Microsoft.Data.Entity.Tests
 
         public class GenericNonRelationship : NonRelationshipTestBase
         {
+            [Fact]
+            public virtual void Can_add_ignore_explicit_interface_implementation_property()
+            {
+                var modelBuilder = CreateModelBuilder();
+                modelBuilder.Entity<EntityBase>().Ignore(e => ((IEntityBase)e).Target);
+
+                Assert.DoesNotContain(
+                    typeof(EntityBase).GetRuntimeProperties().First(p => p != EntityBase.TargetProperty).Name,
+                    modelBuilder.Model.FindEntityType(typeof(EntityBase)).GetProperties().Select(p => p.Name));
+
+                modelBuilder.Entity<EntityBase>().Property(e => ((IEntityBase)e).Target);
+
+                Assert.Contains(
+                    typeof(EntityBase).GetRuntimeProperties().First(p => p != EntityBase.TargetProperty).Name,
+                    modelBuilder.Model.FindEntityType(typeof(EntityBase)).GetProperties().Select(p => p.Name));
+            }
+
             protected override TestModelBuilder CreateTestModelBuilder(ModelBuilder modelBuilder)
                 => new GenericTestModelBuilder(modelBuilder);
         }
 
         public class GenericDataAnnotations : DataAnnotationsTestBase
         {
+            [Fact]
+            public virtual void NotMappedAttribute_ignored_explicit_interface_implementation_property()
+            {
+                var modelBuilder = CreateModelBuilder();
+                modelBuilder.Entity<EntityAnnotationBase>();
+
+                Assert.Equal(EntityAnnotationBase.TargetProperty.Name, modelBuilder.Model.FindEntityType(typeof(EntityAnnotationBase)).GetProperties().Single().Name);
+            }
+
             protected override TestModelBuilder CreateTestModelBuilder(ModelBuilder modelBuilder)
                 => new GenericTestModelBuilder(modelBuilder);
         }
@@ -124,31 +135,31 @@ namespace Microsoft.Data.Entity.Tests
             }
 
             protected EntityTypeBuilder<TEntity> EntityTypeBuilder { get; }
-            public override EntityType Metadata => EntityTypeBuilder.Metadata;
+            public override IMutableEntityType Metadata => EntityTypeBuilder.Metadata;
 
             protected virtual TestEntityTypeBuilder<TEntity> Wrap(EntityTypeBuilder<TEntity> entityTypeBuilder)
                 => new GenericTestEntityTypeBuilder<TEntity>(entityTypeBuilder);
 
-            public override TestEntityTypeBuilder<TEntity> Annotation(string annotation, object value)
-                => Wrap(EntityTypeBuilder.Annotation(annotation, value));
+            public override TestEntityTypeBuilder<TEntity> HasAnnotation(string annotation, object value)
+                => Wrap(EntityTypeBuilder.HasAnnotation(annotation, value));
 
-            public override TestEntityTypeBuilder<TEntity> BaseEntity<TBaseEntity>()
-                => Wrap(EntityTypeBuilder.BaseType<TBaseEntity>());
+            public override TestEntityTypeBuilder<TEntity> HasBaseType<TBaseEntity>()
+                => Wrap(EntityTypeBuilder.HasBaseType<TBaseEntity>());
 
-            public override TestEntityTypeBuilder<TEntity> BaseEntity(string baseEntityTypeName)
-                => Wrap(EntityTypeBuilder.BaseType(baseEntityTypeName));
+            public override TestEntityTypeBuilder<TEntity> HasBaseType(string baseEntityTypeName)
+                => Wrap(EntityTypeBuilder.HasBaseType(baseEntityTypeName));
 
-            public override TestKeyBuilder Key(Expression<Func<TEntity, object>> keyExpression)
-                => new TestKeyBuilder(EntityTypeBuilder.Key(keyExpression));
+            public override TestKeyBuilder HasKey(Expression<Func<TEntity, object>> keyExpression)
+                => new TestKeyBuilder(EntityTypeBuilder.HasKey(keyExpression));
 
-            public override TestKeyBuilder Key(params string[] propertyNames)
-                => new TestKeyBuilder(EntityTypeBuilder.Key(propertyNames));
+            public override TestKeyBuilder HasKey(params string[] propertyNames)
+                => new TestKeyBuilder(EntityTypeBuilder.HasKey(propertyNames));
 
-            public override TestKeyBuilder AlternateKey(Expression<Func<TEntity, object>> keyExpression)
-                => new TestKeyBuilder(EntityTypeBuilder.AlternateKey(keyExpression));
+            public override TestKeyBuilder HasAlternateKey(Expression<Func<TEntity, object>> keyExpression)
+                => new TestKeyBuilder(EntityTypeBuilder.HasAlternateKey(keyExpression));
 
-            public override TestKeyBuilder AlternateKey(params string[] propertyNames)
-                => new TestKeyBuilder(EntityTypeBuilder.AlternateKey(propertyNames));
+            public override TestKeyBuilder HasAlternateKey(params string[] propertyNames)
+                => new TestKeyBuilder(EntityTypeBuilder.HasAlternateKey(propertyNames));
 
             public override TestPropertyBuilder<TProperty> Property<TProperty>(Expression<Func<TEntity, TProperty>> propertyExpression)
                 => new GenericTestPropertyBuilder<TProperty>(EntityTypeBuilder.Property(propertyExpression));
@@ -162,17 +173,17 @@ namespace Microsoft.Data.Entity.Tests
             public override TestEntityTypeBuilder<TEntity> Ignore(string propertyName)
                 => Wrap(EntityTypeBuilder.Ignore(propertyName));
 
-            public override TestIndexBuilder Index(Expression<Func<TEntity, object>> indexExpression)
-                => new TestIndexBuilder(EntityTypeBuilder.Index(indexExpression));
+            public override TestIndexBuilder HasIndex(Expression<Func<TEntity, object>> indexExpression)
+                => new TestIndexBuilder(EntityTypeBuilder.HasIndex(indexExpression));
 
-            public override TestIndexBuilder Index(params string[] propertyNames)
-                => new TestIndexBuilder(EntityTypeBuilder.Index(propertyNames));
+            public override TestIndexBuilder HasIndex(params string[] propertyNames)
+                => new TestIndexBuilder(EntityTypeBuilder.HasIndex(propertyNames));
 
-            public override TestReferenceNavigationBuilder<TEntity, TRelatedEntity> Reference<TRelatedEntity>(Expression<Func<TEntity, TRelatedEntity>> reference = null)
-                => new GenericTestReferenceNavigationBuilder<TEntity, TRelatedEntity>(EntityTypeBuilder.Reference(reference));
+            public override TestReferenceNavigationBuilder<TEntity, TRelatedEntity> HasOne<TRelatedEntity>(Expression<Func<TEntity, TRelatedEntity>> reference = null)
+                => new GenericTestReferenceNavigationBuilder<TEntity, TRelatedEntity>(EntityTypeBuilder.HasOne(reference));
 
-            public override TestCollectionNavigationBuilder<TEntity, TRelatedEntity> Collection<TRelatedEntity>(Expression<Func<TEntity, IEnumerable<TRelatedEntity>>> collection = null)
-                => new GenericTestCollectionNavigationBuilder<TEntity, TRelatedEntity>(EntityTypeBuilder.Collection(collection));
+            public override TestCollectionNavigationBuilder<TEntity, TRelatedEntity> HasMany<TRelatedEntity>(Expression<Func<TEntity, IEnumerable<TRelatedEntity>>> collection = null)
+                => new GenericTestCollectionNavigationBuilder<TEntity, TRelatedEntity>(EntityTypeBuilder.HasMany(collection));
         }
 
         protected class GenericTestPropertyBuilder<TProperty> : TestPropertyBuilder<TProperty>
@@ -184,19 +195,19 @@ namespace Microsoft.Data.Entity.Tests
 
             private PropertyBuilder<TProperty> PropertyBuilder { get; }
 
-            public override Property Metadata => PropertyBuilder.Metadata;
+            public override IMutableProperty Metadata => PropertyBuilder.Metadata;
 
-            public override TestPropertyBuilder<TProperty> Annotation(string annotation, object value)
-                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.Annotation(annotation, value));
+            public override TestPropertyBuilder<TProperty> HasAnnotation(string annotation, object value)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasAnnotation(annotation, value));
 
-            public override TestPropertyBuilder<TProperty> Required(bool isRequired = true)
-                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.Required(isRequired));
+            public override TestPropertyBuilder<TProperty> IsRequired(bool isRequired = true)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.IsRequired(isRequired));
 
-            public override TestPropertyBuilder<TProperty> MaxLength(int maxLength)
-                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.MaxLength(maxLength));
+            public override TestPropertyBuilder<TProperty> HasMaxLength(int maxLength)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasMaxLength(maxLength));
 
-            public override TestPropertyBuilder<TProperty> ConcurrencyToken(bool isConcurrencyToken = true)
-                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.ConcurrencyToken(isConcurrencyToken));
+            public override TestPropertyBuilder<TProperty> IsConcurrencyToken(bool isConcurrencyToken = true)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.IsConcurrencyToken(isConcurrencyToken));
 
             public override TestPropertyBuilder<TProperty> ValueGeneratedNever()
                 => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.ValueGeneratedNever());
@@ -219,11 +230,11 @@ namespace Microsoft.Data.Entity.Tests
 
             protected ReferenceNavigationBuilder<TEntity, TRelatedEntity> ReferenceNavigationBuilder { get; }
 
-            public override TestReferenceCollectionBuilder<TRelatedEntity, TEntity> InverseCollection(Expression<Func<TRelatedEntity, IEnumerable<TEntity>>> collection = null)
-                => new GenericTestReferenceCollectionBuilder<TRelatedEntity, TEntity>(ReferenceNavigationBuilder.InverseCollection(collection));
+            public override TestReferenceCollectionBuilder<TRelatedEntity, TEntity> WithMany(Expression<Func<TRelatedEntity, IEnumerable<TEntity>>> collection = null)
+                => new GenericTestReferenceCollectionBuilder<TRelatedEntity, TEntity>(ReferenceNavigationBuilder.WithMany(collection));
 
-            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> InverseReference(Expression<Func<TRelatedEntity, TEntity>> reference = null)
-                => new GenericTestReferenceReferenceBuilder<TEntity, TRelatedEntity>(ReferenceNavigationBuilder.InverseReference(reference));
+            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> WithOne(Expression<Func<TRelatedEntity, TEntity>> reference = null)
+                => new GenericTestReferenceReferenceBuilder<TEntity, TRelatedEntity>(ReferenceNavigationBuilder.WithOne(reference));
         }
 
         protected class GenericTestCollectionNavigationBuilder<TEntity, TRelatedEntity> : TestCollectionNavigationBuilder<TEntity, TRelatedEntity>
@@ -237,8 +248,8 @@ namespace Microsoft.Data.Entity.Tests
 
             protected CollectionNavigationBuilder<TEntity, TRelatedEntity> CollectionNavigationBuilder { get; }
 
-            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> InverseReference(Expression<Func<TRelatedEntity, TEntity>> reference = null)
-                => new GenericTestReferenceCollectionBuilder<TEntity, TRelatedEntity>(CollectionNavigationBuilder.InverseReference(reference));
+            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> WithOne(Expression<Func<TRelatedEntity, TEntity>> reference = null)
+                => new GenericTestReferenceCollectionBuilder<TEntity, TRelatedEntity>(CollectionNavigationBuilder.WithOne(reference));
         }
 
         protected class GenericTestReferenceCollectionBuilder<TEntity, TRelatedEntity> : TestReferenceCollectionBuilder<TEntity, TRelatedEntity>
@@ -252,28 +263,31 @@ namespace Microsoft.Data.Entity.Tests
 
             protected ReferenceCollectionBuilder<TEntity, TRelatedEntity> ReferenceCollectionBuilder { get; }
 
-            public override ForeignKey Metadata => ReferenceCollectionBuilder.Metadata;
+            public override IMutableForeignKey Metadata => ReferenceCollectionBuilder.Metadata;
 
             protected virtual GenericTestReferenceCollectionBuilder<TEntity, TRelatedEntity> Wrap(ReferenceCollectionBuilder<TEntity, TRelatedEntity> referenceCollectionBuilder)
                 => new GenericTestReferenceCollectionBuilder<TEntity, TRelatedEntity>(referenceCollectionBuilder);
 
-            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> ForeignKey(Expression<Func<TRelatedEntity, object>> foreignKeyExpression)
-                => Wrap(ReferenceCollectionBuilder.ForeignKey(foreignKeyExpression));
+            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasForeignKey(Expression<Func<TRelatedEntity, object>> foreignKeyExpression)
+                => Wrap(ReferenceCollectionBuilder.HasForeignKey(foreignKeyExpression));
 
-            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> PrincipalKey(Expression<Func<TEntity, object>> keyExpression)
-                => Wrap(ReferenceCollectionBuilder.PrincipalKey(keyExpression));
+            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasPrincipalKey(Expression<Func<TEntity, object>> keyExpression)
+                => Wrap(ReferenceCollectionBuilder.HasPrincipalKey(keyExpression));
 
-            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> ForeignKey(params string[] foreignKeyPropertyNames)
-                => Wrap(ReferenceCollectionBuilder.ForeignKey(foreignKeyPropertyNames));
+            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasForeignKey(params string[] foreignKeyPropertyNames)
+                => Wrap(ReferenceCollectionBuilder.HasForeignKey(foreignKeyPropertyNames));
 
-            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> PrincipalKey(params string[] keyPropertyNames)
-                => Wrap(ReferenceCollectionBuilder.PrincipalKey(keyPropertyNames));
+            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasPrincipalKey(params string[] keyPropertyNames)
+                => Wrap(ReferenceCollectionBuilder.HasPrincipalKey(keyPropertyNames));
 
-            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> Annotation(string annotation, object value)
-                => Wrap(ReferenceCollectionBuilder.Annotation(annotation, value));
+            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> HasAnnotation(string annotation, object value)
+                => Wrap(ReferenceCollectionBuilder.HasAnnotation(annotation, value));
 
-            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> Required(bool isRequired = true)
-                => Wrap(ReferenceCollectionBuilder.Required(isRequired));
+            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> IsRequired(bool isRequired = true)
+                => Wrap(ReferenceCollectionBuilder.IsRequired(isRequired));
+
+            public override TestReferenceCollectionBuilder<TEntity, TRelatedEntity> OnDelete(DeleteBehavior deleteBehavior)
+                => Wrap(ReferenceCollectionBuilder.OnDelete(deleteBehavior));
         }
 
         protected class GenericTestReferenceReferenceBuilder<TEntity, TRelatedEntity> : TestReferenceReferenceBuilder<TEntity, TRelatedEntity>
@@ -287,28 +301,31 @@ namespace Microsoft.Data.Entity.Tests
 
             protected ReferenceReferenceBuilder<TEntity, TRelatedEntity> ReferenceReferenceBuilder { get; }
 
-            public override ForeignKey Metadata => ReferenceReferenceBuilder.Metadata;
+            public override IMutableForeignKey Metadata => ReferenceReferenceBuilder.Metadata;
 
             protected virtual GenericTestReferenceReferenceBuilder<TEntity, TRelatedEntity> Wrap(ReferenceReferenceBuilder<TEntity, TRelatedEntity> referenceReferenceBuilder)
                 => new GenericTestReferenceReferenceBuilder<TEntity, TRelatedEntity>(referenceReferenceBuilder);
 
-            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> Annotation(string annotation, object value)
-                => Wrap(ReferenceReferenceBuilder.Annotation(annotation, value));
+            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasAnnotation(string annotation, object value)
+                => Wrap(ReferenceReferenceBuilder.HasAnnotation(annotation, value));
 
-            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> ForeignKey<TDependentEntity>(Expression<Func<TDependentEntity, object>> foreignKeyExpression)
-                => Wrap(ReferenceReferenceBuilder.ForeignKey(foreignKeyExpression));
+            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasForeignKey<TDependentEntity>(Expression<Func<TDependentEntity, object>> foreignKeyExpression)
+                => Wrap(ReferenceReferenceBuilder.HasForeignKey(foreignKeyExpression));
 
-            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> PrincipalKey<TPrincipalEntity>(Expression<Func<TPrincipalEntity, object>> keyExpression)
-                => Wrap(ReferenceReferenceBuilder.PrincipalKey(keyExpression));
+            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasPrincipalKey<TPrincipalEntity>(Expression<Func<TPrincipalEntity, object>> keyExpression)
+                => Wrap(ReferenceReferenceBuilder.HasPrincipalKey(keyExpression));
 
-            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> ForeignKey(Type dependentEntityType, params string[] foreignKeyPropertyNames)
-                => Wrap(ReferenceReferenceBuilder.ForeignKey(dependentEntityType, foreignKeyPropertyNames));
+            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasForeignKey(Type dependentEntityType, params string[] foreignKeyPropertyNames)
+                => Wrap(ReferenceReferenceBuilder.HasForeignKey(dependentEntityType, foreignKeyPropertyNames));
 
-            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> PrincipalKey(Type principalEntityType, params string[] keyPropertyNames)
-                => Wrap(ReferenceReferenceBuilder.PrincipalKey(principalEntityType, keyPropertyNames));
+            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> HasPrincipalKey(Type principalEntityType, params string[] keyPropertyNames)
+                => Wrap(ReferenceReferenceBuilder.HasPrincipalKey(principalEntityType, keyPropertyNames));
 
-            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> Required(bool isRequired = true)
-                => Wrap(ReferenceReferenceBuilder.Required(isRequired));
+            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> IsRequired(bool isRequired = true)
+                => Wrap(ReferenceReferenceBuilder.IsRequired(isRequired));
+
+            public override TestReferenceReferenceBuilder<TEntity, TRelatedEntity> OnDelete(DeleteBehavior deleteBehavior)
+                => Wrap(ReferenceReferenceBuilder.OnDelete(deleteBehavior));
         }
     }
 }

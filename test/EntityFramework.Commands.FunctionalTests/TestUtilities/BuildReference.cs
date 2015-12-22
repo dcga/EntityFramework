@@ -8,10 +8,9 @@ using Microsoft.CodeAnalysis;
 #if DNX451 || DNXCORE50
 using System.Diagnostics;
 using System.Linq;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Dnx.Runtime;
-using Microsoft.Dnx.Compilation;
-using Microsoft.Dnx.Runtime.Infrastructure;
+using Microsoft.Extensions.CompilationAbstractions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.Dnx.Compilation.CSharp;
 #endif
 
@@ -35,11 +34,7 @@ namespace Microsoft.Data.Entity.Commands.TestUtilities
         public static BuildReference ByName(string name, bool copyLocal = false)
         {
 #if DNX451 || DNXCORE50
-            var library = CallContextServiceLocator
-                .Locator
-                .ServiceProvider
-                .GetService<ILibraryExporter>()
-                .GetExport(name);
+            var library = CompilationServices.Default.LibraryExporter.GetExport(name);
             if (library != null)
             {
                 var metadataReference = library.MetadataReferences.Single();

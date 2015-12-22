@@ -3,6 +3,7 @@
 
 using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Metadata
@@ -33,9 +34,13 @@ namespace Microsoft.Data.Entity.Metadata
             => Annotations.SetAnnotation(RelationalAnnotationNames.Name, Check.NullButNotEmpty(value, nameof(value)));
 
         protected virtual string GetDefaultName()
-            => "IX_" +
-               Index.DeclaringEntityType.DisplayName() +
-               "_" +
-               string.Join("_", Index.Properties.Select(p => p.Name));
+        {
+            var entityType = new RelationalEntityTypeAnnotations(Index.DeclaringEntityType, Annotations.ProviderPrefix);
+
+            return "IX_" +
+                entityType.TableName +
+                "_" +
+                string.Join("_", Index.Properties.Select(p => p.Name));
+        }
     }
 }

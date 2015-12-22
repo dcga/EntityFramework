@@ -4,6 +4,7 @@
 using System;
 using System.Linq;
 using Microsoft.Data.Entity.Migrations.Operations;
+using Microsoft.Data.Entity.Tests;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Migrations
@@ -75,6 +76,21 @@ namespace Microsoft.Data.Entity.Migrations
         }
 
         [Fact]
+
+        public virtual void AddColumnOperation_with_maxLength()
+        {
+            Generate(
+                modelBuilder => modelBuilder.Entity("Person").Property<string>("Name").HasMaxLength(30),
+                new AddColumnOperation
+                {
+                    Table = "Person",
+                    Name = "Name",
+                    ClrType = typeof(string),
+                    IsNullable = true
+                });
+        }
+
+        [Fact]
         public virtual void AddForeignKeyOperation_with_name()
         {
             Generate(
@@ -101,6 +117,18 @@ namespace Microsoft.Data.Entity.Migrations
                     Columns = new[] { "SpouseId" },
                     PrincipalTable = "People",
                     PrincipalColumns = new[] { "Id" }
+                });
+        }
+
+        [Fact]
+        public virtual void AddForeignKeyOperation_without_principal_columns()
+        {
+            Generate(
+                new AddForeignKeyOperation
+                {
+                    Table = "People",
+                    Columns = new[] { "SpouseId" },
+                    PrincipalTable = "People"
                 });
         }
 
@@ -186,7 +214,7 @@ namespace Microsoft.Data.Entity.Migrations
             Generate(
                 new AlterSequenceOperation
                 {
-                    Name = "DefaultSequence",
+                    Name = "EntityFrameworkHiLoSequence",
                     Schema = "dbo",
                     IncrementBy = 1,
                     MinValue = 2,
@@ -201,7 +229,7 @@ namespace Microsoft.Data.Entity.Migrations
             Generate(
                 new AlterSequenceOperation
                 {
-                    Name = "DefaultSequence",
+                    Name = "EntityFrameworkHiLoSequence",
                     IncrementBy = 1
                 });
         }
@@ -252,7 +280,7 @@ namespace Microsoft.Data.Entity.Migrations
             Generate(
                 new CreateSequenceOperation
                 {
-                    Name = "DefaultSequence",
+                    Name = "EntityFrameworkHiLoSequence",
                     Schema = "dbo",
                     StartValue = 3,
                     IncrementBy = 1,
@@ -269,7 +297,7 @@ namespace Microsoft.Data.Entity.Migrations
             Generate(
                 new CreateSequenceOperation
                 {
-                    Name = "DefaultSequence",
+                    Name = "EntityFrameworkHiLoSequence",
                     Schema = "dbo",
                     StartValue = 3,
                     IncrementBy = 1,
@@ -286,7 +314,7 @@ namespace Microsoft.Data.Entity.Migrations
             Generate(
                 new CreateSequenceOperation
                 {
-                    Name = "DefaultSequence",
+                    Name = "EntityFrameworkHiLoSequence",
                     ClrType = typeof(long),
                     StartValue = 3,
                     IncrementBy = 1
@@ -400,7 +428,7 @@ namespace Microsoft.Data.Entity.Migrations
             Generate(
                 new DropSequenceOperation
                 {
-                    Name = "DefaultSequence",
+                    Name = "EntityFrameworkHiLoSequence",
                     Schema = "dbo"
                 });
         }
@@ -439,8 +467,16 @@ namespace Microsoft.Data.Entity.Migrations
         }
 
         protected virtual void Generate(params MigrationOperation[] operation)
+            => Generate(_ => { }, operation);
+
+        protected virtual ModelBuilder CreateModelBuilder() => TestHelpers.Instance.CreateConventionBuilder();
+
+        protected virtual void Generate(Action<ModelBuilder> buildAction, params MigrationOperation[] operation)
         {
-            var batch = SqlGenerator.Generate(operation);
+            var modelBuilder = CreateModelBuilder();
+            buildAction(modelBuilder);
+
+            var batch = SqlGenerator.Generate(operation, modelBuilder.Model);
 
             Sql = string.Join(
                 "GO" + EOL + EOL,

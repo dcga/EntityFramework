@@ -27,7 +27,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 context.Add(new Gumball { Id = 1 });
 
                 Assert.Equal(
-                    Strings.PropertyReadOnlyBeforeSave("Id", "Gumball"),
+                    CoreStrings.PropertyReadOnlyBeforeSave("Id", "Gumball"),
                     Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
             }
         }
@@ -40,7 +40,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             using (var context = CreateContext())
             {
                 var entry = context.Add(new Gumball { Identity = "Masami" });
-                entry.GetService().MarkAsTemporary(entry.Property(e => e.Identity).Metadata);
+                entry.GetInfrastructure().MarkAsTemporary(entry.Property(e => e.Identity).Metadata);
 
                 context.SaveChanges();
                 id = entry.Entity.Id;
@@ -55,7 +55,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
 
         [Fact]
-        public virtual void Identity_property_on_Added_entity_with_sentinel_value_gets_value_from_store()
+        public virtual void Identity_property_on_Added_entity_with_default_value_gets_value_from_store()
         {
             int id;
 
@@ -83,7 +83,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 context.Add(new Gumball { IdentityReadOnlyBeforeSave = "Masami" });
 
                 Assert.Equal(
-                    Strings.PropertyReadOnlyBeforeSave("IdentityReadOnlyBeforeSave", "Gumball"),
+                    CoreStrings.PropertyReadOnlyBeforeSave("IdentityReadOnlyBeforeSave", "Gumball"),
                     Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
             }
         }
@@ -132,7 +132,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 gumball.NotStoreGenerated = "Larry Needlemeye";
 
                 Assert.Equal(
-                    Strings.PropertyReadOnlyAfterSave("IdentityReadOnlyAfterSave", "Gumball"),
+                    CoreStrings.PropertyReadOnlyAfterSave("IdentityReadOnlyAfterSave", "Gumball"),
                     Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
             }
         }
@@ -214,7 +214,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             using (var context = CreateContext())
             {
                 var entry = context.Add(new Gumball { AlwaysIdentity = "Masami" });
-                entry.GetService().MarkAsTemporary(entry.Property(e => e.AlwaysIdentity).Metadata);
+                entry.GetInfrastructure().MarkAsTemporary(entry.Property(e => e.AlwaysIdentity).Metadata);
 
                 context.SaveChanges();
                 id = entry.Entity.Id;
@@ -229,7 +229,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
 
         [Fact]
-        public virtual void Always_identity_property_on_Added_entity_with_sentinel_value_gets_value_from_store()
+        public virtual void Always_identity_property_on_Added_entity_with_default_value_gets_value_from_store()
         {
             int id;
 
@@ -257,7 +257,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 context.Add(new Gumball { AlwaysIdentityReadOnlyBeforeSave = "Masami" });
 
                 Assert.Equal(
-                    Strings.PropertyReadOnlyBeforeSave("AlwaysIdentityReadOnlyBeforeSave", "Gumball"),
+                    CoreStrings.PropertyReadOnlyBeforeSave("AlwaysIdentityReadOnlyBeforeSave", "Gumball"),
                     Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
             }
         }
@@ -306,7 +306,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 gumball.NotStoreGenerated = "Larry Needlemeye";
 
                 Assert.Equal(
-                    Strings.PropertyReadOnlyAfterSave("AlwaysIdentityReadOnlyAfterSave", "Gumball"),
+                    CoreStrings.PropertyReadOnlyAfterSave("AlwaysIdentityReadOnlyAfterSave", "Gumball"),
                     Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
             }
         }
@@ -388,7 +388,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             using (var context = CreateContext())
             {
                 var entry = context.Add(new Gumball { Computed = "Masami" });
-                entry.GetService().MarkAsTemporary(entry.Property(e => e.Computed).Metadata);
+                entry.GetInfrastructure().MarkAsTemporary(entry.Property(e => e.Computed).Metadata);
 
                 context.SaveChanges();
                 id = entry.Entity.Id;
@@ -403,7 +403,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
 
         [Fact]
-        public virtual void Computed_property_on_Added_entity_with_sentinel_value_gets_value_from_store()
+        public virtual void Computed_property_on_Added_entity_with_default_value_gets_value_from_store()
         {
             int id;
 
@@ -431,7 +431,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 context.Add(new Gumball { ComputedReadOnlyBeforeSave = "Masami" });
 
                 Assert.Equal(
-                    Strings.PropertyReadOnlyBeforeSave("ComputedReadOnlyBeforeSave", "Gumball"),
+                    CoreStrings.PropertyReadOnlyBeforeSave("ComputedReadOnlyBeforeSave", "Gumball"),
                     Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
             }
         }
@@ -480,7 +480,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 gumball.NotStoreGenerated = "Larry Needlemeye";
 
                 Assert.Equal(
-                    Strings.PropertyReadOnlyAfterSave("ComputedReadOnlyAfterSave", "Gumball"),
+                    CoreStrings.PropertyReadOnlyAfterSave("ComputedReadOnlyAfterSave", "Gumball"),
                     Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
             }
         }
@@ -562,7 +562,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
             using (var context = CreateContext())
             {
                 var entry = context.Add(new Gumball { AlwaysComputed = "Masami" });
-                entry.GetService().MarkAsTemporary(entry.Property(e => e.AlwaysComputed).Metadata);
+                entry.GetInfrastructure().MarkAsTemporary(entry.Property(e => e.AlwaysComputed).Metadata);
 
                 context.SaveChanges();
                 id = entry.Entity.Id;
@@ -577,7 +577,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
 
         [Fact]
-        public virtual void Always_computed_property_on_Added_entity_with_sentinel_value_gets_value_from_store()
+        public virtual void Always_computed_property_on_Added_entity_with_default_value_gets_value_from_store()
         {
             int id;
 
@@ -605,7 +605,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 context.Add(new Gumball { AlwaysComputedReadOnlyBeforeSave = "Masami" });
 
                 Assert.Equal(
-                    Strings.PropertyReadOnlyBeforeSave("AlwaysComputedReadOnlyBeforeSave", "Gumball"),
+                    CoreStrings.PropertyReadOnlyBeforeSave("AlwaysComputedReadOnlyBeforeSave", "Gumball"),
                     Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
             }
         }
@@ -654,7 +654,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 gumball.NotStoreGenerated = "Larry Needlemeye";
 
                 Assert.Equal(
-                    Strings.PropertyReadOnlyAfterSave("AlwaysComputedReadOnlyAfterSave", "Gumball"),
+                    CoreStrings.PropertyReadOnlyAfterSave("AlwaysComputedReadOnlyAfterSave", "Gumball"),
                     Assert.Throws<InvalidOperationException>(() => context.SaveChanges()).Message);
             }
         }
@@ -801,17 +801,17 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         property.IsReadOnlyBeforeSave = false;
 
                         property = b.Property(e => e.AlwaysIdentity).ValueGeneratedOnAdd().Metadata;
-                        property.StoreGeneratedAlways = true;
+                        property.IsStoreGeneratedAlways = true;
                         property.IsReadOnlyAfterSave = false;
                         property.IsReadOnlyBeforeSave = false;
 
                         property = b.Property(e => e.AlwaysIdentityReadOnlyBeforeSave).ValueGeneratedOnAdd().Metadata;
-                        property.StoreGeneratedAlways = true;
+                        property.IsStoreGeneratedAlways = true;
                         property.IsReadOnlyAfterSave = false;
                         property.IsReadOnlyBeforeSave = true;
 
                         property = b.Property(e => e.AlwaysIdentityReadOnlyAfterSave).ValueGeneratedOnAdd().Metadata;
-                        property.StoreGeneratedAlways = true;
+                        property.IsStoreGeneratedAlways = true;
                         property.IsReadOnlyAfterSave = true;
                         property.IsReadOnlyBeforeSave = false;
 
@@ -828,17 +828,17 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         property.IsReadOnlyBeforeSave = false;
 
                         property = b.Property(e => e.AlwaysComputed).ValueGeneratedOnAddOrUpdate().Metadata;
-                        property.StoreGeneratedAlways = true;
+                        property.IsStoreGeneratedAlways = true;
                         property.IsReadOnlyAfterSave = false;
                         property.IsReadOnlyBeforeSave = false;
 
                         property = b.Property(e => e.AlwaysComputedReadOnlyBeforeSave).ValueGeneratedOnAddOrUpdate().Metadata;
-                        property.StoreGeneratedAlways = true;
+                        property.IsStoreGeneratedAlways = true;
                         property.IsReadOnlyAfterSave = false;
                         property.IsReadOnlyBeforeSave = true;
 
                         property = b.Property(e => e.AlwaysComputedReadOnlyAfterSave).ValueGeneratedOnAddOrUpdate().Metadata;
-                        property.StoreGeneratedAlways = true;
+                        property.IsStoreGeneratedAlways = true;
                         property.IsReadOnlyAfterSave = true;
                         property.IsReadOnlyBeforeSave = false;
                     });

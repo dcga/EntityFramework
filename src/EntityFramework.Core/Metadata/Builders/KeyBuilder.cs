@@ -17,7 +17,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
     ///         and it is not designed to be directly constructed in your application code.
     ///     </para>
     /// </summary>
-    public class KeyBuilder : IAccessor<Model>, IAccessor<InternalKeyBuilder>
+    public class KeyBuilder : IInfrastructure<IMutableModel>, IInfrastructure<InternalKeyBuilder>
     {
         private readonly InternalKeyBuilder _builder;
 
@@ -41,17 +41,17 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// <summary>
         ///     The internal builder being used to configure the key.
         /// </summary>
-        InternalKeyBuilder IAccessor<InternalKeyBuilder>.Service => _builder;
+        InternalKeyBuilder IInfrastructure<InternalKeyBuilder>.Instance => _builder;
 
         /// <summary>
         ///     The key being configured.
         /// </summary>
-        public virtual Key Metadata => Builder.Metadata;
+        public virtual IMutableKey Metadata => Builder.Metadata;
 
         /// <summary>
         ///     The model that the key belongs to.
         /// </summary>
-        Model IAccessor<Model>.Service => Builder.ModelBuilder.Metadata;
+        IMutableModel IInfrastructure<IMutableModel>.Instance => Builder.ModelBuilder.Metadata;
 
         /// <summary>
         ///     Adds or updates an annotation on the key. If an annotation with the key specified in
@@ -61,16 +61,16 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// <param name="annotation"> The key of the annotation to be added or updated. </param>
         /// <param name="value"> The value to be stored in the annotation. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual KeyBuilder Annotation([NotNull] string annotation, [NotNull] object value)
+        public virtual KeyBuilder HasAnnotation([NotNull] string annotation, [NotNull] object value)
         {
             Check.NotEmpty(annotation, nameof(annotation));
             Check.NotNull(value, nameof(value));
 
-            Builder.Annotation(annotation, value, ConfigurationSource.Explicit);
+            Builder.HasAnnotation(annotation, value, ConfigurationSource.Explicit);
 
             return this;
         }
 
-        private InternalKeyBuilder Builder => this.GetService<InternalKeyBuilder>();
+        private InternalKeyBuilder Builder => this.GetInfrastructure<InternalKeyBuilder>();
     }
 }

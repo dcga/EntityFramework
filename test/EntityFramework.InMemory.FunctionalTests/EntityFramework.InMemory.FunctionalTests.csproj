@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Microsoft.Data.Entity.InMemory.FunctionalTests</RootNamespace>
     <AssemblyName>EntityFramework.InMemory.FunctionalTests</AssemblyName>
-    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -18,7 +18,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -26,11 +26,14 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <DefineConstants>TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="AsTrackingInMemoryTest.cs" />
+    <Compile Include="ComplexNavigationsQueryInMemoryFixture.cs" />
+    <Compile Include="ComplexNavigationsQueryInMemoryTest.cs" />
     <Compile Include="DataAnnotationInMemoryFixture.cs" />
     <Compile Include="DataAnnotationInMemoryTest.cs" />
     <Compile Include="EndToEndTest.cs" />
@@ -38,15 +41,13 @@
     <Compile Include="ChangeTrackingInMemoryTest.cs" />
     <Compile Include="GearsOfWarQueryInMemoryTest.cs" />
     <Compile Include="InMemoryFixture.cs" />
-    <Compile Include="GraphUpdatesInMemoryTest.cs" />
     <Compile Include="InheritanceInMemoryFixture.cs" />
     <Compile Include="InMemoryTestHelpers.cs" />
     <Compile Include="GearsOfWarQueryInMemoryFixture.cs" />
     <Compile Include="NullKeysInMemoryTest.cs" />
-    <Compile Include="GraphUpdatesInMemoryTestBase.cs" />
+    <Compile Include="GraphUpdatesInMemoryTest.cs" />
     <Compile Include="InheritanceInMemoryTest.cs" />
     <Compile Include="QueryNavigationsInMemoryTest.cs" />
-    <Compile Include="SentinelGraphUpdatesInMemoryTest.cs" />
     <Compile Include="InMemoryTestStore.cs" />
     <Compile Include="BuiltInDataTypesInMemoryFixture.cs" />
     <Compile Include="BuiltInDataTypesInMemoryTest.cs" />

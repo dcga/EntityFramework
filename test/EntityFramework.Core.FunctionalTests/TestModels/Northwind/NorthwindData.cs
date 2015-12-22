@@ -1,4 +1,4 @@
-// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
@@ -12,6 +12,7 @@ using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Query;
 using Microsoft.Data.Entity.Query.ExpressionVisitors;
+using Microsoft.Data.Entity.Query.Internal;
 
 namespace Microsoft.Data.Entity.FunctionalTests.TestModels.Northwind
 {
@@ -51,11 +52,11 @@ namespace Microsoft.Data.Entity.FunctionalTests.TestModels.Northwind
         {
             context.Set<Customer>().AddRange(CreateCustomers());
 
-            var titleProperty = context.Model.GetEntityType(typeof(Employee)).GetProperty("Title");
+            var titleProperty = context.Model.FindEntityType(typeof(Employee)).FindProperty("Title");
             foreach (var employee in CreateEmployees())
             {
                 context.Set<Employee>().Add(employee);
-                context.Entry(employee).GetService()[titleProperty] = employee.Title;
+                context.Entry(employee).GetInfrastructure()[titleProperty] = employee.Title;
             }
 
             context.Set<Order>().AddRange(CreateOrders());

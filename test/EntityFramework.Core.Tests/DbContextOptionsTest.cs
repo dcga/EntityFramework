@@ -3,7 +3,8 @@
 
 using System.Linq;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Internal;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Tests
@@ -18,6 +19,17 @@ namespace Microsoft.Data.Entity.Tests
             var optionsBuilder = new DbContextOptionsBuilder().UseModel(model);
 
             Assert.Same(model, optionsBuilder.Options.FindExtension<CoreOptionsExtension>().Model);
+        }
+
+        [Fact]
+        public void Sensitive_data_logging_can_be_set_explicitly_in_options()
+        {
+            var model = new Model();
+
+            var optionsBuilder = new DbContextOptionsBuilder().UseModel(model).EnableSensitiveDataLogging();
+
+            Assert.Same(model, optionsBuilder.Options.FindExtension<CoreOptionsExtension>().Model);
+            Assert.True(optionsBuilder.Options.FindExtension<CoreOptionsExtension>().IsSensitiveDataLoggingEnabled);
         }
 
         [Fact]

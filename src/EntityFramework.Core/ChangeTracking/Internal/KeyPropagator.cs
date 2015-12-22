@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.ValueGeneration;
@@ -12,17 +13,11 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
 {
     public class KeyPropagator : IKeyPropagator
     {
-        private readonly IClrAccessorSource<IClrPropertyGetter> _getterSource;
-        private readonly IClrCollectionAccessorSource _collectionAccessorSource;
         private readonly IValueGeneratorSelector _valueGeneratorSelector;
 
         public KeyPropagator(
-            [NotNull] IClrAccessorSource<IClrPropertyGetter> getterSource,
-            [NotNull] IClrCollectionAccessorSource collectionAccessorSource,
             [NotNull] IValueGeneratorSelector valueGeneratorSelector)
         {
-            _getterSource = getterSource;
-            _collectionAccessorSource = collectionAccessorSource;
             _valueGeneratorSelector = valueGeneratorSelector;
         }
 
@@ -37,7 +32,7 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
 
                 if (valueGenerator != null)
                 {
-                    entry[property] = valueGenerator.NextSkippingSentinel(property);
+                    entry[property] = valueGenerator.Next();
                 }
             }
         }
@@ -68,7 +63,7 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
                                 var principalProperty = foreignKey.PrincipalKey.Properties[propertyIndex];
 
                                 var principalValue = principalEntry[principalProperty];
-                                if (!principalProperty.IsSentinelValue(principalValue))
+                                if (!principalProperty.ClrType.IsDefaultValue(principalValue))
                                 {
                                     valueToPropagte = principalValue;
                                     break;
@@ -100,11 +95,11 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
             return null;
         }
 
-        private object TryFindPrincipal(IStateManager stateManager, INavigation navigation, object dependentEntity)
+        private static object TryFindPrincipal(IStateManager stateManager, INavigation navigation, object dependentEntity)
         {
-            if (navigation.PointsToPrincipal())
+            if (navigation.IsDependentToPrincipal())
             {
-                return _getterSource.GetAccessor(navigation).GetClrValue(dependentEntity);
+                return navigation.GetGetter().GetClrValue(dependentEntity);
             }
 
             // TODO: Perf
@@ -113,12 +108,12 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
             {
                 if (navigation.IsCollection())
                 {
-                    if (_collectionAccessorSource.GetAccessor(navigation).Contains(principalEntry.Entity, dependentEntity))
+                    if (navigation.GetCollectionAccessor().Contains(principalEntry.Entity, dependentEntity))
                     {
                         return principalEntry.Entity;
                     }
                 }
-                else if (_getterSource.GetAccessor(navigation).GetClrValue(principalEntry.Entity) == dependentEntity)
+                else if (navigation.GetGetter().GetClrValue(principalEntry.Entity) == dependentEntity)
                 {
                     return principalEntry.Entity;
                 }

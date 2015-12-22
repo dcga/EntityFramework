@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Microsoft.Data.Entity.FunctionalTests</RootNamespace>
     <AssemblyName>EntityFramework.Core.FunctionalTests</AssemblyName>
-    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -18,7 +18,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -26,7 +26,7 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <DefineConstants>TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -36,6 +36,7 @@
     <Reference Include="System.ComponentModel.DataAnnotations" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AsTrackingTestBase.cs" />
     <Compile Include="AsNoTrackingTestBase.cs" />
     <Compile Include="ChangeTrackingTestBase.cs" />
     <Compile Include="ComplexNavigationsQueryFixtureBase.cs" />
@@ -53,6 +54,8 @@
     <Compile Include="IncludeOneToOneTestBase.cs" />
     <Compile Include="IncludeTestBase.cs" />
     <Compile Include="InheritanceFixtureBase.cs" />
+    <Compile Include="InheritanceRelationshipsQueryFixtureBase.cs" />
+    <Compile Include="InheritanceRelationshipsQueryTestBase.cs" />
     <Compile Include="InheritanceTestBase.cs" />
     <Compile Include="ModelSourceTest.cs" />
     <Compile Include="MonsterFixupTestBase.cs" />
@@ -78,6 +81,27 @@
     <Compile Include="TestModels\ComplexNavigationsModel\Level3.cs" />
     <Compile Include="TestModels\ComplexNavigationsModel\Level4.cs" />
     <Compile Include="TestModels\GearsOfWarModel\AmmunitionType.cs" />
+    <Compile Include="TestModels\GearsOfWarModel\Officer.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\BaseCollectionOnBase.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\BaseCollectionOnDerived.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\BaseInheritanceRelationshipEntity.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\BaseReferenceOnBase.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\BaseReferenceOnDerived.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\CollectionOnBase.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\CollectionOnDerived.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\DerivedCollectionOnBase.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\DerivedCollectionOnDerived.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\DerivedInheritanceRelationshipEntity.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\DerivedReferenceOnBase.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\DerivedReferenceOnDerived.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\InheritanceRelationshipsContext.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\InheritanceRelationshipsModelInitializer.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\NestedCollectionBase.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\NestedCollectionDerived.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\NestedReferenceBase.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\NestedReferenceDerived.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\ReferenceOnBase.cs" />
+    <Compile Include="TestModels\InheritanceRelationships\ReferenceOnDerived.cs" />
     <Compile Include="TestModels\Inheritance\Animal.cs" />
     <Compile Include="TestModels\Inheritance\Bird.cs" />
     <Compile Include="TestModels\Inheritance\Country.cs" />
@@ -132,13 +156,25 @@
     <Compile Include="TestModels\MonsterModel.cs" />
     <Compile Include="TestModels\SnapshotMonsterContext.cs" />
     <Compile Include="TestUtilities\AnnotationComparer.cs" />
-    <Compile Include="TestUtilities\AsyncLock.cs" />
     <Compile Include="TestUtilities\ForeignKeyComparer.cs" />
     <Compile Include="TestUtilities\IndexComparer.cs" />
     <Compile Include="TestUtilities\KeyComparer.cs" />
     <Compile Include="TestUtilities\NavigationComparer.cs" />
     <Compile Include="TestUtilities\PropertyComparer.cs" />
     <Compile Include="TestUtilities\Extensions.cs" />
+    <Compile Include="TestUtilities\TestPlatformHelper.cs" />
+    <Compile Include="TestUtilities\Xunit\ConditionalTestFramework.cs" />
+    <Compile Include="TestUtilities\Xunit\ConditionalFactDiscoverer.cs" />
+    <Compile Include="TestUtilities\Xunit\ConditionalTestFrameworkExecutor.cs" />
+    <Compile Include="TestUtilities\Xunit\ConditionalTheoryDiscoverer.cs" />
+    <Compile Include="TestUtilities\Xunit\ConditionalFactAttribute.cs" />
+    <Compile Include="TestUtilities\Xunit\ConditionalTheoryAttribute.cs" />
+    <Compile Include="TestUtilities\Xunit\FrameworkSkipConditionAttribute.cs" />
+    <Compile Include="TestUtilities\Xunit\ITestCondition.cs" />
+    <Compile Include="TestUtilities\Xunit\MonoVersionConditionAttribute.cs" />
+    <Compile Include="TestUtilities\Xunit\RuntimeFrameworks.cs" />
+    <Compile Include="TestUtilities\Xunit\SkipReasonTestCase.cs" />
+    <Compile Include="TestUtilities\Xunit\SkipXunitTheoryTestCase.cs" />
     <Compile Include="ThrowingMonsterStateManager.cs" />
     <None Include="project.json" />
   </ItemGroup>
@@ -151,6 +187,9 @@
       <Project>{71415CEC-8111-4C73-8751-512D22F10602}</Project>
       <Name>EntityFramework.Core</Name>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="TestUtilities\Xunit\UseCultureAttribute.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.

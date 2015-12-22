@@ -1,12 +1,13 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using Microsoft.Data.Entity.ChangeTracking;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Sqlite.FunctionalTests.TestModels;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
 {
@@ -22,25 +23,27 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
                 .AddEntityFramework()
                 .AddSqlite()
                 .ServiceCollection()
-                .AddInstance<ILoggerFactory>(new TestSqlLoggerFactory())
+                .AddSingleton<ILoggerFactory>(new TestSqlLoggerFactory())
                 .BuildServiceProvider();
 
             _testDatabase = SqliteNorthwindContext.GetSharedStore();
 
             var optionsBuilder = new DbContextOptionsBuilder().UseModel(CreateModel());
-            optionsBuilder.UseSqlite(_testDatabase.Connection.ConnectionString);
+            optionsBuilder.UseSqlite(_testDatabase.Connection.ConnectionString)
+                .SuppressForeignKeyEnforcement();
             _options = optionsBuilder.Options;
         }
 
         public DbContext CreateContext()
         {
-            return new DbContext(_serviceProvider, _options);
+            var context = new DbContext(_serviceProvider, _options);
+
+            context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+            return context;
         }
 
-        public void Dispose()
-        {
-            _testDatabase.Dispose();
-        }
+        public void Dispose() => _testDatabase.Dispose();
 
         protected override string DatabaseSchema { get; } = null;
 

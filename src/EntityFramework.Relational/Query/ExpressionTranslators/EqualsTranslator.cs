@@ -4,9 +4,9 @@
 using System;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.Relational.Internal;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Utilities;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Data.Entity.Query.ExpressionTranslators
 {
@@ -14,38 +14,40 @@ namespace Microsoft.Data.Entity.Query.ExpressionTranslators
     {
         private readonly ILogger _logger;
 
-        public EqualsTranslator([NotNull] ILoggerFactory loggerFactory)
+        public EqualsTranslator([NotNull] ILogger logger)
         {
-            Check.NotNull(loggerFactory, nameof(loggerFactory));
+            Check.NotNull(logger, nameof(logger));
 
-            _logger = loggerFactory.CreateLogger(nameof(EqualsTranslator));
-            ;
+            _logger = logger;
         }
 
         public virtual Expression Translate(MethodCallExpression methodCallExpression)
         {
             Check.NotNull(methodCallExpression, nameof(methodCallExpression));
 
-            if (methodCallExpression.Method.Name == nameof(object.Equals)
-                && methodCallExpression.Arguments.Count == 1)
+            if ((methodCallExpression.Method.Name == nameof(object.Equals))
+                && (methodCallExpression.Arguments.Count == 1)
+                && (methodCallExpression.Object != null))
             {
                 var argument = methodCallExpression.Arguments[0];
-                var @object = methodCallExpression.Object;
-                if (methodCallExpression.Method.GetParameters()[0].ParameterType == typeof(object)
-                    && @object.Type != argument.Type)
+
+                if ((methodCallExpression.Method.GetParameters()[0].ParameterType == typeof(object))
+                    && (methodCallExpression.Object.Type != argument.Type))
                 {
                     argument = argument.RemoveConvert();
-                    var unwrappedObjectType = @object.Type.UnwrapNullableType();
+
+                    var unwrappedObjectType = methodCallExpression.Object.Type.UnwrapNullableType();
                     var unwrappedArgumentType = argument.Type.UnwrapNullableType();
+
                     if (unwrappedObjectType == unwrappedArgumentType)
                     {
                         return Expression.Equal(
-                            Expression.Convert(@object, unwrappedObjectType),
+                            Expression.Convert(methodCallExpression.Object, unwrappedObjectType),
                             Expression.Convert(argument, unwrappedArgumentType));
                     }
 
                     _logger.LogInformation(
-                        Strings.PossibleUnintendedUseOfEquals(
+                        RelationalStrings.PossibleUnintendedUseOfEquals(
                             methodCallExpression.Object.ToString(),
                             argument.ToString()));
 

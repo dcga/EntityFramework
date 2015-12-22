@@ -2,12 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Threading.Tasks;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.FunctionalTests.TestModels;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.Data.Entity.InMemory.FunctionalTests
 {
@@ -33,7 +32,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
             return optionsBuilder.Options;
         }
 
-        protected override Task CreateAndSeedDatabase(string databaseName, Func<MonsterContext> createContext)
+        protected override void CreateAndSeedDatabase(string databaseName, Func<MonsterContext> createContext)
         {
             using (var context = createContext())
             {
@@ -41,8 +40,15 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
                 context.Database.EnsureCreated();
                 context.SeedUsingFKs();
             }
+        }
 
-            return Task.FromResult(0);
+        public override void OnModelCreating<TMessage, TProductPhoto, TProductReview>(ModelBuilder builder)
+        {
+            base.OnModelCreating<TMessage, TProductPhoto, TProductReview>(builder);
+
+            builder.Entity<TMessage>().Property(e => e.MessageId).ValueGeneratedOnAdd();
+            builder.Entity<TProductPhoto>().Property(e => e.PhotoId).ValueGeneratedOnAdd();
+            builder.Entity<TProductReview>().Property(e => e.ReviewId).ValueGeneratedOnAdd();
         }
     }
 }

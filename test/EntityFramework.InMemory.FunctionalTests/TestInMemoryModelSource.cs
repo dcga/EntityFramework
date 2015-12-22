@@ -3,10 +3,11 @@
 
 using System;
 using Microsoft.Data.Entity.FunctionalTests;
+using Microsoft.Data.Entity.Infrastructure.Internal;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Conventions.Internal;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.Data.Entity.InMemory.FunctionalTests
 {
@@ -23,10 +24,10 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
             _testModelSource = new TestModelSource(onModelCreating, setFinder, coreConventionSetBuilder);
         }
 
-        public override IModel GetModel(DbContext context, IConventionSetBuilder conventionSetBuilder, IModelValidator validator) 
+        public override IModel GetModel(DbContext context, IConventionSetBuilder conventionSetBuilder, IModelValidator validator)
             => _testModelSource.GetModel(context, conventionSetBuilder, validator);
 
-        public static Func<IServiceProvider, InMemoryModelSource> GetFactory(Action<ModelBuilder> onModelCreating) 
+        public static Func<IServiceProvider, InMemoryModelSource> GetFactory(Action<ModelBuilder> onModelCreating)
             => p => new TestInMemoryModelSource(
                 onModelCreating,
                 p.GetRequiredService<IDbSetFinder>(),

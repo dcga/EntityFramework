@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.FunctionalTests.TestUtilities.Xunit;
 using Xunit;
 
 // ReSharper disable StringEndsWithIsCultureSpecific
@@ -15,6 +16,7 @@ using Xunit;
 
 namespace Microsoft.Data.Entity
 {
+    [MonoVersionCondition(Min = "4.2.0", SkipReason = "Mono < 4.2.0 does not implement reflection APIs used in this test")]
     public abstract class ApiConsistencyTestBase
     {
         protected const BindingFlags PublicInstance
@@ -23,22 +25,23 @@ namespace Microsoft.Data.Entity
         protected const BindingFlags AnyInstance
             = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-        [Fact]
+        [ConditionalFact]
         public void Public_inheritable_apis_should_be_virtual()
         {
             var nonVirtualMethods
                 = (from type in GetAllTypes(TargetAssembly.GetTypes())
-                   where type.IsVisible
-                         && !type.IsSealed
+                   where type.GetTypeInfo().IsVisible
+                         && !type.GetTypeInfo().IsSealed
                          && type.GetConstructors(AnyInstance).Any(c => c.IsPublic || c.IsFamily || c.IsFamilyOrAssembly)
-                         && type.Namespace != null
+                         && (type.Namespace != null)
                          && !type.Namespace.EndsWith(".Compiled")
                    from method in type.GetMethods(AnyInstance)
-                   where method.DeclaringType == type
+                   where (method.DeclaringType == type)
                          && !(method.IsVirtual && !method.IsFinal)
                          && !method.Name.StartsWith("add_")
                          && !method.Name.StartsWith("remove_")
                          && (method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly)
+                         && (method.Name != "GenerateCacheKeyCore")
                    select type.FullName + "." + method.Name)
                     .ToList();
 
@@ -47,30 +50,33 @@ namespace Microsoft.Data.Entity
                 "\r\n-- Missing virtual APIs --\r\n" + string.Join(Environment.NewLine, nonVirtualMethods));
         }
 
-        [Fact]
+        [ConditionalFact]
         public void Public_api_arguments_should_have_not_null_annotation()
         {
             var parametersMissingAttribute
                 = (from type in GetAllTypes(TargetAssembly.GetTypes())
-                   where type.IsVisible && !typeof(Delegate).GetTypeInfo().IsAssignableFrom(type)
-                   let interfaceMappings = type.GetInterfaces().Select(type.GetInterfaceMap)
+                   where type.GetTypeInfo().IsVisible && !typeof(Delegate).GetTypeInfo().IsAssignableFrom(type.GetTypeInfo())
+                   let interfaceMappings = type.GetInterfaces().Select(i => type.GetTypeInfo().GetRuntimeInterfaceMap(i))
                    let events = type.GetEvents()
                    from method in type.GetMethods(AnyInstance | BindingFlags.Static)
                        .Concat<MethodBase>(type.GetConstructors())
-                   where method.DeclaringType == type
-                          && (method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly)
-                          && (method is ConstructorInfo
-                            || ((MethodInfo)method).GetBaseDefinition().DeclaringType == method.DeclaringType)
-                          && method.Name != nameof(DbContext.OnConfiguring)
-                          && method.Name != nameof(DbContext.OnModelCreating)
-                   where type.IsInterface || !interfaceMappings.Any(im => im.TargetMethods.Contains(method))
-                   where !events.Any(e => e.AddMethod == method || e.RemoveMethod == method)
+                   where (method.DeclaringType == type)
+                         && (method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly)
+                         && (method is ConstructorInfo
+                             || (((MethodInfo)method).GetBaseDefinition().DeclaringType == method.DeclaringType))
+                         && (method.Name != nameof(DbContext.OnConfiguring))
+                         && (method.Name != nameof(DbContext.OnModelCreating))
+                   where type.GetTypeInfo().IsInterface || !interfaceMappings.Any(im => im.TargetMethods.Contains(method))
+                   where !events.Any(e => (e.AddMethod == method) || (e.RemoveMethod == method))
                    from parameter in method.GetParameters()
-                   where !parameter.ParameterType.IsValueType
+                   let parameterType = parameter.ParameterType.IsByRef
+                       ? parameter.ParameterType.GetElementType()
+                       : parameter.ParameterType
+                   where !parameterType.GetTypeInfo().IsValueType
                          && !parameter.GetCustomAttributes()
                              .Any(
-                                 a => a.GetType().Name == nameof(NotNullAttribute)
-                                      || a.GetType().Name == nameof(CanBeNullAttribute))
+                                 a => (a.GetType().Name == nameof(NotNullAttribute))
+                                      || (a.GetType().Name == nameof(CanBeNullAttribute)))
                    select type.FullName + "." + method.Name + "[" + parameter.Name + "]")
                     .ToList();
 
@@ -79,16 +85,16 @@ namespace Microsoft.Data.Entity
                 "\r\n-- Missing NotNull annotations --\r\n" + string.Join(Environment.NewLine, parametersMissingAttribute));
         }
 
-        [Fact]
+        [ConditionalFact]
         public void Async_methods_should_have_overload_with_cancellation_token_and_end_with_async_suffix()
         {
             var asyncMethods
                 = (from type in GetAllTypes(TargetAssembly.GetTypes())
-                   where type.IsVisible
+                   where type.GetTypeInfo().IsVisible
                    from method in type.GetMethods(AnyInstance | BindingFlags.Static)
-                   where method.DeclaringType == type
+                   where (method.DeclaringType == type)
                          && (method.IsPublic || method.IsFamily || method.IsFamilyOrAssembly)
-                   where typeof(Task).GetTypeInfo().IsAssignableFrom(method.ReturnType)
+                   where typeof(Task).GetTypeInfo().IsAssignableFrom(method.ReturnType.GetTypeInfo())
                    select method).ToList();
 
             var asyncMethodsWithToken
@@ -104,8 +110,8 @@ namespace Microsoft.Data.Entity
             var missingOverloads
                 = (from methodWithoutToken in asyncMethodsWithoutToken
                    where !asyncMethodsWithToken
-                       .Any(methodWithToken => methodWithoutToken.Name == methodWithToken.Name
-                                               && methodWithoutToken.ReflectedType == methodWithToken.ReflectedType)
+                       .Any(methodWithToken => (methodWithoutToken.Name == methodWithToken.Name)
+                                               && (methodWithoutToken.DeclaringType == methodWithToken.DeclaringType))
                    // ReSharper disable once PossibleNullReferenceException
                    select methodWithoutToken.DeclaringType.Name + "." + methodWithoutToken.Name)
                     .Except(GetCancellationTokenExceptions())
@@ -117,7 +123,7 @@ namespace Microsoft.Data.Entity
 
             var missingSuffixMethods
                 = asyncMethods
-                    .Where(method => !method.Name.EndsWith("Async") && method.DeclaringType != null)
+                    .Where(method => !method.Name.EndsWith("Async") && (method.DeclaringType != null))
                     .Select(method => method.DeclaringType.Name + "." + method.Name)
                     .Except(GetAsyncSuffixExceptions())
                     .ToList();
@@ -127,7 +133,7 @@ namespace Microsoft.Data.Entity
                 "\r\n-- Missing async suffix --\r\n" + string.Join(Environment.NewLine, missingSuffixMethods));
         }
 
-        [Fact]
+        [ConditionalFact]
         public void Public_api_bool_parameters_should_not_be_prefixed()
         {
             var prefixes = new[]
@@ -138,20 +144,19 @@ namespace Microsoft.Data.Entity
             };
 
             var parameters = (
-                    from type in GetAllTypes(TargetAssembly.GetExportedTypes())
-                    where !type.Namespace.Contains("Internal")
-                    from method in type.GetTypeInfo().DeclaredMethods
-                    where !method.IsPrivate
-                    from parameter in method.GetParameters()
-                    where parameter.ParameterType.UnwrapNullableType() == typeof(bool)
-                        && prefixes.Any(parameter.Name.StartsWith)
-                    select $"{type.FullName}.{method.Name}[{parameter.Name}]")
+                from type in GetAllTypes(TargetAssembly.GetExportedTypes())
+                where !type.Namespace.Contains("Internal")
+                from method in type.GetTypeInfo().DeclaredMethods
+                where !method.IsPrivate
+                from parameter in method.GetParameters()
+                where (parameter.ParameterType.UnwrapNullableType() == typeof(bool))
+                      && prefixes.Any(parameter.Name.StartsWith)
+                select $"{type.FullName}.{method.Name}[{parameter.Name}]")
                 .ToList();
 
             Assert.False(
                 parameters.Any(),
                 "\r\n-- Prefixed bool parameteres --\r\n" + string.Join(Environment.NewLine, parameters));
-
         }
 
         protected virtual IEnumerable<string> GetCancellationTokenExceptions() => Enumerable.Empty<string>();
@@ -166,7 +171,7 @@ namespace Microsoft.Data.Entity
             {
                 yield return type;
 
-                foreach (var nestedType in GetAllTypes(type.GetNestedTypes()))
+                foreach (var nestedType in GetAllTypes(type.GetTypeInfo().DeclaredNestedTypes.Select(i=>i.AsType())))
                 {
                     yield return nestedType;
                 }

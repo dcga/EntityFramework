@@ -2,32 +2,33 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Utilities;
-using Strings = Microsoft.Data.Entity.Relational.Internal.Strings;
 
 namespace Microsoft.Data.Entity.Storage
 {
     public abstract class RelationalTypeMapper : IRelationalTypeMapper
     {
-        private readonly ThreadSafeDictionaryCache<int, RelationalTypeMapping> _boundedStringMappings
-            = new ThreadSafeDictionaryCache<int, RelationalTypeMapping>();
+        private readonly ConcurrentDictionary<int, RelationalTypeMapping> _boundedStringMappings
+            = new ConcurrentDictionary<int, RelationalTypeMapping>();
 
-        private readonly ThreadSafeDictionaryCache<int, RelationalTypeMapping> _boundedBinaryMappings
-            = new ThreadSafeDictionaryCache<int, RelationalTypeMapping>();
+        private readonly ConcurrentDictionary<int, RelationalTypeMapping> _boundedBinaryMappings
+            = new ConcurrentDictionary<int, RelationalTypeMapping>();
 
-        protected abstract IReadOnlyDictionary<Type, RelationalTypeMapping> SimpleMappings { get; }
+        protected abstract IReadOnlyDictionary<Type, RelationalTypeMapping> GetSimpleMappings();
 
-        protected abstract IReadOnlyDictionary<string, RelationalTypeMapping> SimpleNameMappings { get; }
+        protected abstract IReadOnlyDictionary<string, RelationalTypeMapping> GetSimpleNameMappings();
 
-        // Not useing IRelationalMetadataExtensionProvider here because type mappers are Singletons
+        // Not using IRelationalAnnotationProvider here because type mappers are Singletons
         protected abstract string GetColumnType([NotNull] IProperty property);
 
-        public virtual RelationalTypeMapping MapPropertyType(IProperty property)
+        public virtual RelationalTypeMapping FindMapping([NotNull] IProperty property)
         {
             Check.NotNull(property, nameof(property));
 
@@ -37,36 +38,58 @@ namespace Microsoft.Data.Entity.Storage
             if (typeName != null)
             {
                 var paren = typeName.IndexOf("(", StringComparison.Ordinal);
-                SimpleNameMappings.TryGetValue((paren >= 0 ? typeName.Substring(0, paren) : typeName).ToLowerInvariant(), out mapping);
+                GetSimpleNameMappings().TryGetValue((paren >= 0 ? typeName.Substring(0, paren) : typeName).ToLowerInvariant(), out mapping);
             }
 
             return mapping
-                   ?? (SimpleMappings.TryGetValue(property.ClrType.UnwrapEnumType().UnwrapNullableType(), out mapping)
-                       ? mapping
-                       : GetCustomMapping(property));
+                   ?? FindCustomMapping(property)
+                   ?? FindMapping(property.ClrType);
         }
 
-        public virtual RelationalTypeMapping GetDefaultMapping(Type clrType)
+        public virtual RelationalTypeMapping FindMapping([NotNull] Type clrType)
         {
             Check.NotNull(clrType, nameof(clrType));
 
             RelationalTypeMapping mapping;
-            if (SimpleMappings.TryGetValue(clrType.UnwrapEnumType(), out mapping))
-            {
-                return mapping;
-            }
 
-            throw new NotSupportedException(Strings.UnsupportedType(clrType.Name));
+            return GetSimpleMappings().TryGetValue(clrType.UnwrapNullableType().UnwrapEnumType(), out mapping)
+                ? mapping
+                : null;
         }
+
+        public virtual RelationalTypeMapping FindMapping(string typeName)
+        {
+            Check.NotNull(typeName, nameof(typeName));
+
+            RelationalTypeMapping mapping;
+
+            GetSimpleNameMappings().TryGetValue(typeName, out mapping);
+
+            return mapping;
+        }
+
+        public virtual bool IsTypeMapped(Type clrType) => FindMapping(clrType) != null;
+
+        protected virtual RelationalTypeMapping FindCustomMapping([NotNull] IProperty property) => null;
 
         protected virtual RelationalTypeMapping GetCustomMapping([NotNull] IProperty property)
         {
             Check.NotNull(property, nameof(property));
 
-            throw new NotSupportedException(Strings.UnsupportedType(property.ClrType.Name));
+            var mapping = FindCustomMapping(property);
+
+            if (mapping != null)
+            {
+                return mapping;
+            }
+
+            throw new NotSupportedException(RelationalStrings.UnsupportedType(property.ClrType.Name));
         }
 
-        protected virtual RelationalTypeMapping MapString(
+        protected virtual bool RequiresKeyMapping([NotNull] IProperty property)
+            => property.IsKey() || property.FindContainingEntityTypes().Any(property.IsForeignKey);
+
+        protected virtual RelationalTypeMapping GetStringMapping(
             [NotNull] IProperty property,
             int maxBoundedLength,
             [NotNull] Func<int, RelationalTypeMapping> boundedMapping,
@@ -83,13 +106,13 @@ namespace Microsoft.Data.Entity.Storage
                 ? maxLength <= maxBoundedLength
                     ? _boundedStringMappings.GetOrAdd(maxLength.Value, boundedMapping)
                     : unboundedMapping
-                : (keyMapping != null
-                   && (property.IsKey() || property.FindContainingEntityTypes().Any(property.IsForeignKey))
+                : ((keyMapping != null)
+                   && RequiresKeyMapping(property)
                     ? keyMapping
                     : defaultMapping);
         }
 
-        protected virtual RelationalTypeMapping MapByteArray(
+        protected virtual RelationalTypeMapping GetByteArrayMapping(
             [NotNull] IProperty property,
             int maxBoundedLength,
             [NotNull] Func<int, RelationalTypeMapping> boundedMapping,
@@ -102,8 +125,8 @@ namespace Microsoft.Data.Entity.Storage
             Check.NotNull(defaultMapping, nameof(defaultMapping));
 
             if (property.IsConcurrencyToken
-                && property.ValueGenerated == ValueGenerated.OnAddOrUpdate
-                && rowVersionMapping != null)
+                && (property.ValueGenerated == ValueGenerated.OnAddOrUpdate)
+                && (rowVersionMapping != null))
             {
                 return rowVersionMapping;
             }
@@ -114,8 +137,8 @@ namespace Microsoft.Data.Entity.Storage
                 ? maxLength <= maxBoundedLength
                     ? _boundedBinaryMappings.GetOrAdd(maxLength.Value, boundedMapping)
                     : unboundedMapping
-                : (keyMapping != null
-                   && (property.IsKey() || property.FindContainingEntityTypes().Any(property.IsForeignKey))
+                : ((keyMapping != null)
+                   && RequiresKeyMapping(property)
                     ? keyMapping
                     : defaultMapping);
         }

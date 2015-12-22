@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>Microsoft.Data.Entity.FunctionalTests</RootNamespace>
     <AssemblyName>EntityFramework.CrossStore.FunctionalTests</AssemblyName>
-    <TargetFrameworkVersion>v4.6</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -18,7 +18,7 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -26,7 +26,7 @@
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <DefineConstants>TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
@@ -51,9 +51,9 @@
       <Project>{e340807b-ecbb-41df-a164-23fe833c76de}</Project>
       <Name>EntityFramework.Sqlite</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\src\EntityFramework.SqlServer\EntityFramework.SqlServer.csproj">
+    <ProjectReference Include="..\..\src\EntityFramework.MicrosoftSqlServer\EntityFramework.MicrosoftSqlServer.csproj">
       <Project>{04E6620B-5B41-45FE-981A-F40EB7686B0E}</Project>
-      <Name>EntityFramework.SqlServer</Name>
+      <Name>EntityFramework.MicrosoftSqlServer</Name>
     </ProjectReference>
     <ProjectReference Include="..\EntityFramework.Core.FunctionalTests\EntityFramework.Core.FunctionalTests.csproj">
       <Project>{6ab933c7-de2a-45f2-bdc6-e71a01ef7756}</Project>
@@ -71,9 +71,9 @@
       <Project>{664b4d75-6cb7-4d90-a8e1-2a201500c859}</Project>
       <Name>EntityFramework.Sqlite.FunctionalTests</Name>
     </ProjectReference>
-    <ProjectReference Include="..\EntityFramework.SqlServer.FunctionalTests\EntityFramework.SqlServer.FunctionalTests.csproj">
+    <ProjectReference Include="..\EntityFramework.MicrosoftSqlServer.FunctionalTests\EntityFramework.MicrosoftSqlServer.FunctionalTests.csproj">
       <Project>{fa789ed6-2aac-4baa-a4fb-b600be2da956}</Project>
-      <Name>EntityFramework.SqlServer.FunctionalTests</Name>
+      <Name>EntityFramework.MicrosoftSqlServer.FunctionalTests</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>

@@ -3,7 +3,6 @@
 
 using System;
 using System.Linq;
-using Microsoft.Data.Entity.ChangeTracking;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Internal;
@@ -11,11 +10,12 @@ using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Conventions.Internal;
 using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Query;
+using Microsoft.Data.Entity.Query.Internal;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.ValueGeneration;
-using Microsoft.Framework.Caching.Memory;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Tests
@@ -35,6 +35,7 @@ namespace Microsoft.Data.Entity.Tests
         [Fact]
         public virtual void Services_wire_up_correctly()
         {
+            // Listeners
             VerifyScoped<IEntityStateListener>(isExistingReplaced: true);
             VerifyScoped<IForeignKeyListener>(isExistingReplaced: true);
             VerifyScoped<INavigationListener>(isExistingReplaced: true);
@@ -44,23 +45,14 @@ namespace Microsoft.Data.Entity.Tests
             VerifySingleton<IDbSetFinder>();
             VerifySingleton<IDbSetInitializer>();
             VerifySingleton<IDbSetSource>();
-            VerifySingleton<IEntityKeyFactorySource>();
-            VerifySingleton<IClrAccessorSource<IClrPropertyGetter>>();
-            VerifySingleton<IClrAccessorSource<IClrPropertySetter>>();
-            VerifySingleton<IClrCollectionAccessorSource>();
+            VerifySingleton<IKeyValueFactorySource>();
             VerifySingleton<ICollectionTypeFactory>();
             VerifySingleton<IEntityMaterializerSource>();
             VerifySingleton<IMemberMapper>();
             VerifySingleton<IFieldMatcher>();
-            VerifySingleton<IOriginalValuesFactory>();
-            VerifySingleton<IRelationshipsSnapshotFactory>();
-            VerifySingleton<IStoreGeneratedValuesFactory>();
-            VerifySingleton<IEntityEntryMetadataServices>();
-            VerifySingleton<ICompiledQueryCache>();
             VerifySingleton<ILoggerFactory>();
             VerifySingleton<ICoreConventionSetBuilder>();
             VerifySingleton<LoggingModelValidator>();
-            VerifySingleton<IMemoryCache>();
 
             VerifyScoped<IKeyPropagator>();
             VerifyScoped<INavigationFixer>();
@@ -69,7 +61,6 @@ namespace Microsoft.Data.Entity.Tests
             VerifyScoped<IInternalEntityEntryNotifier>();
             VerifyScoped<IInternalEntityEntrySubscriber>();
             VerifyScoped<IValueGenerationManager>();
-            VerifyScoped<IEntityQueryProvider>();
             VerifyScoped<IChangeTrackerFactory>();
             VerifyScoped<IChangeDetector>();
             VerifyScoped<IEntityEntryGraphIterator>();
@@ -82,7 +73,6 @@ namespace Microsoft.Data.Entity.Tests
             VerifyScoped<IDbContextOptions>();
             VerifyScoped<IDatabaseProviderServices>();
             VerifyScoped<IDatabase>();
-            VerifyScoped<IQueryContextFactory>();
             VerifyScoped<IValueGeneratorSelector>();
             VerifyScoped<IDatabaseCreator>();
             VerifyOptionalScoped<IConventionSetBuilder>();
@@ -90,6 +80,17 @@ namespace Microsoft.Data.Entity.Tests
             VerifyScoped<IModelSource>();
             VerifyScoped<IModelValidator>();
             VerifySingleton<IDatabaseProvider>(isExistingReplaced: true);
+
+            // Query
+            VerifySingleton<IMemoryCache>();
+            VerifySingleton<ICompiledQueryCache>();
+
+            VerifyScoped<IAsyncQueryProvider>();
+            VerifyScoped<IQueryContextFactory>();
+            VerifyScoped<IQueryCompiler>();
+            VerifyScoped<IQueryCompilationContextFactory>();
+            VerifyScoped<ICompiledQueryCacheKeyGenerator>();
+            VerifyScoped<CompiledQueryCacheKeyGenerator>();
         }
 
         private readonly TestHelpers _testHelpers;
@@ -107,7 +108,7 @@ namespace Microsoft.Data.Entity.Tests
 
         private IServiceCollection AddServices(IServiceCollection serviceCollection)
         {
-            return _testHelpers.AddProviderServices(serviceCollection.AddEntityFramework()).GetService();
+            return _testHelpers.AddProviderServices(serviceCollection.AddEntityFramework()).GetInfrastructure();
         }
 
         public void Dispose()
@@ -146,7 +147,7 @@ namespace Microsoft.Data.Entity.Tests
             bool isRequired)
             where TService : class
         {
-            var provider = ((IAccessor<IServiceProvider>)_firstContext).Service;
+            var provider = ((IInfrastructure<IServiceProvider>)_firstContext).Instance;
             var service = provider.GetService<TService>();
             if (isRequired)
             {
@@ -155,13 +156,13 @@ namespace Microsoft.Data.Entity.Tests
 
             Assert.Same(service, provider.GetService<TService>());
 
-            var otherScopeService = ((IAccessor<IServiceProvider>)_secondContext).Service.GetService<TService>();
+            var otherScopeService = ((IInfrastructure<IServiceProvider>)_secondContext).Instance.GetService<TService>();
 
             if (isSingleton)
             {
                 Assert.Same(service, otherScopeService);
             }
-            Assert.Equal(1, ((IAccessor<IServiceProvider>)_firstContext).Service.GetServices<TService>().Count());
+            Assert.Equal(1, ((IInfrastructure<IServiceProvider>)_firstContext).Instance.GetServices<TService>().Count());
 
             if (typeof(TService) != typeof(IDbContextServices))
             {
@@ -169,7 +170,7 @@ namespace Microsoft.Data.Entity.Tests
 
                 using (var customContext = _testHelpers.CreateContext(customServiceCollection.BuildServiceProvider()))
                 {
-                    var serviceProviderWithCustomService = ((IAccessor<IServiceProvider>)customContext).Service;
+                    var serviceProviderWithCustomService = ((IInfrastructure<IServiceProvider>)customContext).Instance;
                     if (isExistingReplaced)
                     {
                         Assert.NotSame(service, serviceProviderWithCustomService.GetService<TService>());

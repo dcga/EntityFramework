@@ -17,12 +17,11 @@ namespace Microsoft.Data.Entity.ChangeTracking
     ///     Instances of this class are typically obtained from <see cref="DbContext.ChangeTracker" /> and it is not designed
     ///     to be directly constructed in your application code.
     /// </summary>
-    public class ChangeTracker : IAccessor<IStateManager>
+    public class ChangeTracker : IInfrastructure<IStateManager>
     {
         private readonly IStateManager _stateManager;
         private readonly IChangeDetector _changeDetector;
         private readonly IEntityEntryGraphIterator _graphIterator;
-        private readonly DbContext _context;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="ChangeTracker" /> class. Instances of this class are typically
@@ -47,24 +46,43 @@ namespace Microsoft.Data.Entity.ChangeTracking
             _stateManager = stateManager;
             _changeDetector = changeDetector;
             _graphIterator = graphIterator;
-            _context = context;
+            Context = context;
         }
 
         /// <summary>
         ///     <para>
-        ///         Gets or sets a value indicating whether the <see cref="ChangeTracker.DetectChanges()" /> method is called
+        ///         Gets or sets a value indicating whether the <see cref="DetectChanges()" /> method is called
         ///         automatically by methods of <see cref="DbContext" /> and related classes.
         ///     </para>
         ///     <para>
         ///         The default value is true. This ensures the context is aware of any changes to tracked entity instances
         ///         before performing operations such as <see cref="DbContext.SaveChanges()" /> or returning change tracking
         ///         information. If you disable automatic detect changes then you must ensure that
-        ///         <see cref="DetectChanges" /> is called when entity instances have been modified.
+        ///         <see cref="DetectChanges()" /> is called when entity instances have been modified.
         ///         Failure to do so may result in some changes not being persisted during
         ///         <see cref="DbContext.SaveChanges()" /> or out-of-date change tracking information being returned.
         ///     </para>
         /// </summary>
         public virtual bool AutoDetectChangesEnabled { get; set; } = true;
+
+        /// <summary>
+        ///     <para>
+        ///         Gets or sets the tracking behavior for LINQ queries run against the context. Disabling change tracking
+        ///         is useful for read-only scenarios because it avoids the overhead of setting up change tracking for each
+        ///         entity instance. You should not disable change tracking if you want to manipulate entity instances and
+        ///         persist those changes to the database using <see cref="DbContext.SaveChanges()" />.
+        ///     </para>
+        ///     <para>
+        ///         This method sets the default behavior for the context, but you can override this behavior for individual
+        ///         queries using the <see cref="EntityFrameworkQueryableExtensions.AsNoTracking{TEntity}(IQueryable{TEntity})" />
+        ///         and <see cref="EntityFrameworkQueryableExtensions.AsTracking{TEntity}(IQueryable{TEntity})" /> methods.
+        ///     </para>
+        ///     <para>
+        ///         The default value is <see cref="QueryTrackingBehavior.TrackAll" />. This means the change tracker will
+        ///         keep track of changes for all entities that are returned from a LINQ query.
+        ///     </para>
+        /// </summary>
+        public virtual QueryTrackingBehavior QueryTrackingBehavior { get; set; }
 
         /// <summary>
         ///     Gets an <see cref="EntityEntry" /> for each entity being tracked by the context.
@@ -75,7 +93,7 @@ namespace Microsoft.Data.Entity.ChangeTracking
         {
             TryDetectChanges();
 
-            return _stateManager.Entries.Select(e => new EntityEntry(_context, e));
+            return _stateManager.Entries.Select(e => new EntityEntry(e));
         }
 
         /// <summary>
@@ -90,7 +108,7 @@ namespace Microsoft.Data.Entity.ChangeTracking
 
             return _stateManager.Entries
                 .Where(e => e.Entity is TEntity)
-                .Select(e => new EntityEntry<TEntity>(_context, e));
+                .Select(e => new EntityEntry<TEntity>(e));
         }
 
         private void TryDetectChanges()
@@ -102,27 +120,33 @@ namespace Microsoft.Data.Entity.ChangeTracking
         }
 
         /// <summary>
-        ///     Gets the internal state manager being used to store information about tracked entities.
+        ///     <para>
+        ///         Gets the internal state manager being used to store information about tracked entities.
+        ///     </para>
+        ///     <para>
+        ///         This property is intended for use by extension methods. It is not intended to be used in
+        ///         application code.
+        ///     </para>
         /// </summary>
-        IStateManager IAccessor<IStateManager>.Service => _stateManager;
+        IStateManager IInfrastructure<IStateManager>.Instance => _stateManager;
 
         /// <summary>
         ///     Gets the context this change tracker belongs to.
         /// </summary>
-        public virtual DbContext Context => _context;
+        public virtual DbContext Context { get; }
 
         /// <summary>
-        ///     Scans the tracked entity instances to detect any changes made to the instance data. <see cref="DetectChanges" />
+        ///     Scans the tracked entity instances to detect any changes made to the instance data. <see cref="DetectChanges()" />
         ///     is usually called automatically by the context when up-to-date information is required (before
-        ///     <see cref="DbContext.SaveChanges()" />
-        ///     and when returning change tracking information). You typically only need to call this method if you have disabled
-        ///     <see cref="AutoDetectChangesEnabled" />.
+        ///     <see cref="DbContext.SaveChanges()" /> and when returning change tracking information). You typically only need to
+        ///     call this method if you have disabled <see cref="AutoDetectChangesEnabled" />.
         /// </summary>
         public virtual void DetectChanges() => _changeDetector.DetectChanges(_stateManager);
 
         /// <summary>
         ///     Accepts all changes made to entities in the context. It will be assumed that the tracked entities
-        ///     represent the current state of the database.
+        ///     represent the current state of the database. This method is typically called by <see cref="DbContext.SaveChanges()" />
+        ///     after changes have been successfully saved to the database.
         /// </summary>
         public virtual void AcceptAllChanges() => _stateManager.AcceptAllChanges();
 
@@ -151,15 +175,28 @@ namespace Microsoft.Data.Entity.ChangeTracking
         ///     An action to configure the change tracking information for each entity. For the entity to begin being tracked,
         ///     the <see cref="EntityEntry.State" /> must be set.
         /// </param>
-        public virtual void TrackGraph([NotNull] object rootEntity, [NotNull] Action<EntityEntry> callback)
+        public virtual void TrackGraph(
+            [NotNull] object rootEntity,
+            [NotNull] Action<EntityEntryGraphNode> callback)
         {
             Check.NotNull(rootEntity, nameof(rootEntity));
             Check.NotNull(callback, nameof(callback));
 
-            foreach (var entry in _graphIterator.TraverseGraph(rootEntity))
-            {
-                callback(entry);
-            }
+            var rootEntry = _stateManager.GetOrCreateEntry(rootEntity);
+
+            _graphIterator.TraverseGraph(
+                new EntityEntryGraphNode(rootEntry, null),
+                n =>
+                    {
+                        if (n.Entry.State != EntityState.Detached)
+                        {
+                            return false;
+                        }
+
+                        callback(n);
+
+                        return n.Entry.State != EntityState.Detached;
+                    });
         }
     }
 }

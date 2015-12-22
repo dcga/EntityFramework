@@ -4,7 +4,7 @@
 using System;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.Data.Entity.InMemory.FunctionalTests
 {
@@ -30,7 +30,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
                     .BuildServiceProvider();
 
                 var optionsBuilder = new DbContextOptionsBuilder();
-                optionsBuilder.UseInMemoryDatabase(persist: true);
+                optionsBuilder.UseInMemoryDatabase();
                 _options = optionsBuilder.Options;
 
                 EnsureCreated();

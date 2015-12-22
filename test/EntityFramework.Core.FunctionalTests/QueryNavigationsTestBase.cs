@@ -2,8 +2,10 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Data.Entity.FunctionalTests.TestModels.Northwind;
 using Xunit;
+// ReSharper disable UseCollectionCountProperty
 
 // ReSharper disable AccessToDisposedClosure
 // ReSharper disable PossibleUnintendedReferenceComparison
@@ -13,10 +15,6 @@ namespace Microsoft.Data.Entity.FunctionalTests
     public abstract class QueryNavigationsTestBase<TFixture> : IClassFixture<TFixture>
         where TFixture : NorthwindQueryFixtureBase, new()
     {
-        // TODO:
-        // - One to ones
-        // - Async
-
         [Fact]
         public virtual void Select_Where_Navigation()
         {
@@ -26,6 +24,20 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     = (from o in context.Set<Order>()
                         where o.Customer.City == "Seattle"
                         select o).ToList();
+
+                Assert.Equal(14, orders.Count);
+            }
+        }
+
+        [Fact]
+        public virtual async Task Select_Where_Navigation_Async()
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = await (from o in context.Set<Order>()
+                       where o.Customer.City == "Seattle"
+                       select o).ToListAsync();
 
                 Assert.Equal(14, orders.Count);
             }
@@ -189,7 +201,23 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         select new { A = o.Customer, B = o.Customer.City }).ToList();
 
                 Assert.Equal(14, orders.Count);
-                Assert.True(orders.All(o => o.A != null && o.B != null));
+                Assert.True(orders.All(o => (o.A != null) && (o.B != null)));
+            }
+        }
+
+        [Fact]
+        public virtual async Task Select_Singleton_Navigation_With_Member_Access_Async()
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = await (from o in context.Set<Order>()
+                       where o.Customer.City == "Seattle"
+                       where o.Customer.Phone != "555 555 5555"
+                       select new { A = o.Customer, B = o.Customer.City }).ToListAsync();
+
+                Assert.Equal(14, orders.Count);
+                Assert.True(orders.All(o => (o.A != null) && (o.B != null)));
             }
         }
 
@@ -200,8 +228,8 @@ namespace Microsoft.Data.Entity.FunctionalTests
             {
                 var orders
                     = (from o in context.Set<Order>()
-                        where o.Customer.City == "Seattle"
-                              && o.Customer.Phone != "555 555 5555"
+                        where (o.Customer.City == "Seattle")
+                              && (o.Customer.Phone != "555 555 5555")
                         select o).ToList();
 
                 Assert.Equal(14, orders.Count);
@@ -215,8 +243,8 @@ namespace Microsoft.Data.Entity.FunctionalTests
             {
                 var orders
                     = (from o in context.Set<Order>()
-                        where o.Customer.City == "Seattle"
-                              && o.Customer.Phone != "555 555 5555"
+                        where (o.Customer.City == "Seattle")
+                              && (o.Customer.Phone != "555 555 5555")
                         select o).ToList();
 
                 Assert.Equal(14, orders.Count);
@@ -247,7 +275,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         select new { A = o.Customer, B = o.Customer }).ToList();
 
                 Assert.Equal(830, orders.Count);
-                Assert.True(orders.All(o => o.A != null && o.B != null));
+                Assert.True(orders.All(o => (o.A != null) && (o.B != null)));
             }
         }
 
@@ -263,7 +291,39 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         select new { A = o.Customer, B = o.Customer }).ToList();
 
                 Assert.Equal(14, orders.Count);
-                Assert.True(orders.All(o => o.A != null && o.B != null));
+                Assert.True(orders.All(o => (o.A != null) && (o.B != null)));
+            }
+        }
+
+        [Fact]
+        public virtual void Select_collection_navigation_simple()
+        {
+            using (var context = CreateContext())
+            {
+                var query = from c in context.Customers
+                            where c.CustomerID.StartsWith("A")
+                            select new { Orders = c.Orders };
+
+                var results = query.ToList();
+
+                Assert.Equal(4, results.Count);
+                Assert.True(results.All(r => r.Orders.Count > 0));
+            }
+        }
+
+        [Fact]
+        public virtual void Select_collection_navigation_multi_part()
+        {
+            using (var context = CreateContext())
+            {
+                var query = from o in context.Orders
+                            where o.CustomerID == "ALFKI"
+                            select new { Orders = o.Customer.Orders };
+
+                var results = query.ToList();
+
+                Assert.Equal(6, results.Count);
+                Assert.True(results.All(r => r.Orders.Count > 0));
             }
         }
 
@@ -434,6 +494,29 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
 
         [Fact]
+        public virtual void Select_multiple_complex_projections()
+        {
+            using (var context = CreateContext())
+            {
+                var customers
+                    = (from o in context.Orders
+                       where o.CustomerID.StartsWith("A")
+                       select new
+                       {
+                           collection1 = o.OrderDetails.Count(),
+                           scalar1 = o.OrderDate,
+                           any = o.OrderDetails.Select(od => od.UnitPrice).Any(up => up > 10),
+                           conditional = o.CustomerID == "ALFKI" ? "50" : "10",
+                           scalar2 = (int?)o.OrderID,
+                           all = o.OrderDetails.All(od => od.OrderID == 42),
+                           collection2 = o.OrderDetails.LongCount(),
+                       }).ToList();
+
+                Assert.Equal(30, customers.Count);
+            }
+        }
+
+        [Fact]
         public virtual void Collection_select_nav_prop_sum()
         {
             using (var context = CreateContext())
@@ -455,6 +538,20 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     = (from c in context.Set<Customer>()
                         where c.Orders.Sum(o => o.OrderID) > 1000
                         select c).ToList();
+
+                Assert.Equal(89, customers.Count);
+            }
+        }
+
+        [Fact]
+        public virtual async Task Collection_where_nav_prop_sum_async()
+        {
+            using (var context = CreateContext())
+            {
+                var customers
+                    = await (from c in context.Set<Customer>()
+                       where c.Orders.Sum(o => o.OrderID) > 1000
+                       select c).ToListAsync();
 
                 Assert.Equal(89, customers.Count);
             }
@@ -483,6 +580,89 @@ namespace Microsoft.Data.Entity.FunctionalTests
                         select new { c.Orders.FirstOrDefault().Customer }).ToList();
 
                 Assert.Equal(91, customers.Count);
+            }
+        }
+
+        [Fact]
+        public virtual void Navigation_fk_based_inside_contains()
+        {
+            using (var context = CreateContext())
+            {
+                var query
+                    = from o in context.Orders
+                       where new[] { "ALFKI", }.Contains(o.Customer.CustomerID)
+                       select o;
+
+                var result = query.ToList();
+
+                Assert.Equal(6, result.Count);
+                Assert.True(result.All(e => e.CustomerID == "ALFKI"));
+            }
+        }
+
+        [Fact]
+        public virtual void Navigation_inside_contains()
+        {
+            using (var context = CreateContext())
+            {
+                var query
+                    = from o in context.Orders
+                       where new[] { "Novigrad", "Seattle" }.Contains(o.Customer.City)
+                       select o;
+
+                var result = query.ToList();
+
+                Assert.Equal(14, result.Count);
+            }
+        }
+
+        [Fact]
+        public virtual void Navigation_inside_contains_nested()
+        {
+            using (var context = CreateContext())
+            {
+                var query
+                    = from od in context.OrderDetails
+                       where new[] { "Novigrad", "Seattle" }.Contains(od.Order.Customer.City)
+                       select od;
+
+                var result = query.ToList();
+
+                Assert.Equal(40, result.Count);
+            }
+        }
+
+        [Fact]
+        public virtual void Navigation_from_join_clause_inside_contains()
+        {
+            using (var context = CreateContext())
+            {
+                var query = from od in context.OrderDetails
+                            join o in context.Orders on od.OrderID equals o.OrderID
+                            where new[] { "USA", "Redania" }.Contains(o.Customer.Country)
+                            select od;
+
+                var result = query.ToList();
+
+                Assert.Equal(352, result.Count);
+            }
+        }
+
+        [Fact]
+        public virtual void Navigation_in_subquery_referencing_outer_query()
+        {
+            using (var context = CreateContext())
+            {
+                var query = from o in context.Orders
+                            // ReSharper disable once UseMethodAny.0
+                            where (from od in context.OrderDetails
+                                   where o.Customer.Country == od.Order.Customer.Country
+                                   select od).Count() > 0
+                            select o;
+
+                var result = query.ToList();
+
+                Assert.Equal(830, result.Count);
             }
         }
 

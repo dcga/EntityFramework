@@ -1,14 +1,16 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.ChangeTracking.Internal;
+using Microsoft.Data.Entity.Query.Internal;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
-using Microsoft.Framework.Logging;
 
 namespace Microsoft.Data.Entity.Query
 {
@@ -20,12 +22,14 @@ namespace Microsoft.Data.Entity.Query
         private int _activeIncludeQueryOffset;
 
         public RelationalQueryContext(
-            [NotNull] ILogger logger,
-            [NotNull] IQueryBuffer queryBuffer,
-            [NotNull] IRelationalConnection connection)
+            [NotNull] Func<IQueryBuffer> queryBufferFactory,
+            [NotNull] IRelationalConnection connection,
+            [NotNull] IStateManager stateManager,
+            [NotNull] IConcurrencyDetector concurrencyDetector)
             : base(
-                Check.NotNull(logger, nameof(logger)),
-                Check.NotNull(queryBuffer, nameof(queryBuffer)))
+                  Check.NotNull(queryBufferFactory, nameof(queryBufferFactory)),
+                  Check.NotNull(stateManager, nameof(stateManager)),
+                  Check.NotNull(concurrencyDetector, nameof(concurrencyDetector)))
         {
             Check.NotNull(connection, nameof(connection));
 
@@ -34,7 +38,8 @@ namespace Microsoft.Data.Entity.Query
 
         public virtual IRelationalConnection Connection { get; }
 
-        public virtual void RegisterValueBufferCursor([NotNull] IValueBufferCursor valueBufferCursor, int? queryIndex)
+        public virtual void RegisterValueBufferCursor(
+            [NotNull] IValueBufferCursor valueBufferCursor, int? queryIndex)
         {
             Check.NotNull(valueBufferCursor, nameof(valueBufferCursor));
 
@@ -46,7 +51,8 @@ namespace Microsoft.Data.Entity.Query
 
             _activeQueries.Add(valueBufferCursor);
 
-            if (queryIndex.HasValue && queryIndex.Value > 0)
+            if (queryIndex.HasValue
+                && queryIndex.Value > 0)
             {
                 AddBufferCursorToIncludeQueriesList(valueBufferCursor, queryIndex.Value);
             }
@@ -65,7 +71,8 @@ namespace Microsoft.Data.Entity.Query
 
             _activeQueries.Add(valueBufferCursor);
 
-            if (queryIndex.HasValue && queryIndex.Value > 0)
+            if (queryIndex.HasValue
+                && queryIndex.Value > 0)
             {
                 AddBufferCursorToIncludeQueriesList(valueBufferCursor, queryIndex.Value);
             }
@@ -76,7 +83,7 @@ namespace Microsoft.Data.Entity.Query
             if (includeQueryIndex > _activeIncludeQueries.Count)
             {
                 var missingEntries = includeQueryIndex - _activeIncludeQueries.Count;
-                for (int i = 0; i < missingEntries; i++)
+                for (var i = 0; i < missingEntries; i++)
                 {
                     _activeIncludeQueries.Add(null);
                 }
@@ -99,11 +106,9 @@ namespace Microsoft.Data.Entity.Query
         }
 
         public virtual ValueBuffer GetIncludeValueBuffer(int queryIndex)
-        {
-            return queryIndex == 0 
+            => queryIndex == 0
                 ? _activeQueries[_activeIncludeQueryOffset + queryIndex].Current
                 : _activeIncludeQueries[queryIndex - 1].Current;
-        }
 
         public virtual void BeginIncludeScope() => _activeIncludeQueryOffset = _activeQueries.Count;
 

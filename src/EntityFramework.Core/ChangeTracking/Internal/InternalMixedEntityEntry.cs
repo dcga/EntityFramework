@@ -1,47 +1,48 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Storage;
 
 namespace Microsoft.Data.Entity.ChangeTracking.Internal
 {
     public class InternalMixedEntityEntry : InternalEntityEntry
     {
-        private readonly object[] _shadowValues;
+        private readonly ISnapshot _shadowValues;
 
         public InternalMixedEntityEntry(
             [NotNull] IStateManager stateManager,
             [NotNull] IEntityType entityType,
-            [NotNull] IEntityEntryMetadataServices metadataServices,
             [NotNull] object entity)
-            : base(stateManager, entityType, metadataServices)
+            : base(stateManager, entityType)
         {
             Entity = entity;
-            _shadowValues = new object[entityType.ShadowPropertyCount()];
+            _shadowValues = entityType.GetEmptyShadowValuesFactory()();
         }
 
         public InternalMixedEntityEntry(
             [NotNull] IStateManager stateManager,
             [NotNull] IEntityType entityType,
-            [NotNull] IEntityEntryMetadataServices metadataServices,
             [NotNull] object entity,
             ValueBuffer valueBuffer)
-            : base(stateManager, entityType, metadataServices)
+            : base(stateManager, entityType)
         {
             Entity = entity;
-            _shadowValues = ExtractShadowValues(valueBuffer);
+            _shadowValues = entityType.GetShadowValuesFactory()(valueBuffer);
         }
 
         public override object Entity { get; }
+
+        protected override T ReadShadowValue<T>(int shadowIndex)
+            => _shadowValues.GetValue<T>(shadowIndex);
 
         protected override object ReadPropertyValue(IPropertyBase propertyBase)
         {
             var property = propertyBase as IProperty;
 
-            return property == null || !property.IsShadowProperty
+            return (property == null) || !property.IsShadowProperty
                 ? base.ReadPropertyValue(propertyBase)
                 : _shadowValues[property.GetShadowIndex()];
         }
@@ -50,7 +51,7 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
         {
             var property = propertyBase as IProperty;
 
-            if (property == null
+            if ((property == null)
                 || !property.IsShadowProperty)
             {
                 base.WritePropertyValue(propertyBase, value);
@@ -59,18 +60,6 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
             {
                 _shadowValues[property.GetShadowIndex()] = value;
             }
-        }
-
-        private object[] ExtractShadowValues(ValueBuffer valueBuffer)
-        {
-            var shadowValues = new object[EntityType.ShadowPropertyCount()];
-
-            foreach (var property in EntityType.GetProperties().Where(property => property.IsShadowProperty))
-            {
-                shadowValues[property.GetShadowIndex()] = valueBuffer[property.Index];
-            }
-
-            return shadowValues;
         }
     }
 }

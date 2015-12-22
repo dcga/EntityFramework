@@ -1,10 +1,10 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using Microsoft.Data.Entity.FunctionalTests;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
 {
@@ -23,35 +23,39 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
                 .AddSqlite()
                 .ServiceCollection()
                 .AddSingleton(TestSqliteModelSource.GetFactory(OnModelCreating))
-                .AddInstance<ILoggerFactory>(new TestSqlLoggerFactory())
+                .AddSingleton<ILoggerFactory>(new TestSqlLoggerFactory())
                 .BuildServiceProvider();
         }
 
         public override SqliteTestStore CreateTestStore()
         {
             return SqliteTestStore.GetOrCreateShared(DatabaseName, () =>
-            {
-                var optionsBuilder = new DbContextOptionsBuilder();
-                optionsBuilder.UseSqlite(_connectionString);
-
-                using (var context = new DataAnnotationContext(_serviceProvider, optionsBuilder.Options))
                 {
-                    // TODO: Delete DB if model changed
-                    context.Database.EnsureDeleted();
-                    if (context.Database.EnsureCreated())
-                    {
-                        DataAnnotationModelInitializer.Seed(context);
-                    }
+                    var optionsBuilder = new DbContextOptionsBuilder();
+                    optionsBuilder.UseSqlite(_connectionString);
 
-                    TestSqlLoggerFactory.SqlStatements.Clear();
-                }
-            });
+                    using (var context = new DataAnnotationContext(_serviceProvider, optionsBuilder.Options))
+                    {
+                        // TODO: Delete DB if model changed
+                        context.Database.EnsureDeleted();
+                        if (context.Database.EnsureCreated())
+                        {
+                            DataAnnotationModelInitializer.Seed(context);
+                        }
+
+                        TestSqlLoggerFactory.SqlStatements.Clear();
+                    }
+                });
         }
 
         public override DataAnnotationContext CreateContext(SqliteTestStore testStore)
         {
             var optionsBuilder = new DbContextOptionsBuilder();
-            optionsBuilder.UseSqlite(testStore.Connection);
+
+            optionsBuilder
+                .EnableSensitiveDataLogging()
+                .UseSqlite(testStore.Connection)
+                .SuppressForeignKeyEnforcement();
 
             var context = new DataAnnotationContext(_serviceProvider, optionsBuilder.Options);
             context.Database.UseTransaction(testStore.Transaction);

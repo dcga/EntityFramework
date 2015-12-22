@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Tests;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Microsoft.Data.Entity.InMemory.FunctionalTests
@@ -22,12 +22,12 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
                 .AddEntityFramework()
                 .AddInMemoryDatabase()
                 .ServiceCollection()
-                .AddInstance(TestFileLogger.Factory)
+                .AddSingleton(TestFileLogger.Factory)
                 .BuildServiceProvider();
 
             var optionsBuilder = new DbContextOptionsBuilder()
                 .UseModel(model);
-            optionsBuilder.UseInMemoryDatabase(persist: true);
+            optionsBuilder.UseInMemoryDatabase();
 
             var customer = new Customer { Id = 42, Name = "Theon" };
 
@@ -103,7 +103,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
             public string Name { get; set; }
         }
 
-        private static Model CreateModel()
+        private static IMutableModel CreateModel()
         {
             var modelBuilder = TestHelpers.Instance.CreateConventionBuilder();
 
@@ -141,7 +141,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Artist>().Key(a => a.ArtistId);
+                modelBuilder.Entity<Artist>().HasKey(a => a.ArtistId);
             }
 
             public class Artist : ArtistBase<string>

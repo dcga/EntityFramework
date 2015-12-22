@@ -17,7 +17,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
     ///         and it is not designed to be directly constructed in your application code.
     ///     </para>
     /// </summary>
-    public class IndexBuilder : IAccessor<Model>, IAccessor<InternalIndexBuilder>
+    public class IndexBuilder : IInfrastructure<IMutableModel>, IInfrastructure<InternalIndexBuilder>
     {
         private readonly InternalIndexBuilder _builder;
 
@@ -41,17 +41,17 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// <summary>
         ///     The internal builder being used to configure the index.
         /// </summary>
-        InternalIndexBuilder IAccessor<InternalIndexBuilder>.Service => _builder;
+        InternalIndexBuilder IInfrastructure<InternalIndexBuilder>.Instance => _builder;
 
         /// <summary>
         ///     The index being configured.
         /// </summary>
-        public virtual Index Metadata => Builder.Metadata;
+        public virtual IMutableIndex Metadata => Builder.Metadata;
 
         /// <summary>
         ///     The model that the index belongs to.
         /// </summary>
-        Model IAccessor<Model>.Service => Builder.ModelBuilder.Metadata;
+        IMutableModel IInfrastructure<IMutableModel>.Instance => Builder.ModelBuilder.Metadata;
 
         /// <summary>
         ///     Adds or updates an annotation on the index. If an annotation with the key specified in
@@ -61,12 +61,12 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// <param name="annotation"> The key of the annotation to be added or updated. </param>
         /// <param name="value"> The value to be stored in the annotation. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual IndexBuilder Annotation([NotNull] string annotation, [NotNull] object value)
+        public virtual IndexBuilder HasAnnotation([NotNull] string annotation, [NotNull] object value)
         {
             Check.NotEmpty(annotation, nameof(annotation));
             Check.NotNull(value, nameof(value));
 
-            Builder.Annotation(annotation, value, ConfigurationSource.Explicit);
+            Builder.HasAnnotation(annotation, value, ConfigurationSource.Explicit);
 
             return this;
         }
@@ -76,13 +76,13 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </summary>
         /// <param name="unique"> A value indicating whether this index is unique. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual IndexBuilder Unique(bool unique = true)
+        public virtual IndexBuilder IsUnique(bool unique = true)
         {
             Builder.IsUnique(unique, ConfigurationSource.Explicit);
 
             return this;
         }
 
-        private InternalIndexBuilder Builder => this.GetService<InternalIndexBuilder>();
+        private InternalIndexBuilder Builder => this.GetInfrastructure<InternalIndexBuilder>();
     }
 }

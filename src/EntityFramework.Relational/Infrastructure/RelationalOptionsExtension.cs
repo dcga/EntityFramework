@@ -5,7 +5,7 @@ using System;
 using System.Data.Common;
 using System.Linq;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.Relational.Internal;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Infrastructure
@@ -16,10 +16,18 @@ namespace Microsoft.Data.Entity.Infrastructure
         private DbConnection _connection;
         private int? _commandTimeout;
         private int? _maxBatchSize;
+        private bool _useRelationalNulls;
+        private QueryClientEvaluationBehavior _queryClientEvaluationBehavior;
+        private bool? _throwOnAmbientTransaction;
+        private string _migrationsAssembly;
+        private string _migrationsHistoryTableName;
+        private string _migrationsHistoryTableSchema;
 
         protected RelationalOptionsExtension()
         {
         }
+
+        // NB: When adding new options, make sure to update the copy ctor below.
 
         protected RelationalOptionsExtension([NotNull] RelationalOptionsExtension copyFrom)
         {
@@ -29,12 +37,17 @@ namespace Microsoft.Data.Entity.Infrastructure
             _connection = copyFrom._connection;
             _commandTimeout = copyFrom._commandTimeout;
             _maxBatchSize = copyFrom._maxBatchSize;
+            _useRelationalNulls = copyFrom._useRelationalNulls;
+            _queryClientEvaluationBehavior = copyFrom._queryClientEvaluationBehavior;
+            _throwOnAmbientTransaction = copyFrom._throwOnAmbientTransaction;
+            _migrationsAssembly = copyFrom._migrationsAssembly;
+            _migrationsHistoryTableName = copyFrom._migrationsHistoryTableName;
+            _migrationsHistoryTableSchema = copyFrom._migrationsHistoryTableSchema;
         }
 
         public virtual string ConnectionString
         {
             get { return _connectionString; }
-
             [param: NotNull]
             set
             {
@@ -63,9 +76,9 @@ namespace Microsoft.Data.Entity.Infrastructure
             set
             {
                 if (value.HasValue
-                    && value <= 0)
+                    && (value <= 0))
                 {
-                    throw new InvalidOperationException(Strings.InvalidCommandTimeout);
+                    throw new InvalidOperationException(RelationalStrings.InvalidCommandTimeout);
                 }
 
                 _commandTimeout = value;
@@ -79,41 +92,71 @@ namespace Microsoft.Data.Entity.Infrastructure
             set
             {
                 if (value.HasValue
-                    && value <= 0)
+                    && (value <= 0))
                 {
-                    throw new InvalidOperationException(Strings.InvalidMaxBatchSize);
+                    throw new InvalidOperationException(RelationalStrings.InvalidMaxBatchSize);
                 }
 
                 _maxBatchSize = value;
             }
         }
 
-        public virtual bool? ThrowOnAmbientTransaction { get; set; }
+        public virtual bool UseRelationalNulls
+        {
+            get { return _useRelationalNulls; }
+            set { _useRelationalNulls = value; }
+        }
 
-        public virtual string MigrationsAssembly { get; [param: CanBeNull] set; }
+        public virtual QueryClientEvaluationBehavior QueryClientEvaluationBehavior
+        {
+            get { return _queryClientEvaluationBehavior; }
+            set { _queryClientEvaluationBehavior = value; }
+        }
 
-        public virtual string MigrationsHistoryTableName { get;[param: CanBeNull] set; }
-        public virtual string MigrationsHistoryTableSchema { get;[param: CanBeNull] set; }
+        public virtual bool? ThrowOnAmbientTransaction
+        {
+            get { return _throwOnAmbientTransaction; }
+            set { _throwOnAmbientTransaction = value; }
+        }
+
+        public virtual string MigrationsAssembly
+        {
+            get { return _migrationsAssembly; }
+            [param: CanBeNull] set { _migrationsAssembly = value; }
+        }
+
+        public virtual string MigrationsHistoryTableName
+        {
+            get { return _migrationsHistoryTableName; }
+            [param: CanBeNull] set { _migrationsHistoryTableName = value; }
+        }
+
+        public virtual string MigrationsHistoryTableSchema
+        {
+            get { return _migrationsHistoryTableSchema; }
+            [param: CanBeNull] set { _migrationsHistoryTableSchema = value; }
+        }
 
         public static RelationalOptionsExtension Extract([NotNull] IDbContextOptions options)
         {
             Check.NotNull(options, nameof(options));
 
-            var configs = options.Extensions
-                .OfType<RelationalOptionsExtension>()
-                .ToArray();
+            var relationalOptionsExtensions
+                = options.Extensions
+                    .OfType<RelationalOptionsExtension>()
+                    .ToArray();
 
-            if (configs.Length == 0)
+            if (relationalOptionsExtensions.Length == 0)
             {
-                throw new InvalidOperationException(Strings.NoProviderConfigured);
+                throw new InvalidOperationException(RelationalStrings.NoProviderConfigured);
             }
 
-            if (configs.Length > 1)
+            if (relationalOptionsExtensions.Length > 1)
             {
-                throw new InvalidOperationException(Strings.MultipleProvidersConfigured);
+                throw new InvalidOperationException(RelationalStrings.MultipleProvidersConfigured);
             }
 
-            return configs[0];
+            return relationalOptionsExtensions[0];
         }
 
         public abstract void ApplyServices(EntityFrameworkServicesBuilder builder);

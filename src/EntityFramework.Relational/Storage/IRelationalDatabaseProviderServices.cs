@@ -4,6 +4,7 @@
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Migrations;
 using Microsoft.Data.Entity.Query.ExpressionTranslators;
+using Microsoft.Data.Entity.Query.Sql;
 using Microsoft.Data.Entity.Update;
 
 namespace Microsoft.Data.Entity.Storage
@@ -21,11 +22,12 @@ namespace Microsoft.Data.Entity.Storage
         IBatchExecutor BatchExecutor { get; }
         IRelationalValueBufferFactoryFactory ValueBufferFactoryFactory { get; }
         IRelationalDatabaseCreator RelationalDatabaseCreator { get; }
-        IRelationalMetadataExtensionProvider MetadataExtensionProvider { get; }
-        ISqlStatementExecutor SqlStatementExecutor { get; }
+        IRelationalAnnotationProvider AnnotationProvider { get; }
         IMethodCallTranslator CompositeMethodCallTranslator { get; }
         IMemberTranslator CompositeMemberTranslator { get; }
         IExpressionFragmentTranslator CompositeExpressionFragmentTranslator { get; }
         IParameterNameGeneratorFactory ParameterNameGeneratorFactory { get; }
+        ISqlGenerationHelper SqlGenerationHelper { get; }
+        IQuerySqlGeneratorFactory QuerySqlGeneratorFactory { get; }
     }
 }

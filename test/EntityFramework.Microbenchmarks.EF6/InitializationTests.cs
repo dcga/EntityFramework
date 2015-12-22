@@ -1,88 +1,54 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
+using System.Data.Entity;
+using System.Data.SqlClient;
+using System.Linq;
 using EntityFramework.Microbenchmarks.Core;
 using EntityFramework.Microbenchmarks.Core.Models.AdventureWorks;
 using EntityFramework.Microbenchmarks.Core.Models.AdventureWorks.TestHelpers;
 using EntityFramework.Microbenchmarks.EF6.Models.AdventureWorks;
-using System.Data.Entity;
-using System.Data.SqlClient;
-using System.Linq;
 using Xunit;
 
 namespace EntityFramework.Microbenchmarks.EF6
 {
     public class InitializationTests : IClassFixture<AdventureWorksFixture>
     {
-        private readonly AdventureWorksFixture _fixture;
-
-        public InitializationTests(AdventureWorksFixture fixture)
+        [Benchmark]
+#if !DNX451
+        [BenchmarkVariation("Cold (1 instance)", true, 1)]
+#endif
+        [BenchmarkVariation("Warm (1000 instances)", false, 1000)]
+        public void CreateAndDisposeUnusedContext(IMetricCollector collector, bool cold, int count)
         {
-            _fixture = fixture;
+            RunColdStartEnabledTest(cold, c => c.CreateAndDisposeUnusedContext(collector, count));
         }
 
         [Benchmark]
-        [BenchmarkVariation("Warm")]
-        public void CreateAndDisposeUnusedContext(MetricCollector collector)
+        [AdventureWorksDatabaseRequired]
+#if !DNX451
+        [BenchmarkVariation("Cold (1 instance)", true, 1)]
+#endif
+        [BenchmarkVariation("Warm (100 instances)", false, 100)]
+        public void InitializeAndQuery_AdventureWorks(IMetricCollector collector, bool cold, int count)
         {
-            using (collector.StartCollection())
-            {
-                for (int i = 0; i < 100; i++)
-                {
-                    using (var context = _fixture.CreateContext())
-                    {
-                    }
-                }
-            }
-        }
-
-        [AdventureWorksDatabaseBenchmark]
-        [BenchmarkVariation("Warm")]
-        public void InitializeAndQuery_AdventureWorks(MetricCollector collector)
-        {
-            using (collector.StartCollection())
-            {
-                for (int i = 0; i < 10; i++)
-                {
-                    using (var context = _fixture.CreateContext())
-                    {
-                        context.Department.First();
-                    }
-                }
-            }
-        }
-
-        [AdventureWorksDatabaseBenchmark]
-        [BenchmarkVariation("Warm")]
-        public void InitializeAndSaveChanges_AdventureWorks(MetricCollector collector)
-        {
-            using (collector.StartCollection())
-            {
-                for (int i = 0; i < 10; i++)
-                {
-                    using (var context = _fixture.CreateContext())
-                    {
-                        context.Department.Add(new Department
-                        {
-                            Name = "Benchmarking",
-                            GroupName = "Engineering"
-                        });
-
-                        using (context.Database.BeginTransaction())
-                        {
-                            context.SaveChanges();
-
-                            // Don't mesure transaction rollback
-                            collector.StopCollection();
-                        }
-                        collector.StartCollection();
-                    }
-                }
-            }
+            RunColdStartEnabledTest(cold, c => c.InitializeAndQuery_AdventureWorks(collector, count));
         }
 
         [Benchmark]
-        public void BuildModel_AdventureWorks(MetricCollector collector)
+        [AdventureWorksDatabaseRequired]
+#if !DNX451
+        [BenchmarkVariation("Cold (1 instance)", true, 1)]
+#endif
+        [BenchmarkVariation("Warm (100 instances)", false, 100)]
+        public void InitializeAndSaveChanges_AdventureWorks(IMetricCollector collector, bool cold, int count)
+        {
+            RunColdStartEnabledTest(cold, t => t.InitializeAndSaveChanges_AdventureWorks(collector, count));
+        }
+
+        [Benchmark]
+        public void BuildModel_AdventureWorks(IMetricCollector collector)
         {
             collector.StartCollection();
 
@@ -93,6 +59,79 @@ namespace EntityFramework.Microbenchmarks.EF6
             collector.StopCollection();
 
             Assert.Equal(67, model.ConceptualModel.EntityTypes.Count());
+        }
+
+        private void RunColdStartEnabledTest(bool cold, Action<ColdStartEnabledTests> test)
+        {
+            if (cold)
+            {
+                using (var sandbox = new ColdStartSandbox())
+                {
+                    var testClass = sandbox.CreateInstance<ColdStartEnabledTests>();
+                    test(testClass);
+                }
+            }
+            else
+            {
+                test(new ColdStartEnabledTests());
+            }
+        }
+
+        private class ColdStartEnabledTests : MarshalByRefObject
+        {
+            public void CreateAndDisposeUnusedContext(IMetricCollector collector, int count)
+            {
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < count; i++)
+                    {
+                        using (var context = AdventureWorksFixture.CreateContext())
+                        {
+                        }
+                    }
+                }
+            }
+
+            public void InitializeAndQuery_AdventureWorks(IMetricCollector collector, int count)
+            {
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < count; i++)
+                    {
+                        using (var context = AdventureWorksFixture.CreateContext())
+                        {
+                            context.Department.First();
+                        }
+                    }
+                }
+            }
+
+            public void InitializeAndSaveChanges_AdventureWorks(IMetricCollector collector, int count)
+            {
+                using (collector.StartCollection())
+                {
+                    for (var i = 0; i < count; i++)
+                    {
+                        using (var context = AdventureWorksFixture.CreateContext())
+                        {
+                            context.Currency.Add(new Currency
+                            {
+                                CurrencyCode = "TMP",
+                                Name = "Temporary"
+                            });
+
+                            using (context.Database.BeginTransaction())
+                            {
+                                context.SaveChanges();
+
+                                // Don't mesure transaction rollback
+                                collector.StopCollection();
+                            }
+                            collector.StartCollection();
+                        }
+                    }
+                }
+            }
         }
     }
 }

@@ -2,15 +2,15 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
-using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Migrations;
 using Microsoft.Data.Entity.Migrations.Internal;
-using Microsoft.Data.Entity.Query;
 using Microsoft.Data.Entity.Query.ExpressionTranslators;
+using Microsoft.Data.Entity.Query.Internal;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Update;
+using Microsoft.Data.Entity.Update.Internal;
 using Microsoft.Data.Entity.ValueGeneration;
 
 namespace Microsoft.Data.Entity.Tests
@@ -29,16 +29,14 @@ namespace Microsoft.Data.Entity.Tests
 
             VerifyScoped<IMigrator>();
             VerifyScoped<IMigrationsAssembly>();
+            VerifyScoped<RelationalDatabase>();
             VerifyScoped<RelationalQueryContextFactory>();
             VerifyScoped<BatchExecutor>();
             VerifyScoped<MigrationsModelDiffer>();
             VerifyScoped<RelationalValueGeneratorSelector>();
-            VerifyScoped<RelationalSqlExecutor>();
-            VerifyScoped<SqlStatementExecutor>();
             VerifyScoped<CommandBatchPreparer>();
             VerifyScoped<RelationalModelValidator>();
 
-            VerifyScoped<ISqlStatementExecutor>();
             VerifyScoped<IMethodCallTranslator>();
             VerifyScoped<IMemberTranslator>();
             VerifyScoped<IExpressionFragmentTranslator>();
@@ -52,7 +50,7 @@ namespace Microsoft.Data.Entity.Tests
             VerifyScoped<IRelationalValueBufferFactoryFactory>();
             VerifyScoped<IRelationalDatabaseCreator>();
             VerifyScoped<IUpdateSqlGenerator>();
-            VerifyScoped<IRelationalMetadataExtensionProvider>();
+            VerifyScoped<IRelationalAnnotationProvider>();
             VerifyScoped<MigrationsSqlGenerator>();
         }
 

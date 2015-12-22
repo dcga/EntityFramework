@@ -7,7 +7,6 @@ using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Builders;
 using Microsoft.Data.Entity.Metadata.Conventions;
-using Microsoft.Data.Entity.Metadata.Conventions.Internal;
 using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Utilities;
 
@@ -15,23 +14,18 @@ namespace Microsoft.Data.Entity
 {
     /// <summary>
     ///     <para>
-    ///         Provides a simple API surface for configuring a <see cref="Model" /> that defines the shape of your
-    ///         entities and how they map to the database.
+    ///         Provides a simple API surface for configuring a <see cref="IMutableModel" /> that defines the shape of your
+    ///         entities, the relationships between them, and how they map to the database.
     ///     </para>
     ///     <para>
     ///         You can use <see cref="ModelBuilder" /> to construct a model for a context by overriding
-    ///         <see cref="DbContext.OnModelCreating(ModelBuilder)" /> or creating a <see cref="Model" />
-    ///         externally
-    ///         and setting is on a <see cref="DbContextOptions" /> instance that is passed to the context
-    ///         constructor.
+    ///         <see cref="DbContext.OnModelCreating(ModelBuilder)" /> on your derived context. Alternatively you can create the
+    ///         model externally and set it on a <see cref="DbContextOptions" /> instance that is passed to the context constructor.
     ///     </para>
     /// </summary>
-    public class ModelBuilder : IAccessor<InternalModelBuilder>
+    public class ModelBuilder : IInfrastructure<InternalModelBuilder>
     {
         private readonly InternalModelBuilder _builder;
-
-        // TODO: Configure property facets, foreign keys & navigation properties
-        // Issue #213
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="ModelBuilder" /> class that will
@@ -42,34 +36,13 @@ namespace Microsoft.Data.Entity
         {
             Check.NotNull(conventions, nameof(conventions));
 
-            _builder = new InternalModelBuilder(new Model(), conventions).Initialize();
-        }
-
-        /// <summary>
-        ///     Initializes a new instance of the <see cref="ModelBuilder" /> class that will
-        ///     configure an existing model and apply a set of conventions.
-        /// </summary>
-        /// <param name="conventions"> The conventions to be applied to the model. </param>
-        /// <param name="model"> The model to be configured. </param>
-        public ModelBuilder([NotNull] ConventionSet conventions, [NotNull] Model model)
-        {
-            Check.NotNull(model, nameof(model));
-            Check.NotNull(conventions, nameof(conventions));
-
-            _builder = new InternalModelBuilder(model, conventions).Initialize();
-        }
-
-        public virtual ModelBuilder Validate()
-        {
-            Builder.Validate();
-
-            return this;
+            _builder = new InternalModelBuilder(new Model(conventions));
         }
 
         /// <summary>
         ///     The model being configured.
         /// </summary>
-        public virtual Model Model => Builder.Metadata;
+        public virtual IMutableModel Model => Builder.Metadata;
 
         /// <summary>
         ///     Adds or updates an annotation on the model. If an annotation with the key specified in
@@ -78,20 +51,26 @@ namespace Microsoft.Data.Entity
         /// <param name="annotation"> The key of the annotation to be added or updated. </param>
         /// <param name="value"> The value to be stored in the annotation. </param>
         /// <returns> The same <see cref="ModelBuilder" /> instance so that multiple configuration calls can be chained. </returns>
-        public virtual ModelBuilder Annotation([NotNull] string annotation, [NotNull] object value)
+        public virtual ModelBuilder HasAnnotation([NotNull] string annotation, [NotNull] object value)
         {
             Check.NotEmpty(annotation, nameof(annotation));
             Check.NotNull(value, nameof(value));
 
-            Builder.Annotation(annotation, value, ConfigurationSource.Explicit);
+            Builder.HasAnnotation(annotation, value, ConfigurationSource.Explicit);
 
             return this;
         }
 
         /// <summary>
-        ///     The internal <see cref="ModelBuilder" /> being used to configure this model.
+        ///     <para>
+        ///         The internal <see cref="ModelBuilder" /> being used to configure this model.
+        ///     </para>
+        ///     <para>
+        ///         This property is intended for use by extension methods to configure the model. It is not intended to be used in
+        ///         application code.
+        ///     </para>
         /// </summary>
-        InternalModelBuilder IAccessor<InternalModelBuilder>.Service => _builder;
+        InternalModelBuilder IInfrastructure<InternalModelBuilder>.Instance => _builder;
 
         /// <summary>
         ///     Returns an object that can be used to configure a given entity type in the model.
@@ -229,6 +208,6 @@ namespace Microsoft.Data.Entity
             return this;
         }
 
-        private InternalModelBuilder Builder => this.GetService();
+        private InternalModelBuilder Builder => this.GetInfrastructure();
     }
 }

@@ -5,10 +5,15 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Storage;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
+
+// ReSharper disable AccessToDisposedClosure
+// ReSharper disable ReturnValueOfPureMethodIsNotUsed
+// ReSharper disable StringStartsWithIsCultureSpecific
 
 namespace Microsoft.Data.Entity.FunctionalTests
 {
@@ -32,8 +37,8 @@ namespace Microsoft.Data.Entity.FunctionalTests
             var serviceProvider = new ServiceCollection()
                 .AddEntityFramework()
                 .AddInMemoryDatabase()
-                .GetService()
-                .AddInstance<ILoggerFactory>(loggerFactory)
+                .GetInfrastructure()
+                .AddSingleton<ILoggerFactory>(loggerFactory)
                 .BuildServiceProvider();
 
             using (var context = new BloggingContext(serviceProvider))
@@ -122,15 +127,15 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 .AddEntityFramework()
                 .AddInMemoryDatabase()
                 .ServiceCollection()
-                .AddInstance<ILoggerFactory>(loggerFactory)
+                .AddSingleton<ILoggerFactory>(loggerFactory)
                 .BuildServiceProvider();
 
             using (var context = new BloggingContext(serviceProvider))
             {
                 context.Blogs.Add(new BloggingContext.Blog(false) { Url = "http://sample.com" });
                 context.SaveChanges();
-                var entry = context.ChangeTracker.Entries().Single().GetService();
-                context.ChangeTracker.GetService().StopTracking(entry);
+                var entry = context.ChangeTracker.Entries().Single().GetInfrastructure();
+                context.ChangeTracker.GetInfrastructure().StopTracking(entry);
 
                 var ex = Assert.ThrowsAny<Exception>(() => test(context));
                 while (ex.InnerException != null)
@@ -142,6 +147,48 @@ namespace Microsoft.Data.Entity.FunctionalTests
                 Assert.Same(ex, loggerFactory.Logger.LastDatabaseErrorException);
                 Assert.Same(typeof(BloggingContext), loggerFactory.Logger.LastDatabaseErrorState.ContextType);
                 Assert.EndsWith(ex.ToString(), loggerFactory.Logger.LastDatabaseErrorFormatter(loggerFactory.Logger.LastDatabaseErrorState, ex));
+            }
+        }
+
+        [Fact]
+        public async Task SaveChanges_logs_concurrent_access_nonasync()
+        {
+            await SaveChanges_logs_concurrent_access(async: false);
+        }
+
+        [Fact]
+        public async Task SaveChanges_logs_concurrent_access_async()
+        {
+            await SaveChanges_logs_concurrent_access(async: true);
+        }
+
+        public async Task SaveChanges_logs_concurrent_access(bool async)
+        {
+            var loggerFactory = new TestLoggerFactory();
+            var serviceProvider = new ServiceCollection()
+                .AddEntityFramework()
+                .AddInMemoryDatabase()
+                .GetInfrastructure()
+                .AddSingleton<ILoggerFactory>(loggerFactory)
+                .BuildServiceProvider();
+
+            using (var context = new BloggingContext(serviceProvider))
+            {
+                context.Blogs.Add(new BloggingContext.Blog(false) { Url = "http://sample.com" });
+
+                ((IInfrastructure<IServiceProvider>)context).Instance.GetService<IConcurrencyDetector>().EnterCriticalSection();
+
+                Exception ex;
+                if (async)
+                {
+                    ex = await Assert.ThrowsAsync<NotSupportedException>(() => context.SaveChangesAsync());
+                }
+                else
+                {
+                    ex = Assert.Throws<NotSupportedException>(() => context.SaveChanges());
+                }
+
+                Assert.Equal(CoreStrings.ConcurrentMethodInvocation, ex.Message);
             }
         }
 
@@ -175,7 +222,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
             {
-                modelBuilder.Entity<Blog>().Key(b => b.Url);
+                modelBuilder.Entity<Blog>().HasKey(b => b.Url);
             }
 
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -184,18 +231,13 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
         private class TestLoggerFactory : ILoggerFactory
         {
-            public LogLevel MinimumLevel { get; set; }
-
             public readonly TestLogger Logger = new TestLogger();
 
             public void AddProvider(ILoggerProvider provider)
             {
             }
 
-            public ILogger CreateLogger(string name)
-            {
-                return Logger;
-            }
+            public ILogger CreateLogger(string name) => Logger;
 
             public void Dispose()
             {
@@ -203,10 +245,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
             public class TestLogger : ILogger
             {
-                public IDisposable BeginScopeImpl(object state)
-                {
-                    return NullScope.Instance;
-                }
+                public IDisposable BeginScopeImpl(object state) => NullScope.Instance;
 
                 public void Log(LogLevel logLevel, int eventId, object state, Exception exception, Func<object, Exception, string> formatter)
                 {
@@ -219,19 +258,11 @@ namespace Microsoft.Data.Entity.FunctionalTests
                     }
                 }
 
-                public bool IsEnabled(LogLevel logLevel)
-                {
-                    return true;
-                }
+                public bool IsEnabled(LogLevel logLevel) => true;
 
-                public IDisposable BeginScope(object state)
-                {
-                    throw new NotImplementedException();
-                }
-
-                public DatabaseErrorLogState LastDatabaseErrorState { get; set; }
-                public Exception LastDatabaseErrorException { get; set; }
-                public Func<object, Exception, string> LastDatabaseErrorFormatter { get; set; }
+                public DatabaseErrorLogState LastDatabaseErrorState { get; private set; }
+                public Exception LastDatabaseErrorException { get; private set; }
+                public Func<object, Exception, string> LastDatabaseErrorFormatter { get; private set; }
             }
         }
     }

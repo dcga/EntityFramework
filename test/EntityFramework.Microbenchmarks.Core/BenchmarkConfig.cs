@@ -1,36 +1,38 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using Microsoft.Framework.Configuration;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Configuration;
 
 namespace EntityFramework.Microbenchmarks.Core
 {
     public class BenchmarkConfig
     {
-        private static Lazy<BenchmarkConfig> _instance = new Lazy<BenchmarkConfig>(() =>
-        {
-            var config = new ConfigurationBuilder(".")
-                .AddJsonFile("config.json")
-                .AddEnvironmentVariables()
-                .Build();
-
-            var resultDatabasesSection = config.GetSection("benchmarks:resultDatabases");
-
-            return new BenchmarkConfig
+        private static readonly Lazy<BenchmarkConfig> _instance = new Lazy<BenchmarkConfig>(() =>
             {
-                RunIterations = bool.Parse(config["benchmarks:runIterations"]),
-                ResultDatabases = resultDatabasesSection.GetChildren().Select(s => config[s.Key]).ToArray(),
-                BenchmarkDatabaseInstance = config["benchmarks:benchmarkDatabaseInstance"],
-                ProductReportingVersion = config["benchmarks:productReportingVersion"],
-                CustomData = config["benchmarks:customData"]
-            };
-        });
+                var config = new ConfigurationBuilder()
+                    .SetBasePath(".")
+                    .AddJsonFile("config.json")
+                    .AddEnvironmentVariables()
+                    .Build();
+
+                var resultDatabasesSection = config.GetSection("benchmarks:resultDatabases");
+
+                return new BenchmarkConfig
+                {
+                    RunIterations = bool.Parse(config["benchmarks:runIterations"]),
+                    ResultDatabases = resultDatabasesSection.GetChildren().Select(s => s.Value).ToArray(),
+                    BenchmarkDatabaseInstance = config["benchmarks:benchmarkDatabaseInstance"],
+                    ProductReportingVersion = config["benchmarks:productReportingVersion"],
+                    CustomData = config["benchmarks:customData"]
+                };
+            });
 
         private BenchmarkConfig()
-        { }
+        {
+        }
 
         public static BenchmarkConfig Instance
         {

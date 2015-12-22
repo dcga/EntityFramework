@@ -23,12 +23,12 @@ namespace Microsoft.Data.Entity.Migrations
         {
             _targetModel = new LazyRef<IModel>(
                 () =>
-                {
-                    var modelBuilder = new ModelBuilder(new ConventionSet());
-                    BuildTargetModel(modelBuilder);
+                    {
+                        var modelBuilder = new ModelBuilder(new ConventionSet());
+                        BuildTargetModel(modelBuilder);
 
-                    return modelBuilder.Model;
-                });
+                        return modelBuilder.Model;
+                    });
             _upOperations = new LazyRef<List<MigrationOperation>>(() => BuildOperations(Up));
             _downOperations = new LazyRef<List<MigrationOperation>>(() => BuildOperations(Down));
         }
@@ -36,6 +36,7 @@ namespace Microsoft.Data.Entity.Migrations
         public virtual IModel TargetModel => _targetModel.Value;
         public virtual IReadOnlyList<MigrationOperation> UpOperations => _upOperations.Value;
         public virtual IReadOnlyList<MigrationOperation> DownOperations => _downOperations.Value;
+        public virtual string ActiveProvider { get; [param: NotNull] set; }
 
         protected virtual void BuildTargetModel([NotNull] ModelBuilder modelBuilder)
         {
@@ -50,7 +51,7 @@ namespace Microsoft.Data.Entity.Migrations
 
         private List<MigrationOperation> BuildOperations(Action<MigrationBuilder> buildAction)
         {
-            var migrationBuilder = new MigrationBuilder();
+            var migrationBuilder = new MigrationBuilder(ActiveProvider);
             buildAction(migrationBuilder);
 
             return migrationBuilder.Operations;

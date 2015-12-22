@@ -3,48 +3,66 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.ChangeTracking.Internal;
+using Microsoft.Data.Entity.ChangeTracking;
+using Microsoft.Data.Entity.Internal;
+using Microsoft.Data.Entity.Update;
 using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity
 {
+    /// <summary>
+    ///     An exception that is thrown when an error is encountered while saving to the database.
+    /// </summary>
     public class DbUpdateException : Exception
     {
-        public DbUpdateException()
-        {
-            Entries = new List<InternalEntityEntry>();
-        }
+        private readonly LazyRef<IReadOnlyList<EntityEntry>> _entries;
 
-        public DbUpdateException([NotNull] string message)
-            : this(message, (Exception)null)
-        {
-        }
-
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="DbUpdateException" /> class.
+        /// </summary>
+        /// <param name="message"> The error message that explains the reason for the exception. </param>
+        /// <param name="innerException"> The exception that is the cause of the current exception. </param>
         public DbUpdateException([NotNull] string message, [CanBeNull] Exception innerException)
             : base(message, innerException)
         {
-            Entries = new List<InternalEntityEntry>();
+            _entries = new LazyRef<IReadOnlyList<EntityEntry>>(() => new List<EntityEntry>());
         }
 
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="DbUpdateException" /> class.
+        /// </summary>
+        /// <param name="message"> The error message that explains the reason for the exception. </param>
+        /// <param name="entries"> The entries that were involved in the error. </param>
         public DbUpdateException(
             [NotNull] string message,
-            [NotNull] IReadOnlyList<InternalEntityEntry> entries)
+            [NotNull] IReadOnlyList<IUpdateEntry> entries)
             : this(message, null, entries)
         {
         }
 
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="DbUpdateException" /> class.
+        /// </summary>
+        /// <param name="message"> The error message that explains the reason for the exception. </param>
+        /// <param name="entries"> The entries that were involved in the error. </param>
+        /// <param name="innerException"> The exception that is the cause of the current exception. </param>
         public DbUpdateException(
             [NotNull] string message,
             [CanBeNull] Exception innerException,
-            [NotNull] IReadOnlyList<InternalEntityEntry> entries)
+            [NotNull] IReadOnlyList<IUpdateEntry> entries)
             : base(message, innerException)
         {
             Check.NotEmpty(entries, nameof(entries));
 
-            Entries = entries;
+            _entries = new LazyRef<IReadOnlyList<EntityEntry>>(() => entries.Select(e => e.ToEntityEntry()).ToList());
         }
 
-        public virtual IReadOnlyList<InternalEntityEntry> Entries { get; }
+        /// <summary>
+        ///     Gets the entries that were involved in the error. Typically this is a single entry, but in some cases it
+        ///     may be zero or multiple entries.
+        /// </summary>
+        public virtual IReadOnlyList<EntityEntry> Entries => _entries.Value;
     }
 }

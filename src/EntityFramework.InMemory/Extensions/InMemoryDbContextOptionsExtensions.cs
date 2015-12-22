@@ -3,7 +3,7 @@
 
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Data.Entity.InMemory;
+using Microsoft.Data.Entity.Infrastructure.Internal;
 using Microsoft.Data.Entity.Utilities;
 
 // ReSharper disable once CheckNamespace
@@ -12,9 +12,13 @@ namespace Microsoft.Data.Entity
 {
     public static class InMemoryDbContextOptionsExtensions
     {
-        public static void UseInMemoryDatabase([NotNull] this DbContextOptionsBuilder optionsBuilder, bool persist = true)
-            => ((IDbContextOptionsBuilderInfrastructure)Check.NotNull(optionsBuilder, nameof(optionsBuilder)))
-                .AddOrUpdateExtension(
-                    new InMemoryOptionsExtension { Persist = persist });
+        public static InMemoryDbContextOptionsBuilder UseInMemoryDatabase([NotNull] this DbContextOptionsBuilder optionsBuilder)
+        {
+            Check.NotNull(optionsBuilder, nameof(optionsBuilder));
+
+            ((IDbContextOptionsBuilderInfrastructure)optionsBuilder).AddOrUpdateExtension(new InMemoryOptionsExtension());
+
+            return new InMemoryDbContextOptionsBuilder(optionsBuilder);
+        }
     }
 }

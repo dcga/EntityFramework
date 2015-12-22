@@ -2,9 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Conventions.Internal;
+using Microsoft.Data.Entity.Metadata.Internal;
 
 namespace Microsoft.Data.Entity.FunctionalTests
 {
@@ -24,13 +26,16 @@ namespace Microsoft.Data.Entity.FunctionalTests
         protected override IModel CreateModel(DbContext context, IConventionSetBuilder conventionSetBuilder, IModelValidator validator)
         {
             var conventionSet = CreateConventionSet(conventionSetBuilder);
-            var model = new Model();
-            var modelBuilder = new ModelBuilder(conventionSet, model);
+
+            var modelBuilder = new ModelBuilder(conventionSet);
+            var model = (Model)modelBuilder.Model;
+            model.SetProductVersion(ProductInfo.GetVersion());
 
             FindSets(modelBuilder, context);
 
             _onModelCreating(modelBuilder);
 
+            model.Validate();
             validator.Validate(model);
 
             return model;

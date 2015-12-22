@@ -3,46 +3,21 @@
 
 using System;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Migrations;
-using Microsoft.Framework.DependencyInjection;
 
 namespace Microsoft.Data.Entity.FunctionalTests
 {
     public abstract class MigrationsFixtureBase
     {
-        private readonly LazyRef<IServiceProvider> _services;
+        public static string ActiveProvider { get; set; }
 
-        protected MigrationsFixtureBase()
+        public abstract MigrationsContext CreateContext();
+
+        public class MigrationsContext : DbContext
         {
-            _services = new LazyRef<IServiceProvider>(
-                () =>
-                {
-                    var services = new ServiceCollection();
-                    ConfigureServices(services);
-
-                    return services.BuildServiceProvider();
-                });
-        }
-
-        public DbContext CreateContext() => new MigrationsContext(_services.Value, OnConfiguring);
-
-        protected abstract void ConfigureServices(IServiceCollection services);
-        protected abstract void OnConfiguring(DbContextOptionsBuilder optionsBuilder);
-
-        private class MigrationsContext : DbContext
-        {
-            private readonly Action<DbContextOptionsBuilder> _configure;
-
-            public MigrationsContext(IServiceProvider serviceProvider, Action<DbContextOptionsBuilder> configure)
-                : base(serviceProvider)
+            public MigrationsContext(IServiceProvider serviceProvider, DbContextOptions options)
+                : base(serviceProvider, options)
             {
-                _configure = configure;
-            }
-
-            protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-            {
-                _configure(optionsBuilder);
             }
         }
 
@@ -52,6 +27,8 @@ namespace Microsoft.Data.Entity.FunctionalTests
         {
             protected override void Up(MigrationBuilder migrationBuilder)
             {
+                MigrationsFixtureBase.ActiveProvider = migrationBuilder.ActiveProvider;
+
                 migrationBuilder
                     .CreateTable(
                         name: "Table1",

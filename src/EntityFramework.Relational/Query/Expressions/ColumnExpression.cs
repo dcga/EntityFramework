@@ -19,12 +19,22 @@ namespace Microsoft.Data.Entity.Query.Expressions
             [NotNull] string name,
             [NotNull] IProperty property,
             [NotNull] TableExpressionBase tableExpression)
+            : this(name, Check.NotNull(property, nameof(property)).ClrType, tableExpression)
+        {
+            _property = property;
+        }
+
+        public ColumnExpression(
+            [NotNull] string name,
+            [NotNull] Type type,
+            [NotNull] TableExpressionBase tableExpression)
         {
             Check.NotEmpty(name, nameof(name));
+            Check.NotNull(type, nameof(type));
             Check.NotNull(tableExpression, nameof(tableExpression));
 
             Name = name;
-            _property = property;
+            Type = type;
             _tableExpression = tableExpression;
         }
 
@@ -40,7 +50,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
         public override ExpressionType NodeType => ExpressionType.Extension;
 
-        public override Type Type => _property.ClrType;
+        public override Type Type { get; }
 
         protected override Expression Accept(ExpressionVisitor visitor)
         {
@@ -71,7 +81,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
                 return true;
             }
 
-            return obj.GetType() == GetType()
+            return (obj.GetType() == GetType())
                    && Equals((ColumnExpression)obj);
         }
 
@@ -84,8 +94,6 @@ namespace Microsoft.Data.Entity.Query.Expressions
             }
         }
 
-        // TODO: Get provider-specific name
-        // Issue #871 
         public override string ToString() => _tableExpression.Alias + "." + Name;
     }
 }

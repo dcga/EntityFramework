@@ -1,19 +1,20 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.FunctionalTests.TestModels.Inheritance;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
 {
-    public class InheritanceSqliteFixture : InheritanceRelationalFixture
+    public class InheritanceSqliteFixture : InheritanceRelationalFixture, IDisposable
     {
         private readonly DbContextOptions _options;
         private readonly IServiceProvider _serviceProvider;
+        private readonly SqliteTestStore _testStore;
 
         public InheritanceSqliteFixture()
         {
@@ -23,18 +24,18 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
                     .AddSqlite()
                     .ServiceCollection()
                     .AddSingleton(TestSqliteModelSource.GetFactory(OnModelCreating))
-                    .AddInstance<ILoggerFactory>(new TestSqlLoggerFactory())
+                    .AddSingleton<ILoggerFactory>(new TestSqlLoggerFactory())
                     .BuildServiceProvider();
 
-            var testStore = SqliteTestStore.CreateScratch();
+            _testStore = SqliteTestStore.CreateScratch();
 
             var optionsBuilder = new DbContextOptionsBuilder();
-            optionsBuilder.UseSqlite(testStore.Connection);
+            optionsBuilder.UseSqlite(_testStore.Connection);
             _options = optionsBuilder.Options;
 
             // TODO: Do this via migrations & update pipeline
 
-            testStore.ExecuteNonQuery(@"
+            _testStore.ExecuteNonQuery(@"
                 DROP TABLE IF EXISTS Country;
                 DROP TABLE IF EXISTS Animal;
 
@@ -75,9 +76,8 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
             TestSqlLoggerFactory.Reset();
         }
 
-        public override InheritanceContext CreateContext()
-        {
-            return new InheritanceContext(_serviceProvider, _options);
-        }
+        public override InheritanceContext CreateContext() => new InheritanceContext(_serviceProvider, _options);
+
+        public void Dispose() => _testStore.Dispose();
     }
 }

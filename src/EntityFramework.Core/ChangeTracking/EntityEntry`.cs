@@ -7,7 +7,6 @@ using JetBrains.Annotations;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Internal;
-using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.ChangeTracking
@@ -30,10 +29,9 @@ namespace Microsoft.Data.Entity.ChangeTracking
         ///     from methods when using the <see cref="ChangeTracker" /> API and it is not designed to be directly
         ///     constructed in your application code.
         /// </summary>
-        /// <param name="context"> The context that is tracking the entity. </param>
         /// <param name="internalEntry"> The internal entry tracking information about this entity. </param>
-        public EntityEntry([NotNull] DbContext context, [NotNull] InternalEntityEntry internalEntry)
-            : base(context, internalEntry)
+        public EntityEntry([NotNull] InternalEntityEntry internalEntry)
+            : base(internalEntry)
         {
         }
 
@@ -58,22 +56,30 @@ namespace Microsoft.Data.Entity.ChangeTracking
 
             var propertyInfo = propertyExpression.GetPropertyAccess();
 
-            return new PropertyEntry<TEntity, TProperty>(this.GetService(), propertyInfo.Name);
+            return new PropertyEntry<TEntity, TProperty>(this.GetInfrastructure(), propertyInfo.Name);
         }
 
+        /// <summary>
+        ///     Provides access to change tracking information and operations for a given
+        ///     property of this entity.
+        /// </summary>
+        /// <typeparam name="TProperty"> The type of the property. </typeparam>
+        /// <param name="propertyName"> The property to access information and operations for. </param>
+        /// <returns> An object that exposes change tracking information and operations for the given property. </returns>
         public virtual PropertyEntry<TEntity, TProperty> Property<TProperty>(
             [NotNull] string propertyName)
         {
             Check.NotNull(propertyName, nameof(propertyName));
 
-            var property = this.GetService().EntityType.GetProperty(propertyName);
+            var property = this.GetInfrastructure().EntityType.FindProperty(propertyName);
 
-            if (property.ClrType != typeof(TProperty))
+            if ((property != null)
+                && (property.ClrType != typeof(TProperty)))
             {
-                throw new ArgumentException(Strings.WrongGenericPropertyType(propertyName, property.DeclaringEntityType.Name, property.ClrType.Name, typeof(TProperty).Name));
+                throw new ArgumentException(CoreStrings.WrongGenericPropertyType(propertyName, property.DeclaringEntityType.Name, property.ClrType.Name, typeof(TProperty).Name));
             }
 
-            return new PropertyEntry<TEntity, TProperty>(this.GetService(), propertyName);
+            return new PropertyEntry<TEntity, TProperty>(this.GetInfrastructure(), propertyName);
         }
     }
 }

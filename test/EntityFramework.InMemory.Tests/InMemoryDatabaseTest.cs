@@ -5,12 +5,13 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
+using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Conventions;
-using Microsoft.Data.Entity.Metadata.Conventions.Internal;
+using Microsoft.Data.Entity.Storage.Internal;
 using Microsoft.Data.Entity.Tests;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -40,16 +41,6 @@ namespace Microsoft.Data.Entity.InMemory.Tests
         }
 
         [Fact]
-        public void Uses_transient_database_if_not_configured_as_persistent()
-        {
-            var serviceProvider = InMemoryTestHelpers.Instance.CreateServiceProvider();
-
-            Assert.NotSame(
-                CreateStore(serviceProvider, persist: false).Store,
-                CreateStore(serviceProvider, persist: false).Store);
-        }
-
-        [Fact]
         public void EnsureDatabaseCreated_returns_true_for_first_use_of_persistent_database_and_false_thereafter()
         {
             var serviceProvider = InMemoryTestHelpers.Instance.CreateServiceProvider();
@@ -65,28 +56,10 @@ namespace Microsoft.Data.Entity.InMemory.Tests
             Assert.False(store.EnsureDatabaseCreated(model));
         }
 
-        [Fact]
-        public void EnsureDatabaseCreated_returns_true_for_first_use_of_non_persistent_database_and_false_thereafter()
-        {
-            var serviceProvider = InMemoryTestHelpers.Instance.CreateServiceProvider();
-            var model = CreateModel();
-            var store = CreateStore(serviceProvider, persist: false);
-
-            Assert.True(store.EnsureDatabaseCreated(model));
-            Assert.False(store.EnsureDatabaseCreated(model));
-            Assert.False(store.EnsureDatabaseCreated(model));
-
-            store = CreateStore(serviceProvider, persist: false);
-
-            Assert.True(store.EnsureDatabaseCreated(model));
-            Assert.False(store.EnsureDatabaseCreated(model));
-            Assert.False(store.EnsureDatabaseCreated(model));
-        }
-
         private static IInMemoryDatabase CreateStore(IServiceProvider serviceProvider, bool persist)
         {
             var optionsBuilder = new DbContextOptionsBuilder();
-            optionsBuilder.UseInMemoryDatabase(persist: persist);
+            optionsBuilder.UseInMemoryDatabase();
 
             return InMemoryTestHelpers.Instance.CreateContextServices(serviceProvider, optionsBuilder.Options).GetRequiredService<IInMemoryDatabase>();
         }
@@ -103,8 +76,8 @@ namespace Microsoft.Data.Entity.InMemory.Tests
 
             await inMemoryDatabase.SaveChangesAsync(new[] { entityEntry });
 
-            Assert.Equal(1, inMemoryDatabase.Store.SelectMany(t => t).Count());
-            Assert.Equal(new object[] { 42, "Unikorn" }, inMemoryDatabase.Store.Single().Single());
+            Assert.Equal(1, inMemoryDatabase.Store.GetTables(entityEntry.EntityType).SelectMany(t => t.Rows).Count());
+            Assert.Equal(new object[] { 42, "Unikorn" }, inMemoryDatabase.Store.GetTables(entityEntry.EntityType).Single().Rows.Single());
         }
 
         [Fact]
@@ -125,8 +98,8 @@ namespace Microsoft.Data.Entity.InMemory.Tests
 
             await inMemoryDatabase.SaveChangesAsync(new[] { entityEntry });
 
-            Assert.Equal(1, inMemoryDatabase.Store.SelectMany(t => t).Count());
-            Assert.Equal(new object[] { 42, "Unikorn, The Return" }, inMemoryDatabase.Store.Single().Single());
+            Assert.Equal(1, inMemoryDatabase.Store.GetTables(entityEntry.EntityType).SelectMany(t => t.Rows).Count());
+            Assert.Equal(new object[] { 42, "Unikorn, The Return" }, inMemoryDatabase.Store.GetTables(entityEntry.EntityType).Single().Rows.Single());
         }
 
         [Fact]
@@ -150,7 +123,7 @@ namespace Microsoft.Data.Entity.InMemory.Tests
 
             await inMemoryDatabase.SaveChangesAsync(new[] { entityEntry });
 
-            Assert.Equal(0, inMemoryDatabase.Store.SelectMany(t => t).Count());
+            Assert.Equal(0, inMemoryDatabase.Store.GetTables(entityEntry.EntityType).SelectMany(t => t.Rows).Count());
         }
 
         [Fact]
@@ -163,7 +136,7 @@ namespace Microsoft.Data.Entity.InMemory.Tests
             mockFactory.Setup(m => m.CreateLogger(It.IsAny<string>())).Returns(mockLogger.Object);
 
             var serviceCollection = new ServiceCollection();
-            serviceCollection.AddInstance(mockFactory.Object);
+            serviceCollection.AddSingleton(mockFactory.Object);
 
             var scopedServices = InMemoryTestHelpers.Instance.CreateContextServices(serviceCollection, CreateModel());
 
@@ -178,7 +151,7 @@ namespace Microsoft.Data.Entity.InMemory.Tests
             mockLogger.Verify(
                 l => l.Log(
                     LogLevel.Information,
-                    0,
+                    (int)InMemoryLoggingEventId.SavedChanges,
                     1,
                     null,
                     It.IsAny<Func<object, Exception, string>>()),
@@ -191,7 +164,7 @@ namespace Microsoft.Data.Entity.InMemory.Tests
 
             modelBuilder.Entity<Customer>(b =>
                 {
-                    b.Key(c => c.Id);
+                    b.HasKey(c => c.Id);
                     b.Property(c => c.Name);
                 });
 

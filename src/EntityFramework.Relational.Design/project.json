@@ -6,45 +6,19 @@
     "url": "git://github.com/aspnet/entityframework"
   },
   "compilationOptions": {
-    "warningsAsErrors": true
+    "warningsAsErrors": true,
+    "keyFile": "../../tools/Key.snk"
   },
   "dependencies": {
-    "Microsoft.AspNet.Razor": "4.0.0-*",
-    "Microsoft.CodeAnalysis.CSharp": "1.1.0-beta1-*",
     "EntityFramework.Relational": "7.0.0-*"
   },
   "compile": "..\\Shared\\*.cs",
   "namedResource": {
-    "EntityFramework.Relational.Design.Strings": "Properties/Strings.resx"
+    "EntityFramework.Relational.Design.RelationalDesignStrings": "Properties/RelationalDesignStrings.resx"
   },
-  "resource": "ReverseEngineering/Templates/*.cshtml",
   "frameworks": {
-    "net45": {
-      "frameworkAssemblies": {
-        "System.ComponentModel.DataAnnotations": "4.0.0.0",
-        "System.IO": { "version": "4.0.0.0", "type": "build" },
-        "System.Text.Encoding": { "version": "4.0.0.0", "type": "build" },
-        "System.Threading.Tasks": { "version": "4.0.0.0", "type": "build" }
-      }
-    },
-    "dnx451": {
-      "frameworkAssemblies": {
-        "System.ComponentModel.DataAnnotations": "4.0.0.0",
-        "System.IO": "4.0.0.0",
-        "System.Text.Encoding": "4.0.0.0",
-        "System.Threading.Tasks": "4.0.0.0"
-      },
-      "dependencies": {
-        "Microsoft.Dnx.Compilation.CSharp": "1.0.0-*",
-        "Microsoft.Dnx.Compilation.CSharp.Abstractions": "1.0.0-*"
-      }
-    },
-    "dnxcore50": {
-      "dependencies": {
-        "System.ComponentModel.Annotations": "4.0.11-beta-*",
-        "Microsoft.Dnx.Compilation.CSharp": "1.0.0-*",
-        "Microsoft.Dnx.Compilation.CSharp.Abstractions": "1.0.0-*"
-      }
-    }
+    "net451": { },
+    "dotnet5.4": { },
+    "netcore50": { }
   }
 }

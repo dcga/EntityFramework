@@ -2,10 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using Microsoft.Data.Entity.ChangeTracking;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.FunctionalTests.TestModels.ComplexNavigationsModel;
-using Microsoft.Framework.DependencyInjection;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
 {
@@ -24,7 +25,7 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
                 .AddSqlite()
                 .ServiceCollection()
                 .AddSingleton(TestSqliteModelSource.GetFactory(OnModelCreating))
-                .AddInstance<ILoggerFactory>(new TestSqlLoggerFactory())
+                .AddSingleton<ILoggerFactory>(new TestSqlLoggerFactory())
                 .BuildServiceProvider();
         }
 
@@ -52,9 +53,13 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
         public override ComplexNavigationsContext CreateContext(SqliteTestStore testStore)
         {
             var optionsBuilder = new DbContextOptionsBuilder();
-            optionsBuilder.UseSqlite(testStore.Connection);
+            optionsBuilder.UseSqlite(testStore.Connection)
+                .SuppressForeignKeyEnforcement();
 
             var context = new ComplexNavigationsContext(_serviceProvider, optionsBuilder.Options);
+
+            context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
             context.Database.UseTransaction(testStore.Transaction);
 
             return context;

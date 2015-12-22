@@ -3,8 +3,8 @@
 
 using System;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata.Internal;
-using Microsoft.Data.Entity.Relational.Internal;
 
 namespace Microsoft.Data.Entity.Metadata.Builders
 {
@@ -16,19 +16,22 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         }
 
         protected virtual RelationalEntityTypeBuilderAnnotations AnnotationsBuilder { get; }
-        
+
+        public virtual DiscriminatorBuilder HasValue([CanBeNull] object value)
+            => HasValue(AnnotationsBuilder.EntityTypeBuilder, value);
+
         public virtual DiscriminatorBuilder HasValue<TEntity>([CanBeNull] object value)
             => HasValue(typeof(TEntity), value);
 
         public virtual DiscriminatorBuilder HasValue([NotNull] Type entityType, [CanBeNull] object value)
         {
-            var entityTypeBuilder = AnnotationsBuilder.EntityTypeBuilder.ModelBuilder.Entity(entityType, ConfigurationSource.Convention);
+            var entityTypeBuilder = AnnotationsBuilder.EntityTypeBuilder.ModelBuilder.Entity(entityType, AnnotationsBuilder.Annotations.ConfigurationSource);
             return HasValue(entityTypeBuilder, value);
         }
 
         public virtual DiscriminatorBuilder HasValue([NotNull] string entityTypeName, [CanBeNull] object value)
         {
-            var entityTypeBuilder = AnnotationsBuilder.EntityTypeBuilder.ModelBuilder.Entity(entityTypeName, ConfigurationSource.Convention);
+            var entityTypeBuilder = AnnotationsBuilder.EntityTypeBuilder.ModelBuilder.Entity(entityTypeName, AnnotationsBuilder.Annotations.ConfigurationSource);
             return HasValue(entityTypeBuilder, value);
         }
 
@@ -36,9 +39,9 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         {
             var baseEntityTypeBuilder = AnnotationsBuilder.EntityTypeBuilder;
             if (!baseEntityTypeBuilder.Metadata.IsAssignableFrom(entityTypeBuilder.Metadata)
-                && entityTypeBuilder.BaseType(baseEntityTypeBuilder.Metadata, AnnotationsBuilder.Annotations.ConfigurationSource) == null)
+                && (entityTypeBuilder.HasBaseType(baseEntityTypeBuilder.Metadata, AnnotationsBuilder.Annotations.ConfigurationSource) == null))
             {
-                throw new InvalidOperationException(Strings.DiscriminatorEntityTypeNotDerived(
+                throw new InvalidOperationException(RelationalStrings.DiscriminatorEntityTypeNotDerived(
                     entityTypeBuilder.Metadata.DisplayName(),
                     baseEntityTypeBuilder.Metadata.DisplayName()));
             }

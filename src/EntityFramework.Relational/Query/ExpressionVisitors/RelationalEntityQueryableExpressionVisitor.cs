@@ -2,17 +2,18 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.ChangeTracking.Internal;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
-using Microsoft.Data.Entity.Query.Annotations;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Query.Expressions;
+using Microsoft.Data.Entity.Query.ExpressionVisitors.Internal;
+using Microsoft.Data.Entity.Query.Internal;
+using Microsoft.Data.Entity.Query.ResultOperators.Internal;
 using Microsoft.Data.Entity.Query.Sql;
-using Microsoft.Data.Entity.Relational.Internal;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses;
@@ -22,79 +23,101 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 {
     public class RelationalEntityQueryableExpressionVisitor : EntityQueryableExpressionVisitor
     {
-        private static readonly ParameterExpression _valueBufferParameter
-            = Expression.Parameter(typeof(ValueBuffer));
-
+        private readonly IModel _model;
+        private readonly ISelectExpressionFactory _selectExpressionFactory;
+        private readonly IMaterializerFactory _materializerFactory;
+        private readonly IShaperCommandContextFactory _shaperCommandContextFactory;
+        private readonly IRelationalAnnotationProvider _relationalAnnotationProvider;
         private readonly IQuerySource _querySource;
 
         public RelationalEntityQueryableExpressionVisitor(
+            [NotNull] IModel model,
+            [NotNull] ISelectExpressionFactory selectExpressionFactory,
+            [NotNull] IMaterializerFactory materializerFactory,
+            [NotNull] IShaperCommandContextFactory shaperCommandContextFactory,
+            [NotNull] IRelationalAnnotationProvider relationalAnnotationProvider,
             [NotNull] RelationalQueryModelVisitor queryModelVisitor,
-            [NotNull] IQuerySource querySource)
+            [CanBeNull] IQuerySource querySource)
             : base(Check.NotNull(queryModelVisitor, nameof(queryModelVisitor)))
         {
-            Check.NotNull(querySource, nameof(querySource));
+            Check.NotNull(model, nameof(model));
+            Check.NotNull(selectExpressionFactory, nameof(selectExpressionFactory));
+            Check.NotNull(materializerFactory, nameof(materializerFactory));
+            Check.NotNull(shaperCommandContextFactory, nameof(shaperCommandContextFactory));
+            Check.NotNull(relationalAnnotationProvider, nameof(relationalAnnotationProvider));
 
+            _model = model;
+            _selectExpressionFactory = selectExpressionFactory;
+            _materializerFactory = materializerFactory;
+            _shaperCommandContextFactory = shaperCommandContextFactory;
+            _relationalAnnotationProvider = relationalAnnotationProvider;
             _querySource = querySource;
         }
 
         private new RelationalQueryModelVisitor QueryModelVisitor => (RelationalQueryModelVisitor)base.QueryModelVisitor;
 
-        protected override Expression VisitSubQuery(SubQueryExpression subQueryExpression)
+        protected override Expression VisitSubQuery(SubQueryExpression expression)
         {
-            Check.NotNull(subQueryExpression, nameof(subQueryExpression));
+            Check.NotNull(expression, nameof(expression));
 
             var queryModelVisitor = (RelationalQueryModelVisitor)CreateQueryModelVisitor();
 
-            queryModelVisitor.VisitQueryModel(subQueryExpression.QueryModel);
+            queryModelVisitor.VisitQueryModel(expression.QueryModel);
 
-            QueryModelVisitor.RegisterSubQueryVisitor(_querySource, queryModelVisitor);
+            if (_querySource != null)
+            {
+                QueryModelVisitor.RegisterSubQueryVisitor(_querySource, queryModelVisitor);
+            }
 
             return queryModelVisitor.Expression;
         }
 
-        protected override Expression VisitMember(MemberExpression memberExpression)
+        protected override Expression VisitMember(MemberExpression node)
         {
-            Check.NotNull(memberExpression, nameof(memberExpression));
+            Check.NotNull(node, nameof(node));
 
             QueryModelVisitor
                 .BindMemberExpression(
-                    memberExpression,
+                    node,
                     (property, querySource, selectExpression)
                         => selectExpression.AddToProjection(
-                            QueryModelVisitor.QueryCompilationContext.RelationalExtensions.For(property).ColumnName,
+                            _relationalAnnotationProvider.For(property).ColumnName,
                             property,
                             querySource),
                     bindSubQueries: true);
 
-            return base.VisitMember(memberExpression);
+            return base.VisitMember(node);
         }
 
-        protected override Expression VisitMethodCall(MethodCallExpression methodCallExpression)
+        protected override Expression VisitMethodCall(MethodCallExpression node)
         {
-            Check.NotNull(methodCallExpression, nameof(methodCallExpression));
+            Check.NotNull(node, nameof(node));
 
             QueryModelVisitor
                 .BindMethodCallExpression(
-                    methodCallExpression,
+                    node,
                     (property, querySource, selectExpression)
                         => selectExpression.AddToProjection(
-                            QueryModelVisitor.QueryCompilationContext.RelationalExtensions.For(property).ColumnName,
+                            _relationalAnnotationProvider.For(property).ColumnName,
                             property,
                             querySource),
                     bindSubQueries: true);
 
-            return base.VisitMethodCall(methodCallExpression);
+            return base.VisitMethodCall(node);
         }
 
         protected override Expression VisitEntityQueryable(Type elementType)
         {
             Check.NotNull(elementType, nameof(elementType));
 
-            var queryMethodInfo = CreateValueBufferMethodInfo;
             var relationalQueryCompilationContext = QueryModelVisitor.QueryCompilationContext;
-            var entityType = relationalQueryCompilationContext.Model.GetEntityType(elementType);
-            var selectExpression = new SelectExpression();
-            var name = relationalQueryCompilationContext.RelationalExtensions.For(entityType).TableName;
+            var entityType = _model.FindEntityType(elementType);
+
+            var selectExpression = _selectExpressionFactory.Create();
+
+            QueryModelVisitor.AddQuery(_querySource, selectExpression);
+
+            var name = _relationalAnnotationProvider.For(entityType).TableName;
 
             var tableAlias
                 = _querySource.HasGeneratedItemName()
@@ -103,185 +126,139 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
 
             var fromSqlAnnotation
                 = relationalQueryCompilationContext
-                    .GetCustomQueryAnnotations(RelationalQueryableExtensions.FromSqlMethodInfo)
+                    .QueryAnnotations
+                    .OfType<FromSqlResultOperator>()
                     .LastOrDefault(a => a.QuerySource == _querySource);
 
-            var composable = true;
-            var sqlString = "";
-            object[] sqlParameters = null;
+            Func<IQuerySqlGenerator> querySqlGeneratorFunc = selectExpression.CreateDefaultQuerySqlGenerator;
 
             if (fromSqlAnnotation == null)
             {
                 selectExpression.AddTable(
                     new TableExpression(
                         name,
-                        relationalQueryCompilationContext.RelationalExtensions.For(entityType).Schema,
+                        _relationalAnnotationProvider.For(entityType).Schema,
                         tableAlias,
                         _querySource));
             }
             else
             {
-                sqlString = (string)fromSqlAnnotation.Arguments[1];
-                sqlParameters = (object[])fromSqlAnnotation.Arguments[2];
-
                 selectExpression.AddTable(
-                    new RawSqlDerivedTableExpression(
-                        sqlString,
-                        sqlParameters,
+                    new FromSqlExpression(
+                        fromSqlAnnotation.Sql,
+                        fromSqlAnnotation.Arguments,
                         tableAlias,
                         _querySource));
 
-                var sqlStart = sqlString.SkipWhile(char.IsWhiteSpace).Take(7).ToArray();
+                var useQueryComposition
+                    = fromSqlAnnotation.Sql
+                        .TrimStart()
+                        .StartsWith("SELECT ", StringComparison.OrdinalIgnoreCase);
 
-                if (sqlStart.Length != 7
-                    || !char.IsWhiteSpace(sqlStart.Last())
-                    || !new string(sqlStart).StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+                if (!useQueryComposition)
                 {
-                    if (relationalQueryCompilationContext.QueryAnnotations
-                        .OfType<IncludeQueryAnnotation>().Any())
+                    if (relationalQueryCompilationContext.IsIncludeQuery)
                     {
-                        throw new InvalidOperationException(Strings.StoredProcedureIncludeNotSupported);
+                        throw new InvalidOperationException(
+                            RelationalStrings.StoredProcedureIncludeNotSupported);
                     }
-
-                    QueryModelVisitor.RequiresClientEval = true;
-
-                    composable = false;
                 }
 
-                if (!fromSqlAnnotation.QueryModel.BodyClauses.Any()
-                    && !fromSqlAnnotation.QueryModel.ResultOperators.Any())
+                if (useQueryComposition
+                    && fromSqlAnnotation.QueryModel.IsIdentityQuery()
+                    && !fromSqlAnnotation.QueryModel.ResultOperators.Any()
+                    && !relationalQueryCompilationContext.IsIncludeQuery)
                 {
-                    composable = false;
+                    useQueryComposition = false;
+                }
+
+                if (!useQueryComposition)
+                {
+                    QueryModelVisitor.RequiresClientEval = true;
+
+                    querySqlGeneratorFunc = ()
+                        => selectExpression.CreateFromSqlQuerySqlGenerator(
+                            fromSqlAnnotation.Sql,
+                            fromSqlAnnotation.Arguments);
                 }
             }
 
-            QueryModelVisitor.AddQuery(_querySource, selectExpression);
+            var shaper = CreateShaper(elementType, entityType, selectExpression);
 
-            var queryMethodArguments
-                = new List<Expression>
-                    {
-                        Expression.Constant(_querySource),
-                        EntityQueryModelVisitor.QueryContextParameter,
-                        EntityQueryModelVisitor.QueryResultScopeParameter,
-                        _valueBufferParameter,
-                        Expression.Constant(0)
-                    };
+            return Expression.Call(
+                QueryModelVisitor.QueryCompilationContext.QueryMethodProvider // TODO: Don't use ShapedQuery when projecting
+                    .ShapedQueryMethod
+                    .MakeGenericMethod(shaper.Type),
+                EntityQueryModelVisitor.QueryContextParameter,
+                Expression.Constant(_shaperCommandContextFactory.Create(querySqlGeneratorFunc)),
+                Expression.Constant(shaper));
+        }
+
+        private Shaper CreateShaper(Type elementType, IEntityType entityType, SelectExpression selectExpression)
+        {
+            Shaper shaper;
 
             if (QueryModelVisitor.QueryCompilationContext
                 .QuerySourceRequiresMaterialization(_querySource)
                 || QueryModelVisitor.RequiresClientEval)
             {
                 var materializer
-                    = new MaterializerFactory(
-                        relationalQueryCompilationContext
-                            .EntityMaterializerSource)
+                    = _materializerFactory
                         .CreateMaterializer(
                             entityType,
                             selectExpression,
                             (p, se) =>
                                 se.AddToProjection(
-                                    relationalQueryCompilationContext.RelationalExtensions.For(p).ColumnName,
+                                    _relationalAnnotationProvider.For(p).ColumnName,
                                     p,
                                     _querySource),
-                            QueryModelVisitor.QueryCompilationContext.RelationalExtensions,
-                            _querySource);
+                            _querySource).Compile();
 
-                queryMethodInfo
-                    = CreateEntityMethodInfo.MakeGenericMethod(elementType);
-
-                var keyFactory
-                    = relationalQueryCompilationContext.EntityKeyFactorySource
-                        .GetKeyFactory(entityType.GetPrimaryKey());
-
-                queryMethodArguments.AddRange(
-                    new[]
+                shaper
+                    = (Shaper)_createEntityShaperMethodInfo.MakeGenericMethod(elementType)
+                        .Invoke(null, new object[]
                         {
-                            Expression.Constant(entityType),
-                            Expression.Constant(QueryModelVisitor.QuerySourceRequiresTracking(_querySource)),
-                            Expression.Constant(keyFactory),
-                            Expression.Constant(entityType.GetPrimaryKey().Properties),
-                            materializer
+                            _querySource,
+                            entityType.DisplayName(),
+                            QueryModelVisitor.QueryCompilationContext.IsTrackingQuery,
+                            entityType.FindPrimaryKey(),
+                            materializer,
+                            QueryModelVisitor.QueryCompilationContext.IsQueryBufferRequired
                         });
-            }
-
-            Func<ISqlQueryGenerator> sqlQueryGeneratorFactory;
-
-            if (composable)
-            {
-                sqlQueryGeneratorFactory = () =>
-                    relationalQueryCompilationContext.CreateSqlQueryGenerator(selectExpression);
             }
             else
             {
-                sqlQueryGeneratorFactory = () =>
-                    new RawSqlQueryGenerator(selectExpression, sqlString, sqlParameters, relationalQueryCompilationContext.TypeMapper);
+                shaper = new ValueBufferShaper(_querySource);
             }
 
-            return Expression.Call(
-                relationalQueryCompilationContext.QueryMethodProvider.ShapedQueryMethod
-                    .MakeGenericMethod(queryMethodInfo.ReturnType),
-                EntityQueryModelVisitor.QueryContextParameter,
-                Expression.Constant(
-                    new CommandBuilder(
-                        sqlQueryGeneratorFactory,
-                        relationalQueryCompilationContext.ValueBufferFactoryFactory)),
-                Expression.Lambda(
-                    Expression.Call(queryMethodInfo, queryMethodArguments),
-                    _valueBufferParameter));
+            return shaper;
         }
 
-        public static readonly MethodInfo CreateValueBufferMethodInfo
+        private static readonly MethodInfo _createEntityShaperMethodInfo
             = typeof(RelationalEntityQueryableExpressionVisitor).GetTypeInfo()
-                .GetDeclaredMethod(nameof(CreateValueBuffer));
+                .GetDeclaredMethod(nameof(CreateEntityShaper));
 
         [UsedImplicitly]
-        private static QueryResultScope<ValueBuffer> CreateValueBuffer(
+        private static IShaper<TEntity> CreateEntityShaper<TEntity>(
             IQuerySource querySource,
-            QueryContext queryContext,
-            QueryResultScope parentQueryResultScope,
-            ValueBuffer valueBuffer,
-            int valueBufferOffset)
-            => new QueryResultScope<ValueBuffer>(
-                querySource,
-                valueBuffer.WithOffset(valueBufferOffset),
-                parentQueryResultScope);
-
-        public static readonly MethodInfo CreateEntityMethodInfo
-            = typeof(RelationalEntityQueryableExpressionVisitor).GetTypeInfo()
-                .GetDeclaredMethod(nameof(CreateEntity));
-
-        [UsedImplicitly]
-        private static QueryResultScope<TEntity> CreateEntity<TEntity>(
-            IQuerySource querySource,
-            QueryContext queryContext,
-            QueryResultScope parentQueryResultScope,
-            ValueBuffer valueBuffer,
-            int valueBufferOffset,
-            IEntityType entityType,
-            bool queryStateManager,
-            EntityKeyFactory entityKeyFactory,
-            IReadOnlyList<IProperty> keyProperties,
-            Func<ValueBuffer, object> materializer)
+            string entityType,
+            bool trackingQuery,
+            IKey key,
+            Func<ValueBuffer, object> materializer,
+            bool useQueryBuffer)
             where TEntity : class
-        {
-            valueBuffer = valueBuffer.WithOffset(valueBufferOffset);
-
-            var entityKey
-                = entityKeyFactory.Create(keyProperties, valueBuffer);
-
-            return new QueryResultScope<TEntity>(
-                querySource,
-                entityKey != EntityKey.InvalidEntityKey
-                    ? (TEntity)queryContext.QueryBuffer
-                        .GetEntity(
-                            entityType,
-                            entityKey,
-                            new EntityLoadInfo(
-                                valueBuffer,
-                                materializer),
-                            queryStateManager)
-                    : null,
-                parentQueryResultScope);
-        }
+            => !useQueryBuffer
+                ? (IShaper<TEntity>)new UnbufferedEntityShaper<TEntity>(
+                    querySource,
+                    entityType,
+                    trackingQuery,
+                    key,
+                    materializer)
+                : new BufferedEntityShaper<TEntity>(
+                    querySource,
+                    entityType,
+                    trackingQuery,
+                    key,
+                    materializer);
     }
 }

@@ -4,13 +4,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.FunctionalTests.TestModels;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Sqlite;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
 {
@@ -18,8 +17,8 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
     {
         private static readonly HashSet<string> _createdDatabases = new HashSet<string>();
 
-        private static readonly ConcurrentDictionary<string, AsyncLock> _creationLocks
-            = new ConcurrentDictionary<string, AsyncLock>();
+        private static readonly ConcurrentDictionary<string, object> _creationLocks
+            = new ConcurrentDictionary<string, object>();
 
         protected override IServiceProvider CreateServiceProvider(bool throwingStateManager = false)
         {
@@ -45,17 +44,15 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
         }
 
         private static string CreateConnectionString(string name)
-        {
-            return new SqliteConnectionStringBuilder
+            => new SqliteConnectionStringBuilder
             {
                 DataSource = name + ".db"
             }.ConnectionString;
-        }
 
-        protected override async Task CreateAndSeedDatabase(string databaseName, Func<MonsterContext> createContext)
+        protected override void CreateAndSeedDatabase(string databaseName, Func<MonsterContext> createContext)
         {
-            var creationLock = _creationLocks.GetOrAdd(databaseName, n => new AsyncLock());
-            using (await creationLock.LockAsync())
+            var creationLock = _creationLocks.GetOrAdd(databaseName, n => new object());
+            lock (creationLock)
             {
                 if (!_createdDatabases.Contains(databaseName))
                 {
@@ -74,9 +71,9 @@ namespace Microsoft.Data.Entity.Sqlite.FunctionalTests
         public override void OnModelCreating<TMessage, TProductPhoto, TProductReview>(ModelBuilder builder)
         {
             base.OnModelCreating<TMessage, TProductPhoto, TProductReview>(builder);
-            builder.Entity<TMessage>().Key(e => e.MessageId);
-            builder.Entity<TProductPhoto>().Key(e => e.PhotoId);
-            builder.Entity<TProductReview>().Key(e => e.ReviewId);
+            builder.Entity<TMessage>().HasKey(e => e.MessageId);
+            builder.Entity<TProductPhoto>().HasKey(e => e.PhotoId);
+            builder.Entity<TProductReview>().HasKey(e => e.ReviewId);
         }
     }
 }

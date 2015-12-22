@@ -2,10 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Internal;
-using Microsoft.Data.Entity.Metadata;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Tests.ChangeTracking
@@ -43,10 +41,10 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new FreezerContext())
             {
                 var entity = context.Add(new Chunky()).Entity;
-                var entry = context.ChangeTracker.GetService().GetOrCreateEntry(entity);
+                var entry = context.ChangeTracker.GetInfrastructure().GetOrCreateEntry(entity);
 
-                Assert.Same(entry, context.Entry(entity).GetService());
-                Assert.Same(entry, context.Entry((object)entity).GetService());
+                Assert.Same(entry, context.Entry(entity).GetInfrastructure());
+                Assert.Same(entry, context.Entry((object)entity).GetInfrastructure());
             }
         }
 
@@ -56,7 +54,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new FreezerContext())
             {
                 var entity = context.Add(new Chunky()).Entity;
-                var entityType = context.Model.GetEntityType(typeof(Chunky));
+                var entityType = context.Model.FindEntityType(typeof(Chunky));
 
                 Assert.Same(entityType, context.Entry(entity).Metadata);
                 Assert.Same(entityType, context.Entry((object)entity).Metadata);
@@ -69,7 +67,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             using (var context = new FreezerContext())
             {
                 var entity = new Chunky();
-                var entry = context.Add(entity).GetService();
+                var entry = context.Add(entity).GetInfrastructure();
 
                 context.Entry(entity).State = EntityState.Modified;
                 Assert.Equal(EntityState.Modified, entry.EntityState);
@@ -174,7 +172,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(Strings.WrongGenericPropertyType("Monkey", entity.GetType(), typeof(int).Name, typeof(string).Name),
+                Assert.Equal(CoreStrings.WrongGenericPropertyType("Monkey", entity.GetType(), typeof(int).Name, typeof(string).Name),
                     Assert.Throws<ArgumentException>(() => context.Entry(entity).Property<string>("Monkey")).Message);
             }
         }
@@ -197,12 +195,12 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             {
                 var entity = context.Add(new Chunky()).Entity;
 
-                Assert.Equal(Strings.PropertyNotFound("Chimp", entity.GetType()),
-                    Assert.Throws<ModelItemNotFoundException>(() => context.Entry(entity).Property("Chimp").Metadata.Name).Message);
-                Assert.Equal(Strings.PropertyNotFound("Chimp", entity.GetType()),
-                    Assert.Throws<ModelItemNotFoundException>(() => context.Entry((object)entity).Property("Chimp").Metadata.Name).Message);
-                Assert.Equal(Strings.PropertyNotFound("Chimp", entity.GetType()),
-                    Assert.Throws<ModelItemNotFoundException>(() => context.Entry(entity).Property<int>("Chimp").Metadata.Name).Message);
+                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                    Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Property("Chimp").Metadata.Name).Message);
+                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                    Assert.Throws<InvalidOperationException>(() => context.Entry((object)entity).Property("Chimp").Metadata.Name).Message);
+                Assert.Equal(CoreStrings.PropertyNotFound("Chimp", entity.GetType().Name),
+                    Assert.Throws<InvalidOperationException>(() => context.Entry(entity).Property<int>("Chimp").Metadata.Name).Message);
             }
         }
 
@@ -219,7 +217,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking
             {
             }
 
-            protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) 
+            protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
                 => optionsBuilder.UseInMemoryDatabase();
 
             public DbSet<Chunky> Icecream { get; set; }

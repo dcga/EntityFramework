@@ -11,9 +11,16 @@ namespace Microsoft.Data.Entity.FunctionalTests
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<Plant>().Discriminator(p => p.Genus)
+            modelBuilder.Entity<Plant>().HasDiscriminator(p => p.Genus)
                 .HasValue<Rose>(PlantGenus.Rose)
                 .HasValue<Daisy>(PlantGenus.Daisy);
+
+            modelBuilder.Entity<Country>().Property(e => e.Id).ValueGeneratedNever();
+            modelBuilder.Entity<Eagle>().HasMany(e => e.Prey).WithOne().HasForeignKey(e => e.EagleId).IsRequired(false);
+
+            // #2455
+            modelBuilder.Entity<Animal>().Property(e => e.Species).HasColumnType("nvarchar(100)");
+            modelBuilder.Entity<Bird>().Property(e => e.EagleId).HasColumnType("nvarchar(100)");
         }
     }
 }

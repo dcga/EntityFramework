@@ -3,7 +3,7 @@
 
 using System;
 using System.IO;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace Microsoft.Data.Entity.FunctionalTests
 {
@@ -14,8 +14,6 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
         private class TestFileLoggerFactory : ILoggerFactory
         {
-            public LogLevel MinimumLevel { get; set; }
-
             public ILogger CreateLogger(string name)
             {
                 return Instance;
@@ -36,8 +34,8 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
         protected TestFileLogger(string fileName = "data-test.log")
         {
-            var logDirectory
-                = Path.Combine(Environment.ExpandEnvironmentVariables("%USERPROFILE%"), ".klog");
+            var homeDir = Environment.GetEnvironmentVariable("USERPROFILE") ?? Environment.GetEnvironmentVariable("HOME");
+            var logDirectory = Path.Combine(homeDir, ".klog");
 
             if (!Directory.Exists(logDirectory))
             {

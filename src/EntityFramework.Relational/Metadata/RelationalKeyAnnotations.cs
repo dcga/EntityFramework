@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using JetBrains.Annotations;
@@ -15,7 +16,7 @@ namespace Microsoft.Data.Entity.Metadata
             : this(new RelationalAnnotations(key, providerPrefix))
         {
         }
-        
+
         protected RelationalKeyAnnotations([NotNull] RelationalAnnotations annotations)
         {
             Annotations = annotations;
@@ -36,17 +37,27 @@ namespace Microsoft.Data.Entity.Metadata
 
         protected virtual string GetDefaultName()
         {
+            var entityType = new RelationalEntityTypeAnnotations(Key.DeclaringEntityType, Annotations.ProviderPrefix);
+
+            return GetDefaultKeyName(entityType.TableName, Key.IsPrimaryKey(), Key.Properties.Select(p => p.Name));
+        }
+
+        public static string GetDefaultKeyName(
+            [NotNull] string tableName, bool primaryKey, [NotNull] IEnumerable<string> propertyNames)
+        {
+            Check.NotEmpty(tableName, nameof(tableName));
+            Check.NotNull(propertyNames, nameof(propertyNames));
+
             var builder = new StringBuilder();
-
             builder
-                .Append(Key.IsPrimaryKey() ? "PK_" : "AK_")
-                .Append(Key.EntityType.DisplayName());
+                .Append(primaryKey ? "PK_" : "AK_")
+                .Append(tableName);
 
-            if (!Key.IsPrimaryKey())
+            if (!primaryKey)
             {
                 builder
                     .Append("_")
-                    .Append(string.Join("_", Key.Properties.Select(p => p.Name)));
+                    .Append(string.Join("_", propertyNames));
             }
 
             return builder.ToString();

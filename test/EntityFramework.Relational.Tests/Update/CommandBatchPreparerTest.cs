@@ -2,19 +2,18 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Conventions;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Update;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Data.Entity.Update.Internal;
+using Microsoft.Extensions.DependencyInjection;
 using Moq;
 using Xunit;
-
-using CoreStrings = Microsoft.Data.Entity.Internal.Strings;
 
 namespace Microsoft.Data.Entity.Tests.Update
 {
@@ -29,7 +28,7 @@ namespace Microsoft.Data.Entity.Tests.Update
 
             entry.SetEntityState(EntityState.Added);
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { entry }, new DbContextOptions<DbContext>()).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { entry }).ToArray();
             Assert.Equal(1, commandBatches.Count());
             Assert.Equal(1, commandBatches.First().ModificationCommands.Count());
 
@@ -66,9 +65,9 @@ namespace Microsoft.Data.Entity.Tests.Update
             var entry = stateManager.GetOrCreateEntry(new FakeEntity { Id = 42, Value = "Test" });
 
             entry.SetEntityState(EntityState.Modified);
-            entry.SetPropertyModified(entry.EntityType.GetPrimaryKey().Properties.Single(), isModified: false);
+            entry.SetPropertyModified(entry.EntityType.FindPrimaryKey().Properties.Single(), isModified: false);
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { entry }, new DbContextOptions<DbContext>()).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { entry }).ToArray();
             Assert.Equal(1, commandBatches.Count());
             Assert.Equal(1, commandBatches.First().ModificationCommands.Count());
 
@@ -106,7 +105,7 @@ namespace Microsoft.Data.Entity.Tests.Update
 
             entry.SetEntityState(EntityState.Deleted);
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { entry }, new DbContextOptions<DbContext>()).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { entry }).ToArray();
             Assert.Equal(1, commandBatches.Count());
             Assert.Equal(1, commandBatches.First().ModificationCommands.Count());
 
@@ -137,7 +136,7 @@ namespace Microsoft.Data.Entity.Tests.Update
             var relatedentry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 42 });
             relatedentry.SetEntityState(EntityState.Added);
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedentry, entry }, new DbContextOptions<DbContext>()).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedentry, entry }).ToArray();
 
             Assert.Equal(
                 new[] { entry, relatedentry },
@@ -156,7 +155,7 @@ namespace Microsoft.Data.Entity.Tests.Update
             var relatedentry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 42 });
             relatedentry.SetEntityState(EntityState.Modified);
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedentry, entry }, new DbContextOptions<DbContext>()).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedentry, entry }).ToArray();
 
             Assert.Equal(
                 new[] { entry, relatedentry },
@@ -175,7 +174,7 @@ namespace Microsoft.Data.Entity.Tests.Update
             var secondentry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 1 });
             secondentry.SetEntityState(EntityState.Added);
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { secondentry, firstentry }, new DbContextOptions<DbContext>()).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { secondentry, firstentry }).ToArray();
 
             Assert.Equal(
                 new[] { firstentry, secondentry },
@@ -196,13 +195,63 @@ namespace Microsoft.Data.Entity.Tests.Update
 
             var relatedentry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 1, RelatedId = 3 });
             relatedentry.SetEntityState(EntityState.Modified);
-            relatedentry.OriginalValues[relatedentry.EntityType.GetProperty("RelatedId")] = 42;
-            relatedentry.SetPropertyModified(relatedentry.EntityType.GetPrimaryKey().Properties.Single(), isModified: false);
+            relatedentry.SetOriginalValue(relatedentry.EntityType.FindProperty("RelatedId"), 42);
+            relatedentry.SetPropertyModified(relatedentry.EntityType.FindPrimaryKey().Properties.Single(), isModified: false);
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedentry, previousParent, newParent }, new DbContextOptions<DbContext>()).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedentry, previousParent, newParent }).ToArray();
 
             Assert.Equal(
                 new[] { newParent, relatedentry, previousParent },
+                commandBatches.Select(cb => cb.ModificationCommands.Single()).Select(mc => mc.Entries.Single()));
+        }
+
+        [Fact]
+        public void BatchCommands_sorts_when_reassigning_child()
+        {
+            var configuration = CreateContextServices(CreateSimpleFKModel());
+            var stateManager = configuration.GetRequiredService<IStateManager>();
+
+            var parentEntity = stateManager.GetOrCreateEntry(new FakeEntity { Id = 1, Value = "Test" });
+            parentEntity.SetEntityState(EntityState.Unchanged);
+
+            var previousChild = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 42, RelatedId = 1 });
+            previousChild.SetEntityState(EntityState.Deleted);
+
+            var newChild = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 23, RelatedId = 1 });
+            newChild.SetEntityState(EntityState.Added);
+
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { newChild, previousChild }).ToArray();
+
+            Assert.Equal(
+                new[] { previousChild, newChild },
+                commandBatches.Select(cb => cb.ModificationCommands.Single()).Select(mc => mc.Entries.Single()));
+        }
+
+        [Fact]
+        public void BatchCommands_sorts_entities_while_reassigning_child_tree()
+        {
+            var configuration = CreateContextServices(CreateTwoLevelFKModel());
+            var stateManager = configuration.GetRequiredService<IStateManager>();
+
+            var parentEntity = stateManager.GetOrCreateEntry(new FakeEntity { Id = 1, Value = "Test" });
+            parentEntity.SetEntityState(EntityState.Unchanged);
+
+            var oldEntity = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 2, RelatedId = 1 });
+            oldEntity.SetEntityState(EntityState.Deleted);
+
+            var oldChildEntity = stateManager.GetOrCreateEntry(new AnotherFakeEntity { Id = 3, AnotherId = 2 });
+            oldChildEntity.SetEntityState(EntityState.Deleted);
+
+            var newEntity = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 4, RelatedId = 1 });
+            newEntity.SetEntityState(EntityState.Added);
+
+            var newChildEntity = stateManager.GetOrCreateEntry(new AnotherFakeEntity { Id = 5, AnotherId = 4 });
+            newChildEntity.SetEntityState(EntityState.Added);
+
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { newEntity, newChildEntity, oldEntity, oldChildEntity }).ToArray();
+
+            Assert.Equal(
+                new[] { oldChildEntity, oldEntity, newEntity, newChildEntity },
                 commandBatches.Select(cb => cb.ModificationCommands.Single()).Select(mc => mc.Entries.Single()));
         }
 
@@ -220,21 +269,21 @@ namespace Microsoft.Data.Entity.Tests.Update
             relatedentry.SetEntityState(EntityState.Added);
 
             var modificationCommandBatchFactoryMock = new Mock<IModificationCommandBatchFactory>();
-            var options = new Mock<IDbContextOptions>().Object;
+            modificationCommandBatchFactoryMock.Setup(f => f.Create()).Returns(Mock.Of<ModificationCommandBatch>());
 
-            var commandBatches = CreateCommandBatchPreparer(modificationCommandBatchFactoryMock.Object).BatchCommands(new[] { relatedentry, entry }, options);
+            var commandBatches = CreateCommandBatchPreparer(modificationCommandBatchFactoryMock.Object).BatchCommands(new[] { relatedentry, entry });
 
             var commandBatchesEnumerator = commandBatches.GetEnumerator();
             commandBatchesEnumerator.MoveNext();
 
             modificationCommandBatchFactoryMock.Verify(
-                mcb => mcb.Create(options, It.IsAny<IRelationalMetadataExtensionProvider>()),
+                mcb => mcb.Create(),
                 Times.Once);
 
             commandBatchesEnumerator.MoveNext();
 
             modificationCommandBatchFactoryMock.Verify(
-                mcb => mcb.Create(options, It.IsAny<IRelationalMetadataExtensionProvider>()),
+                mcb => mcb.Create(),
                 Times.Exactly(2));
         }
 
@@ -254,32 +303,66 @@ namespace Microsoft.Data.Entity.Tests.Update
             Assert.Equal(
                 CoreStrings.CircularDependency(
                     string.Join(", ",
-                        model.GetEntityType(typeof(RelatedFakeEntity)).GetForeignKeys().First(),
-                        model.GetEntityType(typeof(FakeEntity)).GetForeignKeys().First())),
+                        model.FindEntityType(typeof(RelatedFakeEntity)).GetForeignKeys().First(),
+                        model.FindEntityType(typeof(FakeEntity)).GetForeignKeys().First())),
                 Assert.Throws<InvalidOperationException>(
-                    () => { var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { fakeEntry, relatedFakeEntry }, new DbContextOptions<DbContext>()).ToArray(); }).Message);
+                    () => { var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { fakeEntry, relatedFakeEntry }).ToArray(); }).Message);
+        }
+
+
+        [Fact]
+        public void Batch_command_shows_correct_cycle_when_circular_dependencies()
+        {
+            var model = CreateCyclicFkWithTailModel();
+            var configuration = CreateContextServices(model);
+            var stateManager = configuration.GetRequiredService<IStateManager>();
+
+            var fakeEntry = stateManager.GetOrCreateEntry(new FakeEntity { Id = 1, RelatedId = 2 });
+            fakeEntry.SetEntityState(EntityState.Added);
+
+            var relatedFakeEntry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 2, RelatedId = 1 });
+            relatedFakeEntry.SetEntityState(EntityState.Added);
+
+            var anotherFakeEntry = stateManager.GetOrCreateEntry(new AnotherFakeEntity { Id = 3, AnotherId = 2 });
+            anotherFakeEntry.SetEntityState(EntityState.Added);
+
+            Assert.Equal(
+                CoreStrings.CircularDependency(
+                    string.Join(", ",
+                        model.FindEntityType(typeof(FakeEntity)).GetForeignKeys().First(),
+                        model.FindEntityType(typeof(RelatedFakeEntity)).GetForeignKeys().First())),
+                Assert.Throws<InvalidOperationException>(
+                    () =>
+                    {
+                        var commandBatches = CreateCommandBatchPreparer().BatchCommands(
+                    // Order is important for this test. Entry which is not part of cycle but tail should come first.
+                    new[] { anotherFakeEntry, fakeEntry, relatedFakeEntry }).ToArray();
+                    }).Message);
         }
 
         private static IServiceProvider CreateContextServices(IModel model)
         {
             var optionsBuilder = new DbContextOptionsBuilder()
                 .UseModel(model);
-            optionsBuilder.UseInMemoryDatabase(persist: false);
+            optionsBuilder.UseInMemoryDatabase();
 
-            return new DbContext(optionsBuilder.Options).GetService();
+            return new DbContext(optionsBuilder.Options).GetInfrastructure();
         }
 
         private static ICommandBatchPreparer CreateCommandBatchPreparer(IModificationCommandBatchFactory modificationCommandBatchFactory = null)
         {
             modificationCommandBatchFactory =
                 modificationCommandBatchFactory ?? new TestModificationCommandBatchFactory(
-                    Mock.Of<IUpdateSqlGenerator>());
+                    Mock.Of<IRelationalCommandBuilderFactory>(),
+                    Mock.Of<ISqlGenerationHelper>(),
+                    Mock.Of<IUpdateSqlGenerator>(),
+                    Mock.Of<IRelationalValueBufferFactoryFactory>());
 
-            return new TestCommandBatchPreparer(modificationCommandBatchFactory,
+            return new CommandBatchPreparer(modificationCommandBatchFactory,
                 new ParameterNameGeneratorFactory(),
                 new ModificationCommandComparer(),
-                Mock.Of<IRelationalValueBufferFactoryFactory>(),
-                new TestMetadataExtensionProvider());
+                new TestAnnotationProvider(),
+                new KeyValueIndexFactorySource());
         }
 
         private static IModel CreateSimpleFKModel()
@@ -288,16 +371,16 @@ namespace Microsoft.Data.Entity.Tests.Update
 
             modelBuilder.Entity<FakeEntity>(b =>
                 {
-                    b.Key(c => c.Id);
+                    b.HasKey(c => c.Id);
                     b.Property(c => c.Value);
                 });
 
             modelBuilder.Entity<RelatedFakeEntity>(b =>
                 {
-                    b.Key(c => c.Id);
-                    b.Reference<FakeEntity>()
-                        .InverseReference()
-                        .ForeignKey<RelatedFakeEntity>(c => c.Id);
+                    b.HasKey(c => c.Id);
+                    b.HasOne<FakeEntity>()
+                        .WithOne()
+                        .HasForeignKey<RelatedFakeEntity>(c => c.Id);
                 });
 
             return modelBuilder.Model;
@@ -309,23 +392,87 @@ namespace Microsoft.Data.Entity.Tests.Update
 
             modelBuilder.Entity<FakeEntity>(b =>
                 {
-                    b.Key(c => c.Id);
+                    b.HasKey(c => c.Id);
                     b.Property(c => c.Value);
                 });
 
             modelBuilder.Entity<RelatedFakeEntity>(b =>
                 {
-                    b.Key(c => c.Id);
-                    b.Reference<FakeEntity>()
-                        .InverseReference()
-                        .ForeignKey<RelatedFakeEntity>(c => c.RelatedId);
+                    b.HasKey(c => c.Id);
+                    b.HasOne<FakeEntity>()
+                        .WithOne()
+                        .HasForeignKey<RelatedFakeEntity>(c => c.RelatedId);
                 });
 
             modelBuilder
                 .Entity<FakeEntity>()
-                .Reference<RelatedFakeEntity>()
-                .InverseReference()
-                .ForeignKey<FakeEntity>(c => c.RelatedId);
+                .HasOne<RelatedFakeEntity>()
+                .WithOne()
+                .HasForeignKey<FakeEntity>(c => c.RelatedId);
+
+            return modelBuilder.Model;
+        }
+
+        private static IModel CreateCyclicFkWithTailModel()
+        {
+            var modelBuilder = new ModelBuilder(new ConventionSet());
+
+            modelBuilder.Entity<FakeEntity>(b =>
+            {
+                b.HasKey(c => c.Id);
+                b.Property(c => c.Value);
+            });
+
+            modelBuilder.Entity<RelatedFakeEntity>(b =>
+            {
+                b.HasKey(c => c.Id);
+                b.HasOne<FakeEntity>()
+                    .WithOne()
+                    .HasForeignKey<RelatedFakeEntity>(c => c.RelatedId);
+            });
+
+            modelBuilder
+                .Entity<FakeEntity>()
+                .HasOne<RelatedFakeEntity>()
+                .WithOne()
+                .HasForeignKey<FakeEntity>(c => c.RelatedId);
+
+            modelBuilder.Entity<AnotherFakeEntity>(b =>
+                {
+                    b.HasKey(e => e.Id);
+                    b.HasOne<RelatedFakeEntity>()
+                        .WithOne()
+                        .HasForeignKey<AnotherFakeEntity>(e => e.AnotherId);
+                });
+
+            return modelBuilder.Model;
+        }
+
+        private static IModel CreateTwoLevelFKModel()
+        {
+            var modelBuilder = new ModelBuilder(new ConventionSet());
+
+            modelBuilder.Entity<FakeEntity>(b =>
+                {
+                    b.HasKey(c => c.Id);
+                    b.Property(c => c.Value);
+                });
+
+            modelBuilder.Entity<RelatedFakeEntity>(b =>
+                {
+                    b.HasKey(c => c.Id);
+                    b.HasOne<FakeEntity>()
+                        .WithOne()
+                        .HasForeignKey<RelatedFakeEntity>(c => c.RelatedId);
+                });
+
+            modelBuilder.Entity<AnotherFakeEntity>(b =>
+                {
+                    b.HasKey(c => c.Id);
+                    b.HasOne<RelatedFakeEntity>()
+                        .WithOne()
+                        .HasForeignKey<AnotherFakeEntity>(c => c.AnotherId);
+                });
 
             return modelBuilder.Model;
         }
@@ -343,38 +490,38 @@ namespace Microsoft.Data.Entity.Tests.Update
             public int? RelatedId { get; set; }
         }
 
-        private class TestCommandBatchPreparer : CommandBatchPreparer
+        private class AnotherFakeEntity
         {
-            public TestCommandBatchPreparer(
-                IModificationCommandBatchFactory modificationCommandBatchFactory,
-                IParameterNameGeneratorFactory parameterNameGeneratorFactory,
-                IComparer<ModificationCommand> modificationCommandComparer,
-                IRelationalValueBufferFactoryFactory valueBufferFactoryFactory,
-                IRelationalMetadataExtensionProvider metadataExtensionProvider)
-                : base(
-                      modificationCommandBatchFactory,
-                      parameterNameGeneratorFactory,
-                      modificationCommandComparer,
-                      valueBufferFactoryFactory,
-                      metadataExtensionProvider)
-            {
-            }
+            public int Id { get; set; }
+
+            public int? AnotherId { get; set; }
         }
 
-        private class TestModificationCommandBatchFactory : ModificationCommandBatchFactory
+        private class TestModificationCommandBatchFactory : IModificationCommandBatchFactory
         {
+            private readonly IRelationalCommandBuilderFactory _commandBuilderFactory;
+            private readonly ISqlGenerationHelper _sqlGenerationHelper;
+            private readonly IUpdateSqlGenerator _updateSqlGenerator;
+            private readonly IRelationalValueBufferFactoryFactory _valueBufferFactoryFactory;
+
             public TestModificationCommandBatchFactory(
-                IUpdateSqlGenerator sqlGenerator)
-                : base(sqlGenerator)
+                IRelationalCommandBuilderFactory commandBuilderfactory,
+                ISqlGenerationHelper sqlGenerationHelper,
+                IUpdateSqlGenerator updateSqlGenerator,
+                IRelationalValueBufferFactoryFactory valueBufferFactoryFactory)
             {
+                _commandBuilderFactory = commandBuilderfactory;
+                _sqlGenerationHelper = sqlGenerationHelper;
+                _updateSqlGenerator = updateSqlGenerator;
+                _valueBufferFactoryFactory = valueBufferFactoryFactory;
             }
 
-            public override ModificationCommandBatch Create(
-                IDbContextOptions options,
-                IRelationalMetadataExtensionProvider metadataExtensionProvider)
-            {
-                return new SingularModificationCommandBatch(UpdateSqlGenerator);
-            }
+            public ModificationCommandBatch Create()
+                => new SingularModificationCommandBatch(
+                    _commandBuilderFactory,
+                    _sqlGenerationHelper,
+                    _updateSqlGenerator,
+                    _valueBufferFactoryFactory);
         }
     }
 }

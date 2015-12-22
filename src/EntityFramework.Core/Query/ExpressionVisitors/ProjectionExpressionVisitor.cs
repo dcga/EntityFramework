@@ -1,11 +1,13 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Query.ExpressionVisitors.Internal;
 using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses.Expressions;
 
@@ -18,33 +20,24 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
         {
         }
 
-        protected override Expression VisitSubQuery(SubQueryExpression subQueryExpression)
+        protected override Expression VisitSubQuery(SubQueryExpression expression)
         {
             var queryModelVisitor = CreateQueryModelVisitor();
 
-            queryModelVisitor.VisitQueryModel(subQueryExpression.QueryModel);
+            queryModelVisitor.VisitQueryModel(expression.QueryModel);
 
             var subExpression = queryModelVisitor.Expression;
 
-            var resultItemType
-                = queryModelVisitor.StreamedSequenceInfo?.ResultItemType
-                  ?? subExpression.Type;
-
-            if (queryModelVisitor.StreamedSequenceInfo == null)
+            if (subExpression.Type != expression.Type)
             {
-                return subExpression;
-            }
+                var subQueryExpressionTypeInfo = expression.Type.GetTypeInfo();
 
-            if (subExpression.Type != subQueryExpression.Type)
-            {
-                var subQueryExpressionTypeInfo = subQueryExpression.Type.GetTypeInfo();
-
-                if (typeof(IQueryable).GetTypeInfo().IsAssignableFrom(subQueryExpressionTypeInfo))
+                if (typeof(IQueryable).GetTypeInfo().IsAssignableFrom(expression.Type.GetTypeInfo()))
                 {
                     subExpression
                         = Expression.Call(
                             QueryModelVisitor.LinqOperatorProvider.ToQueryable
-                                .MakeGenericMethod(resultItemType),
+                                .MakeGenericMethod(expression.Type.GetSequenceType()),
                             subExpression);
                 }
                 else if (subQueryExpressionTypeInfo.IsGenericType)
@@ -56,7 +49,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                         subExpression
                             = Expression.Call(
                                 QueryModelVisitor.LinqOperatorProvider.ToOrdered
-                                    .MakeGenericMethod(resultItemType),
+                                    .MakeGenericMethod(expression.Type.GetSequenceType()),
                                 subExpression);
                     }
                     else if (genericTypeDefinition == typeof(IEnumerable<>))
@@ -64,7 +57,7 @@ namespace Microsoft.Data.Entity.Query.ExpressionVisitors
                         subExpression
                             = Expression.Call(
                                 QueryModelVisitor.LinqOperatorProvider.ToEnumerable
-                                    .MakeGenericMethod(resultItemType),
+                                    .MakeGenericMethod(expression.Type.GetSequenceType()),
                                 subExpression);
                     }
                 }

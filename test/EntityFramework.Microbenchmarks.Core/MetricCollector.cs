@@ -6,12 +6,20 @@ using System.Diagnostics;
 
 namespace EntityFramework.Microbenchmarks.Core
 {
-    public class MetricCollector
+#if !DNXCORE50
+    public partial class MetricCollector : MarshalByRefObject
+    {
+        private partial class Scope : MarshalByRefObject
+        {
+        }
+    }
+#endif
+
+    public partial class MetricCollector : IMetricCollector
     {
         private bool _collecting;
         private readonly Scope _scope;
-        private Stopwatch _timer = new Stopwatch();
-        private long _cumulativeMemoryDelta;
+        private readonly Stopwatch _timer = new Stopwatch();
         private long _memoryOnCurrentCollectionStarted;
 
         public MetricCollector()
@@ -34,7 +42,7 @@ namespace EntityFramework.Microbenchmarks.Core
                 _timer.Stop();
                 _collecting = false;
                 var currentMemory = GetCurrentMemory();
-                _cumulativeMemoryDelta += (currentMemory - _memoryOnCurrentCollectionStarted);
+                MemoryDelta += currentMemory - _memoryOnCurrentCollectionStarted;
             }
         }
 
@@ -42,12 +50,12 @@ namespace EntityFramework.Microbenchmarks.Core
         {
             _collecting = false;
             _timer.Reset();
-            _cumulativeMemoryDelta = 0;
+            MemoryDelta = 0;
         }
 
         public long TimeElapsed => _timer.ElapsedMilliseconds;
 
-        public long MemoryDelta => _cumulativeMemoryDelta;
+        public long MemoryDelta { get; private set; }
 
         private static long GetCurrentMemory()
         {
@@ -59,11 +67,11 @@ namespace EntityFramework.Microbenchmarks.Core
             return GC.GetTotalMemory(forceFullCollection: true);
         }
 
-        private class Scope : IDisposable
+        private partial class Scope : IDisposable
         {
-            private readonly MetricCollector _collector;
+            private readonly IMetricCollector _collector;
 
-            public Scope(MetricCollector collector)
+            public Scope(IMetricCollector collector)
             {
                 _collector = collector;
             }
@@ -73,6 +81,5 @@ namespace EntityFramework.Microbenchmarks.Core
                 _collector.StopCollection();
             }
         }
-
     }
 }

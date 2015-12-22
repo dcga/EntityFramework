@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Storage;
 
 namespace Microsoft.Data.Entity.ChangeTracking.Internal
@@ -18,29 +19,18 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
             _notifier = notifier;
         }
 
-        public virtual InternalEntityEntry SnapshotAndSubscribe(InternalEntityEntry entry, ValueBuffer? values)
+        public virtual InternalEntityEntry SnapshotAndSubscribe(InternalEntityEntry entry)
         {
             var entityType = entry.EntityType;
 
             if (entityType.UseEagerSnapshots())
             {
-                if (values != null)
-                {
-                    entry.OriginalValues = new ValueBufferOriginalValues(entry, values.Value);
-                }
-                else
-                {
-                    entry.OriginalValues.TakeSnapshot();
-                }
-
-                entry.RelationshipsSnapshot.TakeSnapshot();
+                entry.EnsureOriginalValues();
+                entry.EnsureRelationshipSnapshot();
             }
-            else
+            else if (entityType.GetNavigations().Any(n => n.IsNonNotifyingCollection(entry)))
             {
-                foreach (var navigation in entityType.GetNavigations().Where(n => n.IsNonNotifyingCollection(entry)))
-                {
-                    entry.RelationshipsSnapshot.TakeSnapshot(navigation);
-                }
+                entry.EnsureRelationshipSnapshot();
             }
 
             var changing = entry.Entity as INotifyPropertyChanging;

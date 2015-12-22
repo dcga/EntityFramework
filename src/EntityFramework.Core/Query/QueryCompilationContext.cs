@@ -1,66 +1,71 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Metadata.Internal;
-using Microsoft.Data.Entity.Query.Annotations;
 using Microsoft.Data.Entity.Query.ExpressionVisitors;
 using Microsoft.Data.Entity.Query.Internal;
+using Microsoft.Data.Entity.Query.ResultOperators;
+using Microsoft.Data.Entity.Query.ResultOperators.Internal;
 using Microsoft.Data.Entity.Utilities;
-using Microsoft.Framework.Logging;
+using Microsoft.Extensions.Logging;
 using Remotion.Linq;
 using Remotion.Linq.Clauses;
+using Remotion.Linq.Clauses.Expressions;
 
 namespace Microsoft.Data.Entity.Query
 {
-    public abstract class QueryCompilationContext
+    public class QueryCompilationContext
     {
-        private IReadOnlyCollection<QueryAnnotationBase> _queryAnnotations;
+        private readonly IRequiresMaterializationExpressionVisitorFactory _requiresMaterializationExpressionVisitorFactory;
+        private readonly IEntityQueryModelVisitorFactory _entityQueryModelVisitorFactory;
+
+        private IReadOnlyCollection<IQueryAnnotation> _queryAnnotations;
         private IDictionary<IQuerySource, List<IReadOnlyList<INavigation>>> _trackableIncludes;
         private ISet<IQuerySource> _querySourcesRequiringMaterialization;
 
-        protected QueryCompilationContext(
+        public QueryCompilationContext(
             [NotNull] IModel model,
             [NotNull] ILogger logger,
+            [NotNull] IEntityQueryModelVisitorFactory entityQueryModelVisitorFactory,
+            [NotNull] IRequiresMaterializationExpressionVisitorFactory requiresMaterializationExpressionVisitorFactory,
             [NotNull] ILinqOperatorProvider linqOperatorProvider,
-            [NotNull] IResultOperatorHandler resultOperatorHandler,
-            [NotNull] IEntityMaterializerSource entityMaterializerSource,
-            [NotNull] IEntityKeyFactorySource entityKeyFactorySource,
-            [NotNull] IClrAccessorSource<IClrPropertyGetter> clrPropertyGetterSource)
+            [NotNull] Type contextType,
+            bool trackQueryResults)
         {
             Check.NotNull(model, nameof(model));
-            Check.NotNull(logger, nameof(logger));
+            Check.NotNull(entityQueryModelVisitorFactory, nameof(entityQueryModelVisitorFactory));
+            Check.NotNull(requiresMaterializationExpressionVisitorFactory, nameof(requiresMaterializationExpressionVisitorFactory));
             Check.NotNull(linqOperatorProvider, nameof(linqOperatorProvider));
-            Check.NotNull(resultOperatorHandler, nameof(resultOperatorHandler));
-            Check.NotNull(entityMaterializerSource, nameof(entityMaterializerSource));
-            Check.NotNull(entityKeyFactorySource, nameof(entityKeyFactorySource));
-            Check.NotNull(clrPropertyGetterSource, nameof(clrPropertyGetterSource));
+            Check.NotNull(contextType, nameof(contextType));
 
             Model = model;
             Logger = logger;
+
+            _entityQueryModelVisitorFactory = entityQueryModelVisitorFactory;
+            _requiresMaterializationExpressionVisitorFactory = requiresMaterializationExpressionVisitorFactory;
+
             LinqOperatorProvider = linqOperatorProvider;
-            ResultOperatorHandler = resultOperatorHandler;
-            EntityMaterializerSource = entityMaterializerSource;
-            EntityKeyFactorySource = entityKeyFactorySource;
-            ClrPropertyGetterSource = clrPropertyGetterSource;
+            ContextType = contextType;
+            TrackQueryResults = trackQueryResults;
         }
 
         public virtual IModel Model { get; }
         public virtual ILogger Logger { get; }
         public virtual ILinqOperatorProvider LinqOperatorProvider { get; }
-        public virtual IResultOperatorHandler ResultOperatorHandler { get; }
-        public virtual IEntityMaterializerSource EntityMaterializerSource { get; }
-        public virtual IEntityKeyFactorySource EntityKeyFactorySource { get; }
-        public virtual IClrAccessorSource<IClrPropertyGetter> ClrPropertyGetterSource { get; }
+
+        public virtual Type ContextType { get; }
+        public virtual bool TrackQueryResults { get; }
 
         public virtual QuerySourceMapping QuerySourceMapping { get; } = new QuerySourceMapping();
 
-        public virtual IReadOnlyCollection<QueryAnnotationBase> QueryAnnotations
+        public virtual IReadOnlyCollection<IQueryAnnotation> QueryAnnotations
         {
             get { return _queryAnnotations; }
             [param: NotNull]
@@ -72,20 +77,115 @@ namespace Microsoft.Data.Entity.Query
             }
         }
 
-        public virtual IEnumerable<QueryAnnotation> GetCustomQueryAnnotations([NotNull] MethodInfo methodInfo)
-            => _queryAnnotations
-                .OfType<QueryAnnotation>()
-                .Where(qa => qa.IsCallTo(Check.NotNull(methodInfo, nameof(methodInfo))));
-
-        public virtual EntityQueryModelVisitor CreateQueryModelVisitor() => CreateQueryModelVisitor(null);
-
-        public abstract EntityQueryModelVisitor CreateQueryModelVisitor(
-            [CanBeNull] EntityQueryModelVisitor parentEntityQueryModelVisitor);
-
-        public virtual IExpressionPrinter CreateExpressionPrinter()
+        public virtual bool IsTrackingQuery
         {
-            return new ExpressionPrinter();
+            get
+            {
+                var lastTrackingModifier
+                    = QueryAnnotations
+                        .OfType<TrackingResultOperator>()
+                        .LastOrDefault();
+
+                return lastTrackingModifier?.IsTracking ?? TrackQueryResults;
+            }
         }
+
+        public virtual bool IsIncludeQuery
+        {
+            get
+            {
+                return QueryAnnotations
+                    .OfType<IncludeResultOperator>()
+                    .Any();
+            }
+        }
+
+        public virtual bool IsQueryBufferRequired { get; private set; }
+
+        public virtual void DetermineQueryBufferRequirement([NotNull] QueryModel queryModel)
+        {
+            Check.NotNull(queryModel, nameof(queryModel));
+
+            IsQueryBufferRequired
+                = QueryAnnotations.OfType<IncludeResultOperator>().Any()
+                  || new RequiresBufferingExpressionVisitor(Model).RequiresBuffering(queryModel);
+        }
+
+        private class RequiresBufferingExpressionVisitor : ExpressionVisitorBase
+        {
+            private readonly IModel _model;
+
+            private int _referencedEntityTypes;
+            private bool _requiresBuffering;
+
+            public RequiresBufferingExpressionVisitor(IModel model)
+            {
+                _model = model;
+            }
+
+            public bool RequiresBuffering(QueryModel queryModel)
+            {
+                queryModel.TransformExpressions(Visit);
+
+                return _requiresBuffering;
+            }
+
+            public override Expression Visit(Expression expression)
+                => _requiresBuffering ? expression : base.Visit(expression);
+
+            protected override Expression VisitConstant(ConstantExpression constantExpression)
+            {
+                if (constantExpression.Type.GetTypeInfo().IsGenericType
+                    && constantExpression.Type.GetGenericTypeDefinition() == typeof(EntityQueryable<>))
+                {
+                    var entityType = _model.FindEntityType(((IQueryable)constantExpression.Value).ElementType);
+
+                    if (entityType != null)
+                    {
+                        if (_referencedEntityTypes > 0
+                            || entityType.ShadowPropertyCount() > 0)
+                        {
+                            _requiresBuffering = true;
+
+                            return constantExpression;
+                        }
+
+                        _referencedEntityTypes++;
+                    }
+                }
+
+                return base.VisitConstant(constantExpression);
+            }
+
+            protected override Expression VisitMethodCall(MethodCallExpression methodCallExpression)
+            {
+                if (methodCallExpression.Method.IsGenericMethod
+                    && ReferenceEquals(
+                        methodCallExpression.Method.GetGenericMethodDefinition(),
+                        EntityQueryModelVisitor.PropertyMethodInfo))
+                {
+                    _requiresBuffering = true;
+
+                    return methodCallExpression;
+                }
+
+                return base.VisitMethodCall(methodCallExpression);
+            }
+
+            protected override Expression VisitSubQuery(SubQueryExpression expression)
+            {
+                expression.QueryModel.TransformExpressions(Visit);
+
+                return expression;
+            }
+        }
+
+        public virtual EntityQueryModelVisitor CreateQueryModelVisitor()
+            => CreateQueryModelVisitor(parentEntityQueryModelVisitor: null);
+
+        public virtual EntityQueryModelVisitor CreateQueryModelVisitor(
+            [CanBeNull] EntityQueryModelVisitor parentEntityQueryModelVisitor)
+            => _entityQueryModelVisitorFactory.Create(this, parentEntityQueryModelVisitor);
 
         public virtual void AddTrackableInclude(
             [NotNull] IQuerySource querySource, [NotNull] IReadOnlyList<INavigation> navigationPath)
@@ -127,11 +227,9 @@ namespace Microsoft.Data.Entity.Query
             Check.NotNull(queryModelVisitor, nameof(queryModelVisitor));
             Check.NotNull(queryModel, nameof(queryModel));
 
-            var requiresEntityMaterializationExpressionVisitor
-                = new RequiresMaterializationExpressionVisitor(queryModelVisitor);
-
             _querySourcesRequiringMaterialization
-                = requiresEntityMaterializationExpressionVisitor
+                = _requiresMaterializationExpressionVisitorFactory
+                    .Create(queryModelVisitor)
                     .FindQuerySourcesRequiringMaterialization(queryModel);
 
             foreach (var groupJoinClause in queryModel.BodyClauses.OfType<GroupJoinClause>())

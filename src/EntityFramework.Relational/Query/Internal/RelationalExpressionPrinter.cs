@@ -2,8 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
 
@@ -27,14 +27,14 @@ namespace Microsoft.Data.Entity.Query.Internal
         {
             public bool TryPrintConstant(object value, IndentedStringBuilder stringBuilder)
             {
-                var commandBuilder = value as CommandBuilder;
-                if (commandBuilder != null)
+                var shaperCommandContext = value as ShaperCommandContext;
+                if (shaperCommandContext != null)
                 {
                     stringBuilder.AppendLine("SelectExpression: ");
                     stringBuilder.IncrementIndent();
 
-                    var commandGenerator = commandBuilder.SqlGeneratorFactory();
-                    var sql = commandGenerator.GenerateSql(new Dictionary<string, object>()).CommandText;
+                    var querySqlGenerator = shaperCommandContext.QuerySqlGeneratorFactory();
+                    var sql = querySqlGenerator.GenerateSql(new Dictionary<string, object>()).CommandText;
 
                     var lines = sql.Split(new[] { Environment.NewLine }, StringSplitOptions.None);
                     foreach (var line in lines)
@@ -63,7 +63,7 @@ namespace Microsoft.Data.Entity.Query.Internal
                     appendAction(stringBuilder, "{ ");
                     stringBuilder.IncrementIndent();
 
-                    for (int i = 0; i < trackingInfoList.Count; i++)
+                    for (var i = 0; i < trackingInfoList.Count; i++)
                     {
                         var entityTrackingInfo = trackingInfoList[i];
                         var separator = i == trackingInfoList.Count - 1 ? " " : ", ";

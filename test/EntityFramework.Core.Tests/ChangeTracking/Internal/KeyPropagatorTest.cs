@@ -5,7 +5,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.Metadata;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
@@ -22,7 +22,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 
             var contextServices = CreateContextServices(model);
             var dependentEntry = contextServices.GetRequiredService<IStateManager>().GetOrCreateEntry(dependent);
-            var property = model.GetEntityType(typeof(Product)).GetProperty("CategoryId");
+            var property = model.FindEntityType(typeof(Product)).FindProperty("CategoryId");
 
             PropagateValue(contextServices.GetRequiredService<IKeyPropagator>(), dependentEntry, property);
 
@@ -42,7 +42,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 
             manager.StartTracking(manager.GetOrCreateEntry(principal));
             var dependentEntry = manager.GetOrCreateEntry(dependent);
-            var property = model.GetEntityType(typeof(Product)).GetProperty("CategoryId");
+            var property = model.FindEntityType(typeof(Product)).FindProperty("CategoryId");
 
             PropagateValue(contextServices.GetRequiredService<IKeyPropagator>(), dependentEntry, property);
 
@@ -59,7 +59,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 
             var contextServices = CreateContextServices(model);
             var dependentEntry = contextServices.GetRequiredService<IStateManager>().GetOrCreateEntry(dependent);
-            var property = model.GetEntityType(typeof(Product)).GetProperty("CategoryId");
+            var property = model.FindEntityType(typeof(Product)).FindProperty("CategoryId");
 
             PropagateValue(contextServices.GetRequiredService<IKeyPropagator>(), dependentEntry, property);
 
@@ -76,7 +76,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 
             var contextServices = CreateContextServices(model);
             var dependentEntry = contextServices.GetRequiredService<IStateManager>().GetOrCreateEntry(dependent);
-            var property = model.GetEntityType(typeof(ProductDetail)).GetProperty("Id");
+            var property = model.FindEntityType(typeof(ProductDetail)).FindProperty("Id");
 
             PropagateValue(contextServices.GetRequiredService<IKeyPropagator>(), dependentEntry, property);
 
@@ -95,7 +95,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 
             manager.StartTracking(manager.GetOrCreateEntry(principal));
             var dependentEntry = manager.GetOrCreateEntry(dependent);
-            var property = model.GetEntityType(typeof(ProductDetail)).GetProperty("Id");
+            var property = model.FindEntityType(typeof(ProductDetail)).FindProperty("Id");
 
             PropagateValue(contextServices.GetRequiredService<IKeyPropagator>(), dependentEntry, property);
 
@@ -112,7 +112,7 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 
             var contextServices = CreateContextServices(model);
             var dependentEntry = contextServices.GetRequiredService<IStateManager>().GetOrCreateEntry(dependent);
-            var property = model.GetEntityType(typeof(ProductDetail)).GetProperty("Id");
+            var property = model.FindEntityType(typeof(ProductDetail)).FindProperty("Id");
 
             PropagateValue(contextServices.GetRequiredService<IKeyPropagator>(), dependentEntry, property);
 
@@ -129,8 +129,8 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 
             var contextServices = CreateContextServices(model);
             var dependentEntry = contextServices.GetRequiredService<IStateManager>().GetOrCreateEntry(dependent);
-            var property1 = model.GetEntityType(typeof(OrderLineDetail)).GetProperty("OrderId");
-            var property2 = model.GetEntityType(typeof(OrderLineDetail)).GetProperty("ProductId");
+            var property1 = model.FindEntityType(typeof(OrderLineDetail)).FindProperty("OrderId");
+            var property2 = model.FindEntityType(typeof(OrderLineDetail)).FindProperty("ProductId");
 
             var keyPropagator = contextServices.GetRequiredService<IKeyPropagator>();
             PropagateValue(keyPropagator, dependentEntry, property1);
@@ -152,8 +152,8 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 
             manager.StartTracking(manager.GetOrCreateEntry(principal));
             var dependentEntry = manager.GetOrCreateEntry(dependent);
-            var property1 = model.GetEntityType(typeof(OrderLineDetail)).GetProperty("OrderId");
-            var property2 = model.GetEntityType(typeof(OrderLineDetail)).GetProperty("ProductId");
+            var property1 = model.FindEntityType(typeof(OrderLineDetail)).FindProperty("OrderId");
+            var property2 = model.FindEntityType(typeof(OrderLineDetail)).FindProperty("ProductId");
 
             var keyPropagator = contextServices.GetRequiredService<IKeyPropagator>();
             PropagateValue(keyPropagator, dependentEntry, property1);
@@ -226,32 +226,31 @@ namespace Microsoft.Data.Entity.Tests.ChangeTracking.Internal
 
         private static IModel BuildModel()
         {
-            var model = new Model();
-            var builder = TestHelpers.Instance.CreateConventionBuilder(model);
+            var builder = TestHelpers.Instance.CreateConventionBuilder();
 
             builder.Entity<BaseType>();
 
             builder.Entity<Product>(b =>
                 {
-                    b.Collection(e => e.OrderLines).InverseReference(e => e.Product);
-                    b.Reference(e => e.Detail).InverseReference(e => e.Product).ForeignKey<ProductDetail>(e => e.Id);
+                    b.HasMany(e => e.OrderLines).WithOne(e => e.Product);
+                    b.HasOne(e => e.Detail).WithOne(e => e.Product).HasForeignKey<ProductDetail>(e => e.Id);
                 });
 
-            builder.Entity<Category>().Collection(e => e.Products).InverseReference(e => e.Category);
+            builder.Entity<Category>().HasMany(e => e.Products).WithOne(e => e.Category);
 
             builder.Entity<ProductDetail>();
 
-            builder.Entity<Order>().Collection(e => e.OrderLines).InverseReference(e => e.Order);
+            builder.Entity<Order>().HasMany(e => e.OrderLines).WithOne(e => e.Order);
 
-            builder.Entity<OrderLineDetail>().Key(e => new { e.OrderId, e.ProductId });
+            builder.Entity<OrderLineDetail>().HasKey(e => new { e.OrderId, e.ProductId });
 
             builder.Entity<OrderLine>(b =>
                 {
-                    b.Key(e => new { e.OrderId, e.ProductId });
-                    b.Reference(e => e.Detail).InverseReference(e => e.OrderLine);
+                    b.HasKey(e => new { e.OrderId, e.ProductId });
+                    b.HasOne(e => e.Detail).WithOne(e => e.OrderLine);
                 });
 
-            return model;
+            return builder.Model;
         }
     }
 }

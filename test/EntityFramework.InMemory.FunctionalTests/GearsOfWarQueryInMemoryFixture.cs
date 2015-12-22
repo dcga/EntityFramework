@@ -5,7 +5,7 @@ using System;
 using Microsoft.Data.Entity.FunctionalTests;
 using Microsoft.Data.Entity.FunctionalTests.TestModels.GearsOfWarModel;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.Data.Entity.InMemory.FunctionalTests
 {
@@ -48,7 +48,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
         {
             var context = new GearsOfWarContext(_serviceProvider, _options);
 
-            context.ChangeTracker.AutoDetectChangesEnabled = false;
+            context.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
 
             return context;
         }

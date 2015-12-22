@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using EntityFramework.Microbenchmarks.Core.Models.Orders;
 using Microsoft.Data.Entity;
 
@@ -12,6 +13,13 @@ namespace EntityFramework.Microbenchmarks.Models.Orders
         private readonly bool _disableBatching;
 
         public OrdersContext(string connectionString, bool disableBatching = false)
+        {
+            _connectionString = connectionString;
+            _disableBatching = disableBatching;
+        }
+
+        public OrdersContext(IServiceProvider serviceProvider, string connectionString, bool disableBatching = false)
+            : base(serviceProvider)
         {
             _connectionString = connectionString;
             _disableBatching = disableBatching;
@@ -30,18 +38,6 @@ namespace EntityFramework.Microbenchmarks.Models.Orders
             {
                 sqlBuilder.MaxBatchSize(1);
             }
-        }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.Entity<Customer>().Collection(c => c.Orders).InverseReference(o => o.Customer)
-                .ForeignKey(o => o.CustomerId);
-
-            modelBuilder.Entity<Order>().Collection(o => o.OrderLines).InverseReference(ol => ol.Order)
-                .ForeignKey(ol => ol.OrderId);
-
-            modelBuilder.Entity<Product>().Collection(p => p.OrderLines).InverseReference(ol => ol.Product)
-                .ForeignKey(ol => ol.ProductId);
         }
     }
 }

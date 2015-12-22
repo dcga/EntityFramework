@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Infrastructure;
+using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Metadata
@@ -12,7 +14,7 @@ namespace Microsoft.Data.Entity.Metadata
             : this(new RelationalAnnotations(property, providerPrefix))
         {
         }
-        
+
         protected RelationalPropertyAnnotations([NotNull] RelationalAnnotations annotations)
         {
             Annotations = annotations;
@@ -57,8 +59,7 @@ namespace Microsoft.Data.Entity.Metadata
                     (string)Annotations.GetAnnotation(RelationalAnnotationNames.DefaultValueType),
                     (string)Annotations.GetAnnotation(RelationalAnnotationNames.DefaultValue)).Value;
             }
-            [param: CanBeNull]
-            set { SetDefaultValue(value); }
+            [param: CanBeNull] set { SetDefaultValue(value); }
         }
 
         protected virtual bool SetDefaultValue([CanBeNull] object value)

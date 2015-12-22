@@ -83,12 +83,41 @@ namespace Microsoft.Data.Entity.Query.Expressions
         {
             var newInnerExpression = visitor.Visit(_expression);
 
-            return newInnerExpression != _expression 
+            return newInnerExpression != _expression
                 ? new AliasExpression(Alias, newInnerExpression)
                 : this;
         }
 
         public override string ToString()
             => this.TryGetColumnExpression()?.ToString() ?? Expression.NodeType + " " + Alias;
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj))
+            {
+                return false;
+            }
+
+            if (ReferenceEquals(this, obj))
+            {
+                return true;
+            }
+
+            return (obj.GetType() == GetType())
+                   && Equals((AliasExpression)obj);
+        }
+
+        private bool Equals(AliasExpression other)
+            => Equals(_expression, other._expression)
+               && string.Equals(_alias, other._alias);
+
+        public override int GetHashCode()
+        {
+            unchecked
+            {
+                // ReSharper disable once NonReadonlyMemberInGetHashCode
+                return (_expression.GetHashCode() * 397) ^ (_alias?.GetHashCode() ?? 0);
+            }
+        }
     }
 }

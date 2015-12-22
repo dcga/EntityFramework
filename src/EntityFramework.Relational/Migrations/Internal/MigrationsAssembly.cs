@@ -30,31 +30,32 @@ namespace Microsoft.Data.Entity.Migrations.Internal
             var contextType = context.GetType();
 
             var assemblyName = RelationalOptionsExtension.Extract(options)?.MigrationsAssembly;
-            var assembly = assemblyName == null
+            Assembly = assemblyName == null
                 ? contextType.GetTypeInfo().Assembly
                 : Assembly.Load(new AssemblyName(assemblyName));
 
             _idGenerator = idGenerator;
             _migrations = new LazyRef<IReadOnlyDictionary<string, TypeInfo>>(
                 () => (
-                        from t in assembly.GetConstructibleTypes()
-                        where t.IsSubclassOf(typeof(Migration))
-                            && t.GetCustomAttribute<DbContextAttribute>()?.ContextType == contextType
-                        let id = t.GetCustomAttribute<MigrationAttribute>()?.Id
-                        orderby id
-                        select new { Key = id, Element = t })
+                    from t in Assembly.GetConstructibleTypes()
+                    where t.IsSubclassOf(typeof(Migration))
+                          && (t.GetCustomAttribute<DbContextAttribute>()?.ContextType == contextType)
+                    let id = t.GetCustomAttribute<MigrationAttribute>()?.Id
+                    orderby id
+                    select new { Key = id, Element = t })
                     .ToDictionary(i => i.Key, i => i.Element));
             _modelSnapshot = new LazyRef<ModelSnapshot>(
                 () => (
-                        from t in assembly.GetConstructibleTypes()
-                        where t.IsSubclassOf(typeof(ModelSnapshot))
-                              && t.GetCustomAttribute<DbContextAttribute>()?.ContextType == contextType
-                        select (ModelSnapshot)Activator.CreateInstance(t.AsType()))
+                    from t in Assembly.GetConstructibleTypes()
+                    where t.IsSubclassOf(typeof(ModelSnapshot))
+                          && (t.GetCustomAttribute<DbContextAttribute>()?.ContextType == contextType)
+                    select (ModelSnapshot)Activator.CreateInstance(t.AsType()))
                     .FirstOrDefault());
         }
 
         public virtual IReadOnlyDictionary<string, TypeInfo> Migrations => _migrations.Value;
         public virtual ModelSnapshot ModelSnapshot => _modelSnapshot.Value;
+        public virtual Assembly Assembly { get; }
 
         public virtual string FindMigrationId(string nameOrId)
             => Migrations.Keys
@@ -64,7 +65,14 @@ namespace Microsoft.Data.Entity.Migrations.Internal
                         : id => string.Equals(_idGenerator.GetName(id), nameOrId, StringComparison.OrdinalIgnoreCase))
                 .FirstOrDefault();
 
-        public virtual Migration CreateMigration(TypeInfo migrationClass)
-            => (Migration)Activator.CreateInstance(migrationClass.AsType());
+        public virtual Migration CreateMigration(TypeInfo migrationClass, string activeProvider)
+        {
+            Check.NotNull(activeProvider, nameof(activeProvider));
+
+            var migration = (Migration)Activator.CreateInstance(migrationClass.AsType());
+            migration.ActiveProvider = activeProvider;
+
+            return migration;
+        }
     }
 }

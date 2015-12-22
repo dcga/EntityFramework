@@ -5,6 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 using Microsoft.Data.Entity.Metadata.Conventions;
 using Microsoft.Data.Entity.Metadata.Conventions.Internal;
 using Microsoft.Data.Entity.Metadata.Internal;
+using Microsoft.Data.Entity.Tests;
 using Xunit;
 
 namespace Microsoft.Data.Entity.Metadata
@@ -14,7 +15,7 @@ namespace Microsoft.Data.Entity.Metadata
         [Fact]
         public void TableAttribute_sets_column_name_order_and_type_with_conventional_builder()
         {
-            var modelBuilder = new ModelBuilder(new TestConventionalSetBuilder().AddConventions(new CoreConventionSetBuilder().CreateConventionSet()));
+            var modelBuilder = new ModelBuilder(TestConventionalSetBuilder.Build());
 
             var entityBuilder = modelBuilder.Entity<A>();
 
@@ -27,8 +28,8 @@ namespace Microsoft.Data.Entity.Metadata
         {
             var entityBuilder = CreateInternalEntityTypeBuilder<A>();
 
-            entityBuilder.Annotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.TableName, "ConventionalName", ConfigurationSource.Convention);
-            entityBuilder.Annotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.Schema, "ConventionalSchema", ConfigurationSource.Convention);
+            entityBuilder.HasAnnotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.TableName, "ConventionalName", ConfigurationSource.Convention);
+            entityBuilder.HasAnnotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.Schema, "ConventionalSchema", ConfigurationSource.Convention);
 
             new RelationalTableAttributeConvention().Apply(entityBuilder);
 
@@ -41,8 +42,8 @@ namespace Microsoft.Data.Entity.Metadata
         {
             var entityBuilder = CreateInternalEntityTypeBuilder<A>();
 
-            entityBuilder.Annotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.TableName, "ExplicitName", ConfigurationSource.Explicit);
-            entityBuilder.Annotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.Schema, "ExplicitName", ConfigurationSource.Explicit);
+            entityBuilder.HasAnnotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.TableName, "ExplicitName", ConfigurationSource.Explicit);
+            entityBuilder.HasAnnotation(RelationalAnnotationNames.Prefix + RelationalAnnotationNames.Schema, "ExplicitName", ConfigurationSource.Explicit);
 
             new RelationalTableAttributeConvention().Apply(entityBuilder);
 
@@ -55,13 +56,9 @@ namespace Microsoft.Data.Entity.Metadata
             var conventionSet = new ConventionSet();
             conventionSet.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention());
 
-            var modelBuilder = new InternalModelBuilder(new Model(), conventionSet);
+            var modelBuilder = new InternalModelBuilder(new Model(conventionSet));
 
             return modelBuilder.Entity(typeof(T), ConfigurationSource.Explicit);
-        }
-
-        private class TestConventionalSetBuilder : RelationalConventionSetBuilder
-        {
         }
 
         [Table("MyTable", Schema = "MySchema")]

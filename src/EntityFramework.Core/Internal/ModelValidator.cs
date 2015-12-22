@@ -3,10 +3,12 @@
 
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
+using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
+using Microsoft.Data.Entity.Metadata.Internal;
+using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Internal
 {
@@ -16,32 +18,32 @@ namespace Microsoft.Data.Entity.Internal
         {
             EnsureNoShadowEntities(model);
             EnsureNoShadowKeys(model);
-            EnsureClrPropertyTypesMatch(model);
-            EnsureValidForeignKeyChains(model);
+            EnsureNonNullPrimaryKeys(model);
+            EnsureClrInheritance(model);
         }
 
         protected virtual void EnsureNoShadowEntities([NotNull] IModel model)
         {
-            var firstShadowEntity = model.EntityTypes.FirstOrDefault(entityType => !entityType.HasClrType());
+            var firstShadowEntity = model.GetEntityTypes().FirstOrDefault(entityType => !entityType.HasClrType());
             if (firstShadowEntity != null)
             {
-                ShowError(Strings.ShadowEntity(firstShadowEntity.Name));
+                ShowError(CoreStrings.ShadowEntity(firstShadowEntity.Name));
             }
         }
 
         protected virtual void EnsureNoShadowKeys([NotNull] IModel model)
         {
-            foreach (var entityType in model.EntityTypes)
+            foreach (var entityType in model.GetEntityTypes())
             {
                 foreach (var key in entityType.GetKeys())
                 {
                     if (key.Properties.Any(p => p.IsShadowProperty))
                     {
                         string message;
-                        var referencingFk = model.FindReferencingForeignKeys(key).FirstOrDefault();
+                        var referencingFk = key.FindReferencingForeignKeys().FirstOrDefault();
                         if (referencingFk != null)
                         {
-                            message = Strings.ReferencedShadowKey(
+                            message = CoreStrings.ReferencedShadowKey(
                                 Property.Format(key.Properties),
                                 entityType.Name,
                                 Property.Format(key.Properties.Where(p => p.IsShadowProperty)),
@@ -50,7 +52,7 @@ namespace Microsoft.Data.Entity.Internal
                         }
                         else
                         {
-                            message = Strings.ShadowKey(
+                            message = CoreStrings.ShadowKey(
                                 Property.Format(key.Properties),
                                 entityType.Name,
                                 Property.Format(key.Properties.Where(p => p.IsShadowProperty)));
@@ -62,141 +64,49 @@ namespace Microsoft.Data.Entity.Internal
             }
         }
 
-        protected virtual void EnsureClrPropertyTypesMatch([NotNull] IModel model)
+        protected virtual void EnsureNonNullPrimaryKeys([NotNull] IModel model)
         {
-            foreach (var entityType in model.EntityTypes)
+            Check.NotNull(model, nameof(model));
+
+            var entityTypeWithNullPk = model.GetEntityTypes().FirstOrDefault(et => et.FindPrimaryKey() == null);
+            if (entityTypeWithNullPk != null)
             {
-                foreach (var property in entityType.GetDeclaredProperties())
-                {
-                    if (property.IsShadowProperty
-                        || !entityType.HasClrType())
-                    {
-                        continue;
-                    }
-
-                    var clrProperty = entityType.ClrType.GetPropertiesInHierarchy(property.Name).FirstOrDefault();
-                    if (clrProperty == null)
-                    {
-                        ShowError(Strings.NoClrProperty(property.Name, entityType.Name));
-                        continue;
-                    }
-
-                    if (property.ClrType != clrProperty.PropertyType)
-                    {
-                        ShowError(Strings.PropertyWrongClrType(property.Name, entityType.Name));
-                    }
-                }
+                ShowError(CoreStrings.EntityRequiresKey(entityTypeWithNullPk.Name));
             }
         }
 
-        protected virtual void EnsureValidForeignKeyChains([NotNull] IModel model)
+        protected virtual void EnsureClrInheritance([NotNull] IModel model)
         {
-            var verifiedProperties = new Dictionary<IProperty, IProperty>();
-            foreach (var entityType in model.EntityTypes)
+            var validEntityTypes = new HashSet<IEntityType>();
+            foreach (var entityType in model.GetEntityTypes())
             {
-                foreach (var foreignKey in entityType.GetForeignKeys())
-                {
-                    foreach (var referencedProperty in foreignKey.Properties)
-                    {
-                        string errorMessage;
-                        VerifyRootPrincipal(referencedProperty, verifiedProperties, ImmutableList<IForeignKey>.Empty, out errorMessage);
-                        if (errorMessage != null)
-                        {
-                            ShowError(errorMessage);
-                        }
-                    }
-                }
+                EnsureClrInheritance(model, entityType, validEntityTypes);
             }
         }
 
-        private IProperty VerifyRootPrincipal(
-            IProperty principalProperty,
-            Dictionary<IProperty, IProperty> verifiedProperties,
-            ImmutableList<IForeignKey> visitedForeignKeys,
-            out string errorMessage)
+        private void EnsureClrInheritance(IModel model, IEntityType entityType, HashSet<IEntityType> validEntityTypes)
         {
-            errorMessage = null;
-            IProperty rootPrincipal;
-            if (verifiedProperties.TryGetValue(principalProperty, out rootPrincipal))
+            if (validEntityTypes.Contains(entityType))
             {
-                return rootPrincipal;
+                return;
             }
 
-            var rootPrincipals = new Dictionary<IProperty, IForeignKey>();
-            foreach (var foreignKey in principalProperty.DeclaringEntityType.GetForeignKeys())
+            var baseClrType = entityType.ClrType?.GetTypeInfo().BaseType;
+            while (baseClrType != null)
             {
-                for (var index = 0; index < foreignKey.Properties.Count; index++)
+                var baseEntityType = model.FindEntityType(baseClrType);
+                if (baseEntityType != null)
                 {
-                    if (principalProperty == foreignKey.Properties[index])
+                    if (!baseEntityType.IsAssignableFrom(entityType))
                     {
-                        var nextPrincipalProperty = foreignKey.PrincipalKey.Properties[index];
-                        if (visitedForeignKeys.Contains(foreignKey))
-                        {
-                            var cycleStart = visitedForeignKeys.IndexOf(foreignKey);
-                            var cycle = visitedForeignKeys.GetRange(cycleStart, visitedForeignKeys.Count - cycleStart);
-                            errorMessage = Strings.CircularDependency(cycle.Select(fk => fk.ToString()).Join());
-                            continue;
-                        }
-                        rootPrincipal = VerifyRootPrincipal(nextPrincipalProperty, verifiedProperties, visitedForeignKeys.Add(foreignKey), out errorMessage);
-                        if (rootPrincipal == null)
-                        {
-                            if (principalProperty.RequiresValueGenerator)
-                            {
-                                rootPrincipals[principalProperty] = foreignKey;
-                            }
-                            continue;
-                        }
-
-                        if (principalProperty.RequiresValueGenerator)
-                        {
-                            ShowError(Strings.ForeignKeyValueGenerationOnAdd(
-                                principalProperty.Name,
-                                principalProperty.DeclaringEntityType.DisplayName(),
-                                Property.Format(foreignKey.Properties)));
-                            return principalProperty;
-                        }
-
-                        rootPrincipals[rootPrincipal] = foreignKey;
+                        ShowError(CoreStrings.InconsistentInheritance(entityType.DisplayName(), baseEntityType.DisplayName()));
                     }
+                    EnsureClrInheritance(model, baseEntityType, validEntityTypes);
+                    break;
                 }
+                baseClrType = baseClrType.GetTypeInfo().BaseType;
             }
-
-            if (rootPrincipals.Count == 0)
-            {
-                if (errorMessage != null)
-                {
-                    return null;
-                }
-
-                if (!principalProperty.RequiresValueGenerator)
-                {
-                    ShowError(Strings.PrincipalKeyNoValueGenerationOnAdd(principalProperty.Name, principalProperty.DeclaringEntityType.DisplayName()));
-                    return null;
-                }
-
-                return principalProperty;
-            }
-
-            if (rootPrincipals.Count > 1)
-            {
-                var firstRoot = rootPrincipals.Keys.ElementAt(0);
-                var secondRoot = rootPrincipals.Keys.ElementAt(1);
-                ShowWarning(Strings.MultipleRootPrincipals(
-                    rootPrincipals[firstRoot].DeclaringEntityType.DisplayName(),
-                    Property.Format(rootPrincipals[firstRoot].Properties),
-                    firstRoot.DeclaringEntityType.DisplayName(),
-                    firstRoot.Name,
-                    Property.Format(rootPrincipals[secondRoot].Properties),
-                    secondRoot.DeclaringEntityType.DisplayName(),
-                    secondRoot.Name));
-
-                return firstRoot;
-            }
-
-            errorMessage = null;
-            rootPrincipal = rootPrincipals.Keys.Single();
-            verifiedProperties[principalProperty] = rootPrincipal;
-            return rootPrincipal;
+            validEntityTypes.Add(entityType);
         }
 
         protected virtual void ShowError([NotNull] string message)

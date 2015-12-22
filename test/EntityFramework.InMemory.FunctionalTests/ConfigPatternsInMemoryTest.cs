@@ -4,9 +4,9 @@
 using System;
 using System.Linq;
 using Microsoft.Data.Entity.Infrastructure;
-using Microsoft.Framework.DependencyInjection;
+using Microsoft.Data.Entity.Internal;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using CoreStrings = Microsoft.Data.Entity.Internal.Strings;
 
 namespace Microsoft.Data.Entity.InMemory.FunctionalTests
 {
@@ -277,7 +277,7 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
             var services = new ServiceCollection();
             services.AddTransient<InjectContextAndConfigurationBlogContext>()
                 .AddTransient<InjectContextAndConfigurationController>()
-                .AddInstance(optionsBuilder.Options)
+                .AddSingleton(optionsBuilder.Options)
                 .AddEntityFramework()
                 .AddInMemoryDatabase();
 
@@ -328,12 +328,12 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
         public void Can_register_configuration_with_DI_container_and_have_it_injected()
         {
             var optionsBuilder = new DbContextOptionsBuilder();
-            optionsBuilder.UseInMemoryDatabase(persist: false);
+            optionsBuilder.UseInMemoryDatabase();
 
             var services = new ServiceCollection();
             services.AddTransient<InjectConfigurationBlogContext>()
                 .AddTransient<InjectConfigurationController>()
-                .AddInstance(optionsBuilder.Options)
+                .AddSingleton(optionsBuilder.Options)
                 .AddEntityFramework()
                 .AddInMemoryDatabase();
 
@@ -362,6 +362,9 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
 
                 Assert.NotEqual(0, blog.Id);
                 Assert.Equal("The Waffle Cart", blog.Name);
+
+                _context.Remove(blog);
+                _context.SaveChanges();
             }
         }
 
@@ -390,8 +393,8 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
                 .AddTransient<InjectDifferentConfigurationsAccountContext>()
                 .AddTransient<InjectDifferentConfigurationsBlogController>()
                 .AddTransient<InjectDifferentConfigurationsAccountController>()
-                .AddInstance(blogOptions.Options)
-                .AddInstance(accountOptions.Options)
+                .AddSingleton(blogOptions.Options)
+                .AddSingleton(accountOptions.Options)
                 .AddEntityFramework()
                 .AddInMemoryDatabase();
 
@@ -491,8 +494,8 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
                 .AddTransient<InjectDifferentConfigurationsNoConstructorAccountContext>()
                 .AddTransient<InjectDifferentConfigurationsNoConstructorBlogController>()
                 .AddTransient<InjectDifferentConfigurationsNoConstructorAccountController>()
-                .AddInstance(blogOptions.Options)
-                .AddInstance(accountOptions.Options)
+                .AddSingleton(blogOptions.Options)
+                .AddSingleton(accountOptions.Options)
                 .AddEntityFramework()
                 .AddInMemoryDatabase();
 
@@ -516,8 +519,8 @@ namespace Microsoft.Data.Entity.InMemory.FunctionalTests
                 .AddTransient<InjectDifferentConfigurationsNoConstructorAccountContext>()
                 .AddTransient<InjectDifferentConfigurationsNoConstructorBlogController>()
                 .AddTransient<InjectDifferentConfigurationsNoConstructorAccountController>()
-                .AddInstance<DbContextOptions>(blogOptions.Options)
-                .AddInstance<DbContextOptions>(accountOptions.Options)
+                .AddSingleton<DbContextOptions>(blogOptions.Options)
+                .AddSingleton<DbContextOptions>(accountOptions.Options)
                 .AddEntityFramework()
                 .AddInMemoryDatabase();
 

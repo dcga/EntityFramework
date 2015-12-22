@@ -17,7 +17,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
     ///         and it is not designed to be directly constructed in your application code.
     ///     </para>
     /// </summary>
-    public class PropertyBuilder : IAccessor<Model>, IAccessor<InternalPropertyBuilder>
+    public class PropertyBuilder : IInfrastructure<IMutableModel>, IInfrastructure<InternalPropertyBuilder>
     {
         /// <summary>
         ///     <para>
@@ -40,17 +40,17 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// <summary>
         ///     The internal builder being used to configure the property.
         /// </summary>
-        InternalPropertyBuilder IAccessor<InternalPropertyBuilder>.Service => Builder;
+        InternalPropertyBuilder IInfrastructure<InternalPropertyBuilder>.Instance => Builder;
 
         /// <summary>
         ///     The property being configured.
         /// </summary>
-        public virtual Property Metadata => Builder.Metadata;
+        public virtual IMutableProperty Metadata => Builder.Metadata;
 
         /// <summary>
         ///     The model that the property belongs to.
         /// </summary>
-        Model IAccessor<Model>.Service => Builder.ModelBuilder.Metadata;
+        IMutableModel IInfrastructure<IMutableModel>.Instance => Builder.ModelBuilder.Metadata;
 
         /// <summary>
         ///     Adds or updates an annotation on the property. If an annotation with the key specified in
@@ -59,12 +59,12 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// <param name="annotation"> The key of the annotation to be added or updated. </param>
         /// <param name="value"> The value to be stored in the annotation. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual PropertyBuilder Annotation([NotNull] string annotation, [NotNull] object value)
+        public virtual PropertyBuilder HasAnnotation([NotNull] string annotation, [NotNull] object value)
         {
             Check.NotEmpty(annotation, nameof(annotation));
             Check.NotNull(value, nameof(value));
 
-            Builder.Annotation(annotation, value, ConfigurationSource.Explicit);
+            Builder.HasAnnotation(annotation, value, ConfigurationSource.Explicit);
 
             return this;
         }
@@ -76,9 +76,9 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </summary>
         /// <param name="required"> A value indicating whether the property is required. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual PropertyBuilder Required(bool required = true)
+        public virtual PropertyBuilder IsRequired(bool required = true)
         {
-            Builder.Required(required, ConfigurationSource.Explicit);
+            Builder.IsRequired(required, ConfigurationSource.Explicit);
 
             return this;
         }
@@ -89,9 +89,9 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </summary>
         /// <param name="maxLength"> The maximum length of data allowed in the property. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual PropertyBuilder MaxLength(int maxLength)
+        public virtual PropertyBuilder HasMaxLength(int maxLength)
         {
-            Builder.MaxLength(maxLength, ConfigurationSource.Explicit);
+            Builder.HasMaxLength(maxLength, ConfigurationSource.Explicit);
 
             return this;
         }
@@ -105,9 +105,9 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </summary>
         /// <param name="concurrencyToken"> A value indicating whether this property is a concurrency token. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual PropertyBuilder ConcurrencyToken(bool concurrencyToken = true)
+        public virtual PropertyBuilder IsConcurrencyToken(bool concurrencyToken = true)
         {
-            Builder.ConcurrencyToken(concurrencyToken, ConfigurationSource.Explicit);
+            Builder.IsConcurrencyToken(concurrencyToken, ConfigurationSource.Explicit);
 
             return this;
         }

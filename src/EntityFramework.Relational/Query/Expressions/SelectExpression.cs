@@ -9,7 +9,6 @@ using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Query.Sql;
-using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
 using Remotion.Linq.Clauses;
 
@@ -22,13 +21,13 @@ namespace Microsoft.Data.Entity.Query.Expressions
         internal string DebugView => ToString();
 #endif
 
+        private readonly IQuerySqlGeneratorFactory _querySqlGeneratorFactory;
         private readonly List<Expression> _projection = new List<Expression>();
         private readonly List<TableExpressionBase> _tables = new List<TableExpressionBase>();
         private readonly List<Ordering> _orderBy = new List<Ordering>();
 
-        private int? _limit;
-        private int? _offset;
-        private bool _projectStar;
+        private Expression _limit;
+        private Expression _offset;
 
         private int _subqueryDepth = -1;
 
@@ -36,14 +35,22 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
         public virtual Expression Predicate { get; [param: CanBeNull] set; }
 
-        public SelectExpression()
+        public SelectExpression([NotNull] IQuerySqlGeneratorFactory querySqlGeneratorFactory)
             : base(null, null)
         {
+            Check.NotNull(querySqlGeneratorFactory, nameof(querySqlGeneratorFactory));
+
+            _querySqlGeneratorFactory = querySqlGeneratorFactory;
         }
 
-        public SelectExpression([NotNull] string alias)
+        public SelectExpression(
+            [NotNull] IQuerySqlGeneratorFactory querySqlGeneratorFactory,
+            [NotNull] string alias)
             : base(null, Check.NotEmpty(alias, nameof(alias)))
         {
+            Check.NotNull(querySqlGeneratorFactory, nameof(querySqlGeneratorFactory));
+
+            _querySqlGeneratorFactory = querySqlGeneratorFactory;
         }
 
         public override Type Type => _projection.Count == 1
@@ -55,15 +62,15 @@ namespace Microsoft.Data.Entity.Query.Expressions
             Check.NotEmpty(alias, nameof(alias));
 
             var selectExpression
-                = new SelectExpression(alias)
-                    {
-                        _limit = _limit,
-                        _offset = _offset,
-                        _isDistinct = _isDistinct,
-                        _subqueryDepth = _subqueryDepth,
-                        _projectStar = _projectStar,
-                        Predicate = Predicate
-                    };
+                = new SelectExpression(_querySqlGeneratorFactory, alias)
+                {
+                    _limit = _limit,
+                    _offset = _offset,
+                    _isDistinct = _isDistinct,
+                    _subqueryDepth = _subqueryDepth,
+                    IsProjectStar = IsProjectStar,
+                    Predicate = Predicate
+                };
 
             selectExpression._projection.AddRange(_projection);
 
@@ -75,7 +82,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
         public virtual IReadOnlyList<TableExpressionBase> Tables => _tables;
 
-        public virtual bool IsProjectStar => _projectStar;
+        public virtual bool IsProjectStar { get; set; }
 
         public virtual void AddTable([NotNull] TableExpressionBase tableExpression)
             => _tables.Add(Check.NotNull(tableExpression, nameof(tableExpression)));
@@ -107,7 +114,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
                 {
                     var columnExpression = expression as ColumnExpression;
 
-                    if (columnExpression != null
+                    if (columnExpression?.Table.QuerySource != null
                         && !_selectExpression.HandlesQuerySource(columnExpression.Table.QuerySource))
                     {
                         _correlated = true;
@@ -155,9 +162,10 @@ namespace Microsoft.Data.Entity.Query.Expressions
             }
         }
 
-        public virtual int? Limit
+        public virtual Expression Limit
         {
             get { return _limit; }
+            [param: CanBeNull]
             set
             {
                 Check.NotNull(value, nameof(value));
@@ -168,14 +176,14 @@ namespace Microsoft.Data.Entity.Query.Expressions
             }
         }
 
-        public virtual int? Offset
+        public virtual Expression Offset
         {
             get { return _offset; }
+            [param: CanBeNull]
             set
             {
-                Check.NotNull(value, nameof(value));
-
-                if (_limit != null)
+                if (_limit != null
+                    && value != null)
                 {
                     var subquery = PushDownSubquery();
 
@@ -221,20 +229,28 @@ namespace Microsoft.Data.Entity.Query.Expressions
         {
             _subqueryDepth++;
 
-            var subquery = new SelectExpression(SystemAliasPrefix + _subqueryDepth);
+            var subquery = new SelectExpression(_querySqlGeneratorFactory, SystemAliasPrefix + _subqueryDepth);
 
             var columnAliasCounter = 0;
 
-            // TODO: Only AliasExpressions? Don't unique-ify here.
-            foreach (var aliasExpression in _projection.OfType<AliasExpression>())
+            foreach (var expression in _projection)
             {
-                var columnExpression = aliasExpression.TryGetColumnExpression();
+                var aliasExpression = expression as AliasExpression;
 
-                if (columnExpression != null
-                    && subquery._projection.OfType<AliasExpression>().Any(ae =>
-                        ae.TryGetColumnExpression()?.Name == columnExpression.Name))
+                if (aliasExpression != null)
                 {
-                    aliasExpression.Alias = "c" + columnAliasCounter++;
+                    var columnExpression = aliasExpression.TryGetColumnExpression();
+
+                    if (columnExpression != null
+                        && subquery._projection.OfType<AliasExpression>()
+                            .Any(ae => ae.TryGetColumnExpression()?.Name == columnExpression.Name))
+                    {
+                        aliasExpression.Alias = "c" + columnAliasCounter++;
+                    }
+                }
+                else
+                {
+                    aliasExpression = new AliasExpression("c" + columnAliasCounter++, expression);
                 }
 
                 subquery._projection.Add(aliasExpression);
@@ -248,7 +264,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
             subquery._offset = _offset;
             subquery._isDistinct = _isDistinct;
             subquery._subqueryDepth = _subqueryDepth;
-            subquery._projectStar = _projectStar || !subquery._projection.Any();
+            subquery.IsProjectStar = IsProjectStar || !subquery._projection.Any();
 
             _limit = null;
             _offset = null;
@@ -258,8 +274,6 @@ namespace Microsoft.Data.Entity.Query.Expressions
             ClearTables();
             ClearProjection();
             ClearOrderBy();
-
-            _projectStar = true;
 
             AddTable(subquery);
 
@@ -292,6 +306,9 @@ namespace Microsoft.Data.Entity.Query.Expressions
         }
 
         public virtual int AddToProjection([NotNull] Expression expression)
+            => AddToProjection(expression, true);
+
+        public virtual int AddToProjection([NotNull] Expression expression, bool resetProjectStar)
         {
             Check.NotNull(expression, nameof(expression));
 
@@ -310,12 +327,15 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
             if (expression is SelectExpression)
             {
-                ClearProjection();
+                ClearColumnProjections();
             }
 
             _projection.Add(expression);
 
-            _projectStar = false;
+            if (resetProjectStar)
+            {
+                IsProjectStar = false;
+            }
 
             return _projection.Count - 1;
         }
@@ -336,8 +356,8 @@ namespace Microsoft.Data.Entity.Query.Expressions
                             var ae = e as AliasExpression;
                             var ce = e.TryGetColumnExpression();
 
-                            return (ce != null && ce.Property == columnExpression?.Property
-                                    && ce.TableAlias == columnExpression?.TableAlias)
+                            return ce != null && ce.Property == columnExpression?.Property
+                                   && ce.TableAlias == columnExpression?.TableAlias
                                    || ae?.Expression == expression;
                         });
 
@@ -372,7 +392,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
                 _projection.Add(new AliasExpression(alias, expression));
 
-                _projectStar = false;
+                IsProjectStar = false;
             }
 
             return projectionIndex;
@@ -389,7 +409,8 @@ namespace Microsoft.Data.Entity.Query.Expressions
                             var ce = e.TryGetColumnExpression();
 
                             return ce?.Property == columnExpression.Property
-                                   && ce?.TableAlias == columnExpression.TableAlias;
+                                   && ce?.Type == columnExpression.Type
+                                   && ce.TableAlias == columnExpression.TableAlias;
                         });
 
             if (projectionIndex == -1)
@@ -411,7 +432,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
                 _projection.Add(aliasExpression);
 
-                _projectStar = false;
+                IsProjectStar = false;
             }
 
             return projectionIndex;
@@ -447,7 +468,28 @@ namespace Microsoft.Data.Entity.Query.Expressions
             AddToProjection(expression);
         }
 
-        public virtual void ClearProjection() => _projection.Clear();
+        public virtual void ClearProjection()
+        {
+            _projection.Clear();
+            IsProjectStar = true;
+        }
+
+        public virtual void ClearColumnProjections()
+        {
+            for (int i = _projection.Count - 1; i >= 0; i--)
+            {
+                var aliasExpression = _projection[i] as AliasExpression;
+                if (aliasExpression != null && aliasExpression.Expression is ColumnExpression)
+                {
+                    _projection.RemoveAt(i);
+                }
+            }
+
+            if (_projection.Count == 0)
+            {
+                IsProjectStar = true;
+            }
+        }
 
         public virtual void RemoveRangeFromProjection(int index)
         {
@@ -550,7 +592,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
         public virtual void ExplodeStarProjection()
         {
-            if (_projectStar)
+            if (IsProjectStar)
             {
                 var subquery = (SelectExpression)_tables.Single();
 
@@ -560,12 +602,12 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
                     _projection.Add(
                         new AliasExpression(aliasExpression.Alias, expression)
-                            {
-                                SourceMember = aliasExpression.SourceMember
-                            });
+                        {
+                            SourceMember = aliasExpression.SourceMember
+                        });
                 }
 
-                _projectStar = false;
+                IsProjectStar = false;
             }
         }
 
@@ -582,7 +624,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
             _projection.AddRange(projection);
         }
 
-        public virtual void AddCrossApply(
+        public virtual void AddLateralJoin(
             [NotNull] TableExpressionBase tableExpression,
             [NotNull] IEnumerable<Expression> projection)
         {
@@ -591,7 +633,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
             tableExpression.Alias = CreateUniqueTableAlias(tableExpression.Alias);
 
-            _tables.Add(new CrossApplyExpression(tableExpression));
+            _tables.Add(new LateralJoinExpression(tableExpression));
             _projection.AddRange(projection);
         }
 
@@ -720,17 +762,22 @@ namespace Microsoft.Data.Entity.Query.Expressions
             return this;
         }
 
-        // TODO: Use generator from DI
+        public virtual IQuerySqlGenerator CreateDefaultQuerySqlGenerator()
+            => _querySqlGeneratorFactory.CreateDefault(this);
+
+        public virtual IQuerySqlGenerator CreateFromSqlQuerySqlGenerator(
+            [NotNull] string sql,
+            [NotNull] Expression arguments)
+            => _querySqlGeneratorFactory
+                .CreateFromSql(
+                    this,
+                    Check.NotEmpty(sql, nameof(sql)),
+                    Check.NotNull(arguments, nameof(arguments)));
+
         public override string ToString()
-            => new DefaultQuerySqlGenerator(this, new NullTypeMapper())
-                .GenerateSql(new Dictionary<string, object>()).CommandText;
-
-        private class NullTypeMapper : IRelationalTypeMapper
-        {
-            public RelationalTypeMapping MapPropertyType(IProperty property) => new RelationalTypeMapping("?");
-
-            public RelationalTypeMapping GetDefaultMapping(Type clrType) => new RelationalTypeMapping("?");
-        }
+            => CreateDefaultQuerySqlGenerator()
+                .GenerateSql(new Dictionary<string, object>())
+                .CommandText;
 
         // TODO: Make polymorphic
         public virtual Expression UpdateColumnExpression(
@@ -754,9 +801,9 @@ namespace Microsoft.Data.Entity.Query.Expressions
                     = new AliasExpression(
                         aliasExpression.Alias,
                         UpdateColumnExpression(aliasExpression.Expression, tableExpression))
-                        {
-                            SourceMember = aliasExpression.SourceMember
-                        };
+                    {
+                        SourceMember = aliasExpression.SourceMember
+                    };
 
                 return newAliasExpression;
             }

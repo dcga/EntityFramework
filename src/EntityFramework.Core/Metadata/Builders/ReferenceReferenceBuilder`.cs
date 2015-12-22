@@ -5,7 +5,6 @@ using System;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.Data.Entity.ChangeTracking;
-using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Utilities;
 
@@ -27,7 +26,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
     {
         /// <summary>
         ///     <para>
-        ///         Initializes a new instance of the <see cref="ReferenceReferenceBuilder" /> class.
+        ///         Initializes a new instance of the <see cref="ReferenceReferenceBuilder{TEntity, TRelatedEntity}" /> class.
         ///     </para>
         ///     <para>
         ///         Instances of this class are returned from methods when using the <see cref="ModelBuilder" /> API
@@ -41,14 +40,43 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         }
 
         /// <summary>
+        ///     <para>
+        ///         Initializes a new instance of the <see cref="ReferenceReferenceBuilder{TEntity, TRelatedEntity}" /> class.
+        ///     </para>
+        /// </summary>
+        /// <param name="builder"> The internal builder being used to configure this relationship. </param>
+        /// <param name="oldBuilder"> A builder to copy configuration from. </param>
+        /// <param name="inverted">
+        ///     A value indicating whether to reverse the direction of the relationship.
+        /// </param>
+        /// <param name="foreignKeySet">
+        ///     A value indicating whether the foreign key properties have been configured in this chain of configuration calls.
+        /// </param>
+        /// <param name="principalKeySet">
+        ///     A value indicating whether the principal key properties have been configured in this chain of configuration calls.
+        /// </param>
+        /// <param name="requiredSet">
+        ///     A value indicating whether required/optional has been configured in this chain of configuration calls.
+        /// </param>
+        protected ReferenceReferenceBuilder(InternalRelationshipBuilder builder,
+            ReferenceReferenceBuilder oldBuilder,
+            bool inverted = false,
+            bool foreignKeySet = false,
+            bool principalKeySet = false,
+            bool requiredSet = false)
+            : base(builder, oldBuilder, inverted, foreignKeySet, principalKeySet, requiredSet)
+        {
+        }
+
+        /// <summary>
         ///     Adds or updates an annotation on the relationship. If an annotation with the key specified in
         ///     <paramref name="annotation" /> already exists it's value will be updated.
         /// </summary>
         /// <param name="annotation"> The key of the annotation to be added or updated. </param>
         /// <param name="value"> The value to be stored in the annotation. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> Annotation([NotNull] string annotation, [NotNull] object value)
-            => (ReferenceReferenceBuilder<TEntity, TRelatedEntity>)base.Annotation(annotation, value);
+        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> HasAnnotation([NotNull] string annotation, [NotNull] object value)
+            => (ReferenceReferenceBuilder<TEntity, TRelatedEntity>)base.HasAnnotation(annotation, value);
 
         /// <summary>
         ///     <para>
@@ -62,7 +90,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///         of the entity class.
         ///     </para>
         ///     <para>
-        ///         If <see cref="PrincipalKey(Type, string[])" /> is not specified, then an attempt will be made to
+        ///         If <see cref="HasPrincipalKey(System.Type,string[])" /> is not specified, then an attempt will be made to
         ///         match the data type and order of foreign key properties against the primary key of the principal
         ///         entity type. If they do not match, new shadow state properties that form a unique index will be
         ///         added to the principal entity type to serve as the reference key.
@@ -76,21 +104,25 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     The name(s) of the foreign key property(s).
         /// </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> ForeignKey(
+        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> HasForeignKey(
             [NotNull] Type dependentEntityType,
             [NotNull] params string[] foreignKeyPropertyNames)
         {
             Check.NotNull(dependentEntityType, nameof(dependentEntityType));
             Check.NotEmpty(foreignKeyPropertyNames, nameof(foreignKeyPropertyNames));
 
-            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(Builder.ForeignKey(dependentEntityType, foreignKeyPropertyNames, ConfigurationSource.Explicit));
+            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(
+                SetDependentEntityType(dependentEntityType).HasForeignKey(foreignKeyPropertyNames, ConfigurationSource.Explicit),
+                this,
+                inverted: Builder.Metadata.DeclaringEntityType.ClrType != dependentEntityType,
+                foreignKeySet: true);
         }
 
         /// <summary>
         ///     Configures the unique property(s) that this relationship targets. Typically you would only call this
         ///     method if you want to use a property(s) other than the primary key as the principal property(s). If
-        ///     the specified property(s) is not already a unique constraint (or the primary key) then a new unique constraint
-        ///     will be introduced.
+        ///     the specified property(s) is not already a unique constraint (or the primary key) then a new unique
+        ///     constraint will be introduced.
         /// </summary>
         /// <param name="principalEntityType">
         ///     The entity type that is the principal in this relationship (the type
@@ -98,14 +130,18 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </param>
         /// <param name="keyPropertyNames"> The name(s) of the reference key property(s). </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> PrincipalKey(
+        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> HasPrincipalKey(
             [NotNull] Type principalEntityType,
             [NotNull] params string[] keyPropertyNames)
         {
             Check.NotNull(principalEntityType, nameof(principalEntityType));
             Check.NotEmpty(keyPropertyNames, nameof(keyPropertyNames));
 
-            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(Builder.PrincipalKey(principalEntityType, keyPropertyNames, ConfigurationSource.Explicit));
+            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(
+                SetPrincipalEntityType(principalEntityType).HasPrincipalKey(keyPropertyNames, ConfigurationSource.Explicit),
+                this,
+                inverted: Builder.Metadata.PrincipalEntityType.ClrType != principalEntityType,
+                principalKeySet: true);
         }
 
         /// <summary>
@@ -120,7 +156,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///         of the entity class.
         ///     </para>
         ///     <para>
-        ///         If <see cref="PrincipalKey(string, string[])" /> is not specified, then an attempt will be made to
+        ///         If <see cref="HasPrincipalKey(Type,string[])" /> is not specified, then an attempt will be made to
         ///         match the data type and order of foreign key properties against the primary key of the principal
         ///         entity type. If they do not match, new shadow state properties that form a unique index will be
         ///         added to the principal entity type to serve as the reference key.
@@ -134,20 +170,25 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     The name(s) of the foreign key property(s).
         /// </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> ForeignKey(
+        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> HasForeignKey(
             [NotNull] string dependentEntityTypeName,
             [NotNull] params string[] foreignKeyPropertyNames)
         {
             Check.NotEmpty(dependentEntityTypeName, nameof(dependentEntityTypeName));
             Check.NotEmpty(foreignKeyPropertyNames, nameof(foreignKeyPropertyNames));
 
-            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(Builder.ForeignKey(dependentEntityTypeName, foreignKeyPropertyNames, ConfigurationSource.Explicit));
+            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(
+                SetDependentEntityType(dependentEntityTypeName).HasForeignKey(foreignKeyPropertyNames, ConfigurationSource.Explicit),
+                this,
+                inverted: Builder.Metadata.DeclaringEntityType.Name != dependentEntityTypeName,
+                foreignKeySet: true);
         }
 
         /// <summary>
         ///     Configures the unique property(s) that this relationship targets. Typically you would only call this
         ///     method if you want to use a property(s) other than the primary key as the principal property(s). If
-        ///     the specified property(s) is not already a unique constraint (or the primary key) then a new unique constraint
+        ///     the specified property(s) is not already a unique constraint (or the primary key) then a new unique
+        ///     constraint
         ///     will be introduced.
         /// </summary>
         /// <param name="principalEntityTypeName">
@@ -156,14 +197,18 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </param>
         /// <param name="keyPropertyNames"> The name(s) of the reference key property(s). </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> PrincipalKey(
+        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> HasPrincipalKey(
             [NotNull] string principalEntityTypeName,
             [NotNull] params string[] keyPropertyNames)
         {
             Check.NotEmpty(principalEntityTypeName, nameof(principalEntityTypeName));
             Check.NotEmpty(keyPropertyNames, nameof(keyPropertyNames));
 
-            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(Builder.PrincipalKey(principalEntityTypeName, keyPropertyNames, ConfigurationSource.Explicit));
+            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(
+                SetPrincipalEntityType(principalEntityTypeName).HasPrincipalKey(keyPropertyNames, ConfigurationSource.Explicit),
+                this,
+                inverted: Builder.Metadata.PrincipalEntityType.Name != principalEntityTypeName,
+                principalKeySet: true);
         }
 
         /// <summary>
@@ -171,7 +216,7 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///         Configures the property(s) to use as the foreign key for this relationship.
         ///     </para>
         ///     <para>
-        ///         If <see cref="PrincipalKey{TPrincipalEntity}" />
+        ///         If <see cref="HasPrincipalKey{TPrincipalEntity}" />
         ///         is not specified, then an attempt will be made to match the data type and order of foreign key
         ///         properties against the primary key of the principal entity type. If they do not match, new shadow
         ///         state properties that form a unique index will be
@@ -192,24 +237,28 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     <para>
         ///         If the foreign key is made up of multiple properties then specify an anonymous type including the
         ///         properties (<c>t => new { t.Id1, t.Id2 }</c>). The order specified should match the order of
-        ///         corresponding keys in <see cref="PrincipalKey{TPrincipalEntity}" />.
+        ///         corresponding keys in <see cref="HasPrincipalKey{TPrincipalEntity}" />.
         ///     </para>
         /// </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> ForeignKey<TDependentEntity>(
+        public virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> HasForeignKey<TDependentEntity>(
             [NotNull] Expression<Func<TDependentEntity, object>> foreignKeyExpression)
         {
             Check.NotNull(foreignKeyExpression, nameof(foreignKeyExpression));
 
             return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(
-                Builder.ForeignKey(typeof(TDependentEntity), foreignKeyExpression.GetPropertyAccessList(), ConfigurationSource.Explicit));
+                SetDependentEntityType(typeof(TDependentEntity))
+                    .HasForeignKey(foreignKeyExpression.GetPropertyAccessList(), ConfigurationSource.Explicit),
+                this,
+                inverted: Builder.Metadata.DeclaringEntityType.ClrType != typeof(TDependentEntity),
+                foreignKeySet: true);
         }
 
         /// <summary>
         ///     Configures the unique property(s) that this relationship targets. Typically you would only call this
         ///     method if you want to use a property(s) other than the primary key as the principal property(s). If
-        ///     the specified property(s) is not already a unique constraint (or the primary key) then a new unique constraint
-        ///     will be introduced.
+        ///     the specified property(s) is not already a unique constraint (or the primary key) then a new unique
+        ///     constraint will be introduced.
         /// </summary>
         /// <typeparam name="TPrincipalEntity">
         ///     The entity type that is the principal in this relationship. That is, the type
@@ -225,12 +274,17 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         ///     </para>
         /// </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> PrincipalKey<TPrincipalEntity>(
+        public virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> HasPrincipalKey<TPrincipalEntity>(
             [NotNull] Expression<Func<TPrincipalEntity, object>> keyExpression)
         {
             Check.NotNull(keyExpression, nameof(keyExpression));
 
-            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(Builder.PrincipalKey(typeof(TPrincipalEntity), keyExpression.GetPropertyAccessList(), ConfigurationSource.Explicit));
+            return new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(
+                SetPrincipalEntityType(typeof(TPrincipalEntity))
+                    .HasPrincipalKey(keyExpression.GetPropertyAccessList(), ConfigurationSource.Explicit),
+                this,
+                inverted: Builder.Metadata.PrincipalEntityType.ClrType != typeof(TPrincipalEntity),
+                principalKeySet: true);
         }
 
         /// <summary>
@@ -239,9 +293,20 @@ namespace Microsoft.Data.Entity.Metadata.Builders
         /// </summary>
         /// <param name="required"> A value indicating whether this is a required relationship. </param>
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
-        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> Required(bool required = true)
-            => new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(Builder.Required(required, ConfigurationSource.Explicit));
+        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> IsRequired(bool required = true)
+            => new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(
+                Builder.IsRequired(required, ConfigurationSource.Explicit),
+                this,
+                requiredSet: true);
 
-        private InternalRelationshipBuilder Builder => this.GetService<InternalRelationshipBuilder>();
+        /// <summary>
+        ///     Configures how a delete operation is applied to dependent entities in the relationship when the
+        ///     principal is deleted or the relationship is severed.
+        /// </summary>
+        /// <param name="deleteBehavior"> The action to perform. </param>
+        /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
+        public new virtual ReferenceReferenceBuilder<TEntity, TRelatedEntity> OnDelete(DeleteBehavior deleteBehavior)
+            => new ReferenceReferenceBuilder<TEntity, TRelatedEntity>(
+                Builder.DeleteBehavior(deleteBehavior, ConfigurationSource.Explicit), this);
     }
 }

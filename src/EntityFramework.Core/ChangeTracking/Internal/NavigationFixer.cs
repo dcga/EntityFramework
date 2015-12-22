@@ -15,34 +15,24 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
 {
     public class NavigationFixer : INavigationFixer
     {
-        private readonly IClrAccessorSource<IClrPropertySetter> _setterSource;
-        private readonly IClrAccessorSource<IClrPropertyGetter> _getterSource;
-        private readonly IClrCollectionAccessorSource _collectionAccessorSource;
         private readonly IModel _model;
         private bool _inFixup;
 
-        public NavigationFixer(
-            [NotNull] IClrAccessorSource<IClrPropertyGetter> getterSource,
-            [NotNull] IClrAccessorSource<IClrPropertySetter> setterSource,
-            [NotNull] IClrCollectionAccessorSource collectionAccessorSource,
-            [NotNull] IModel model)
+        public NavigationFixer([NotNull] IModel model)
         {
-            _getterSource = getterSource;
-            _setterSource = setterSource;
-            _collectionAccessorSource = collectionAccessorSource;
             _model = model;
         }
 
         public virtual void ForeignKeyPropertyChanged(InternalEntityEntry entry, IProperty property, object oldValue, object newValue)
-            => PerformFixup(() => ForeignKeyPropertyChangedAction(entry, property, oldValue, newValue));
+            => PerformFixup(() => ForeignKeyPropertyChangedAction(entry, property));
 
-        private void ForeignKeyPropertyChangedAction(InternalEntityEntry entry, IProperty property, object oldValue, object newValue)
+        private void ForeignKeyPropertyChangedAction(InternalEntityEntry entry, IProperty property)
         {
             foreach (var foreignKey in entry.EntityType.GetForeignKeys().Where(p => p.Properties.Contains(property)).Distinct())
             {
-                var navigations = _model.GetNavigations(foreignKey).ToList();
+                var navigations = foreignKey.GetNavigations().ToList();
 
-                var oldPrincipalEntry = entry.StateManager.GetPrincipal(entry.RelationshipsSnapshot, foreignKey);
+                var oldPrincipalEntry = entry.StateManager.GetPrincipalUsingRelationshipSnapshot(entry, foreignKey);
                 if (oldPrincipalEntry != null)
                 {
                     Unfixup(navigations, oldPrincipalEntry, entry);
@@ -53,13 +43,13 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
                 {
                     if (foreignKey.IsUnique)
                     {
-                        var oldDependents = entry.StateManager.GetDependents(principalEntry, foreignKey).Where(e => e != entry).ToList();
-
-                        // TODO: Decide how to handle case where multiple values found (negative case)
-                        // Issue #739
-                        if (oldDependents.Count > 0)
+                        foreach (var oldDependentEntry in 
+                            (entry.StateManager.GetDependentsFromNavigation(principalEntry, foreignKey)
+                             ?? entry.StateManager.GetDependents(principalEntry, foreignKey))
+                                .Where(e => e != entry)
+                                .ToList())
                         {
-                            StealReference(foreignKey, oldDependents[0]);
+                            StealReference(foreignKey, oldDependentEntry);
                         }
                     }
 
@@ -77,9 +67,7 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
             var dependentProperties = foreignKey.Properties;
             var principalProperties = foreignKey.PrincipalKey.Properties;
 
-            // TODO: What if the other entry is not yet being tracked?
-            // Issue #323
-            if (navigation.PointsToPrincipal())
+            if (navigation.IsDependentToPrincipal())
             {
                 if (newValue != null)
                 {
@@ -133,8 +121,6 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
             var dependentProperties = navigation.ForeignKey.Properties;
             var principalValues = principalProperties.Select(p => entry[p]).ToList();
 
-            // TODO: What if the entity is not yet being tracked?
-            // Issue #323
             foreach (var entity in removed)
             {
                 ConditionallySetNullForeignKey(entry.StateManager.GetOrCreateEntry(entity), dependentProperties, principalValues);
@@ -158,20 +144,14 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
                 return;
             }
 
-            foreach (var foreignKey in _model.EntityTypes.SelectMany(
+            foreach (var foreignKey in _model.GetEntityTypes().SelectMany(
                 e => e.GetForeignKeys().Where(f => f.PrincipalKey.Properties.Contains(property))))
             {
                 var newKeyValues = foreignKey.PrincipalKey.Properties.Select(p => entry[p]).ToList();
 
-                var oldKey = entry.RelationshipsSnapshot.GetPrincipalKeyValue(foreignKey);
-                if (oldKey != EntityKey.InvalidEntityKey)
+                foreach (var dependentEntry in entry.StateManager.GetDependentsUsingRelationshipSnapshot(entry, foreignKey).ToList())
                 {
-                    foreach (var dependent in entry.StateManager.Entries.Where(
-                        e => foreignKey.DeclaringEntityType.IsAssignableFrom(e.EntityType)
-                             && oldKey.Equals(e.GetDependentKeyValue(foreignKey))).ToList())
-                    {
-                        SetForeignKeyValue(foreignKey, dependent, newKeyValues);
-                    }
+                    SetForeignKeyValue(foreignKey, dependentEntry, newKeyValues);
                 }
             }
         }
@@ -180,14 +160,54 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
         {
         }
 
-        public virtual void StateChanged(InternalEntityEntry entry, EntityState oldState)
+        public virtual void StateChanged(InternalEntityEntry entry, EntityState oldState, bool skipInitialFixup)
         {
-            if (oldState != EntityState.Detached)
+            if ((oldState == EntityState.Detached)
+                && !skipInitialFixup)
             {
-                return;
+                PerformFixup(() => InitialFixup(entry));
             }
 
-            PerformFixup(() => InitialFixup(entry));
+            else if ((entry.EntityState == EntityState.Detached)
+                     && (oldState == EntityState.Deleted))
+            {
+                PerformFixup(() => DeleteFixup(entry));
+            }
+        }
+
+        private void DeleteFixup(InternalEntityEntry entry)
+        {
+            var entityType = entry.EntityType;
+            var entries = entry.StateManager.Entries.ToList();
+
+            // TODO: Perf on this state manager query
+            foreach (var navigation in _model.GetEntityTypes()
+                .SelectMany(e => e.GetNavigations())
+                .Where(n => n.GetTargetType().IsAssignableFrom(entityType)))
+            {
+                var collectionAccessor = navigation.IsCollection()
+                    ? navigation.GetCollectionAccessor()
+                    : null;
+
+                var navigationEntityType = navigation.DeclaringEntityType;
+
+                foreach (var relatedEntry in entries)
+                {
+                    if (!navigationEntityType.IsAssignableFrom(relatedEntry.EntityType))
+                    {
+                        continue;
+                    }
+
+                    if (collectionAccessor != null)
+                    {
+                        collectionAccessor.Remove(relatedEntry.Entity, entry.Entity);
+                    }
+                    else if (relatedEntry[navigation] == entry.Entity)
+                    {
+                        relatedEntry[navigation] = null;
+                    }
+                }
+            }
         }
 
         private void InitialFixup(InternalEntityEntry entry)
@@ -226,22 +246,20 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
                 var entries = entry.StateManager.Entries.ToList();
 
                 // TODO: Perf on this state manager query
-                foreach (var navigation in _model.EntityTypes
+                foreach (var navigation in _model.GetEntityTypes()
                     .SelectMany(e => e.GetNavigations())
                     .Where(n => n.GetTargetType().IsAssignableFrom(entityType)))
                 {
-                    IClrCollectionAccessor collectionAccessor = null;
-                    if (navigation.IsCollection())
-                    {
-                        collectionAccessor = _collectionAccessorSource.GetAccessor(navigation);
-                    }
+                    var collectionAccessor = navigation.IsCollection()
+                        ? navigation.GetCollectionAccessor()
+                        : null;
 
                     var navigationEntityType = navigation.DeclaringEntityType;
 
                     foreach (var relatedEntry in entries)
                     {
                         if (!navigationEntityType.IsAssignableFrom(relatedEntry.EntityType)
-                            || relatedEntry == entry)
+                            || (relatedEntry == entry))
                         {
                             continue;
                         }
@@ -278,14 +296,14 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
 
             foreach (var foreignKey in entityType.GetForeignKeys())
             {
-                var principalEntry = entry.StateManager.GetPrincipal(entry.RelationshipsSnapshot, foreignKey);
+                var principalEntry = entry.StateManager.GetPrincipalUsingRelationshipSnapshot(entry, foreignKey);
                 if (principalEntry != null)
                 {
                     DoFixup(foreignKey, principalEntry, new[] { entry });
                 }
             }
 
-            foreach (var foreignKey in _model.FindReferencingForeignKeys(entityType))
+            foreach (var foreignKey in entityType.GetReferencingForeignKeys())
             {
                 var dependents = entry.StateManager.GetDependents(entry, foreignKey).ToArray();
                 if (dependents.Length > 0)
@@ -315,33 +333,35 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
         }
 
         private void DoFixup(IForeignKey foreignKey, InternalEntityEntry principalEntry, InternalEntityEntry[] dependentEntries)
-            => DoFixup(_model.GetNavigations(foreignKey).ToList(), principalEntry, dependentEntries);
+            => DoFixup(foreignKey.GetNavigations().ToList(), principalEntry, dependentEntries);
 
-        private void DoFixup(IEnumerable<INavigation> navigations, InternalEntityEntry principalEntry, InternalEntityEntry[] dependentEntries)
+        private static void DoFixup(IEnumerable<INavigation> navigations, InternalEntityEntry principalEntry, InternalEntityEntry[] dependentEntries)
         {
             foreach (var navigation in navigations)
             {
-                if (navigation.PointsToPrincipal())
+                if (navigation.IsDependentToPrincipal())
                 {
-                    var setter = _setterSource.GetAccessor(navigation);
+                    var setter = navigation.GetSetter();
 
                     foreach (var dependent in dependentEntries)
                     {
                         setter.SetClrValue(dependent.Entity, principalEntry.Entity);
-                        dependent.RelationshipsSnapshot.TakeSnapshot(navigation);
+                        dependent.SetRelationshipSnapshotValue(navigation, principalEntry.Entity);
                     }
                 }
                 else
                 {
                     if (navigation.IsCollection())
                     {
-                        var collectionAccessor = _collectionAccessorSource.GetAccessor(navigation);
+                        var collectionAccessor = navigation.GetCollectionAccessor();
 
                         foreach (var dependent in dependentEntries)
                         {
-                            if (!collectionAccessor.Contains(principalEntry.Entity, dependent.Entity))
+                            var dependentEntity = dependent.Entity;
+                            if (!collectionAccessor.Contains(principalEntry.Entity, dependentEntity))
                             {
-                                collectionAccessor.Add(principalEntry.Entity, dependent.Entity);
+                                collectionAccessor.Add(principalEntry.Entity, dependentEntity);
+                                principalEntry.AddToCollectionSnapshot(navigation, dependentEntity);
                             }
                         }
                     }
@@ -349,9 +369,10 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
                     {
                         // TODO: Decide how to handle case where multiple values match non-collection nav prop
                         // Issue #739
-                        _setterSource.GetAccessor(navigation).SetClrValue(principalEntry.Entity, dependentEntries.Single().Entity);
+                        var value = dependentEntries.Single().Entity;
+                        navigation.GetSetter().SetClrValue(principalEntry.Entity, value);
+                        principalEntry.SetRelationshipSnapshotValue(navigation, value);
                     }
-                    principalEntry.RelationshipsSnapshot.TakeSnapshot(navigation);
                 }
             }
         }
@@ -361,53 +382,50 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
             foreach (var navigation in navigations)
             {
                 Unfixup(navigation, oldPrincipalEntry, dependentEntry);
-                oldPrincipalEntry.RelationshipsSnapshot.TakeSnapshot(navigation);
             }
         }
 
-        private void Unfixup(INavigation navigation, InternalEntityEntry oldPrincipalEntry, InternalEntityEntry dependentEntry)
+        private static void Unfixup(INavigation navigation, InternalEntityEntry oldPrincipalEntry, InternalEntityEntry dependentEntry)
         {
-            if (navigation.PointsToPrincipal())
-            {
-                _setterSource.GetAccessor(navigation).SetClrValue(dependentEntry.Entity, null);
+            var dependentEntity = dependentEntry.Entity;
 
-                dependentEntry.RelationshipsSnapshot.TakeSnapshot(navigation);
+            if (navigation.IsDependentToPrincipal())
+            {
+                navigation.GetSetter().SetClrValue(dependentEntity, null);
+
+                dependentEntry.SetRelationshipSnapshotValue(navigation, null);
             }
             else
             {
                 if (navigation.IsCollection())
                 {
-                    var collectionAccessor = _collectionAccessorSource.GetAccessor(navigation);
-                    if (collectionAccessor.Contains(oldPrincipalEntry.Entity, dependentEntry.Entity))
+                    var collectionAccessor = navigation.GetCollectionAccessor();
+                    if (collectionAccessor.Contains(oldPrincipalEntry.Entity, dependentEntity))
                     {
-                        collectionAccessor.Remove(oldPrincipalEntry.Entity, dependentEntry.Entity);
+                        collectionAccessor.Remove(oldPrincipalEntry.Entity, dependentEntity);
+                        oldPrincipalEntry.RemoveFromCollectionSnapshot(navigation, dependentEntity);
                     }
                 }
                 else
                 {
-                    _setterSource.GetAccessor(navigation).SetClrValue(oldPrincipalEntry.Entity, null);
+                    navigation.GetSetter().SetClrValue(oldPrincipalEntry.Entity, null);
+                    oldPrincipalEntry.SetRelationshipSnapshotValue(navigation, null);
                 }
             }
         }
 
-        private void StealReference(IForeignKey foreignKey, InternalEntityEntry dependentEntry)
+        private static void StealReference(IForeignKey foreignKey, InternalEntityEntry dependentEntry)
         {
-            foreach (var navigation in dependentEntry.EntityType.GetNavigations().Where(n => n.ForeignKey == foreignKey))
+            var navigation = foreignKey.DependentToPrincipal;
+            if (navigation != null)
             {
-                if (navigation.PointsToPrincipal())
-                {
-                    _setterSource.GetAccessor(navigation).SetClrValue(dependentEntry.Entity, null);
-                    dependentEntry.RelationshipsSnapshot.TakeSnapshot(navigation);
-                }
+                navigation.GetSetter().SetClrValue(dependentEntry.Entity, null);
+                dependentEntry.SetRelationshipSnapshotValue(navigation, null);
             }
 
-            var nullableProperties = foreignKey.Properties.Where(p => p.IsNullable).ToList();
-            if (nullableProperties.Count > 0)
+            foreach (var property in foreignKey.Properties.Where(p => p.IsNullable).ToList())
             {
-                foreach (var property in nullableProperties)
-                {
-                    dependentEntry[property] = null;
-                }
+                dependentEntry[property] = null;
             }
         }
 
@@ -421,12 +439,13 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
         {
             for (var i = 0; i < foreignKey.Properties.Count; i++)
             {
-                if (foreignKey.Properties[i].GetGenerationProperty() == null
-                    || !foreignKey.PrincipalKey.Properties[i].IsSentinelValue(principalValues[i]))
+                var principalValue = principalValues[i];
+                if ((foreignKey.Properties[i].GetGenerationProperty() == null)
+                    || !foreignKey.PrincipalKey.Properties[i].ClrType.IsDefaultValue(principalValue))
                 {
                     var dependentProperty = foreignKey.Properties[i];
-                    dependentEntry[dependentProperty] = principalValues[i];
-                    dependentEntry.RelationshipsSnapshot.TakeSnapshot(dependentProperty);
+                    dependentEntry[dependentProperty] = principalValue;
+                    dependentEntry.SetRelationshipSnapshotValue(dependentProperty, principalValue);
                 }
             }
         }
@@ -450,10 +469,8 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
         {
             foreach (var dependentProperty in dependentProperties)
             {
-                // TODO: Conceptual nulls
-                // Issue #323
                 dependentEntry[dependentProperty] = null;
-                dependentEntry.RelationshipsSnapshot.TakeSnapshot(dependentProperty);
+                dependentEntry.SetRelationshipSnapshotValue(dependentProperty, null);
             }
         }
 
@@ -467,21 +484,22 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
 
                 if (inverse.IsCollection())
                 {
-                    var collectionAccessor = _collectionAccessorSource.GetAccessor(inverse);
+                    var collectionAccessor = inverse.GetCollectionAccessor();
 
                     if (!collectionAccessor.Contains(entity, entry.Entity))
                     {
                         collectionAccessor.Add(entity, entry.Entity);
+                        inverseEntry.AddToCollectionSnapshot(inverse, entry.Entity);
                     }
                 }
                 else
                 {
-                    var oldEntity = _getterSource.GetAccessor(inverse).GetClrValue(entity);
-                    if (oldEntity != null
-                        && oldEntity != entry.Entity)
+                    var oldEntity = inverse.GetGetter().GetClrValue(entity);
+                    if ((oldEntity != null)
+                        && (oldEntity != entry.Entity))
                     {
                         var oldEntry = entry.StateManager.GetOrCreateEntry(oldEntity);
-                        if (navigation.PointsToPrincipal())
+                        if (navigation.IsDependentToPrincipal())
                         {
                             Unfixup(navigation, inverseEntry, oldEntry);
                             SetNullForeignKey(oldEntry, navigation.ForeignKey.Properties);
@@ -492,14 +510,13 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
                         }
                     }
 
-                    _setterSource.GetAccessor(inverse).SetClrValue(entity, entry.Entity);
+                    inverse.GetSetter().SetClrValue(entity, entry.Entity);
+                    inverseEntry.SetRelationshipSnapshotValue(inverse, entry.Entity);
                 }
-
-                inverseEntry.RelationshipsSnapshot.TakeSnapshot(inverse);
             }
         }
 
-        private void ConditionallyClearInverse(InternalEntityEntry entry, INavigation navigation, object entity)
+        private static void ConditionallyClearInverse(InternalEntityEntry entry, INavigation navigation, object entity)
         {
             var inverse = navigation.FindInverse();
 
@@ -507,17 +524,17 @@ namespace Microsoft.Data.Entity.ChangeTracking.Internal
             {
                 if (inverse.IsCollection())
                 {
-                    _collectionAccessorSource.GetAccessor(inverse).Remove(entity, entry.Entity);
+                    inverse.GetCollectionAccessor().Remove(entity, entry.Entity);
+                    entry.StateManager.GetOrCreateEntry(entity).RemoveFromCollectionSnapshot(inverse, entry.Entity);
                 }
                 else
                 {
-                    if (ReferenceEquals(_getterSource.GetAccessor(inverse).GetClrValue(entity), entry.Entity))
+                    if (ReferenceEquals(inverse.GetGetter().GetClrValue(entity), entry.Entity))
                     {
-                        _setterSource.GetAccessor(inverse).SetClrValue(entity, null);
+                        inverse.GetSetter().SetClrValue(entity, null);
+                        entry.StateManager.GetOrCreateEntry(entity).SetRelationshipSnapshotValue(inverse, null);
                     }
                 }
-
-                entry.StateManager.GetOrCreateEntry(entity).RelationshipsSnapshot.TakeSnapshot(inverse);
             }
         }
     }

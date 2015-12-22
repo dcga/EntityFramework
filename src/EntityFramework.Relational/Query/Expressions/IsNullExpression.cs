@@ -24,7 +24,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
 
         public override Type Type => typeof(bool);
 
-        protected override Expression Accept([NotNull] ExpressionVisitor visitor)
+        protected override Expression Accept(ExpressionVisitor visitor)
         {
             Check.NotNull(visitor, nameof(visitor));
 
@@ -43,5 +43,7 @@ namespace Microsoft.Data.Entity.Query.Expressions
                 ? new IsNullExpression(newExpression)
                 : this;
         }
+
+        public override string ToString() => $"{Operand} IS NULL";
     }
 }

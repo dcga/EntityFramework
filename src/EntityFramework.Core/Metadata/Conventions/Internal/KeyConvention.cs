@@ -5,98 +5,136 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata.Internal;
 using Microsoft.Data.Entity.Utilities;
 
 namespace Microsoft.Data.Entity.Metadata.Conventions.Internal
 {
-    public class KeyConvention : IKeyConvention, IForeignKeyRemovedConvention
+    public class KeyConvention
+        : IKeyConvention, IPrimaryKeyConvention, IForeignKeyConvention, IForeignKeyRemovedConvention, IModelConvention
     {
         public virtual InternalKeyBuilder Apply(InternalKeyBuilder keyBuilder)
         {
-            Check.NotNull(keyBuilder, nameof(keyBuilder));
-
-            var entityTypeBuilder = keyBuilder.ModelBuilder.Entity(keyBuilder.Metadata.DeclaringEntityType.Name, ConfigurationSource.Convention);
-            var properties = keyBuilder.Metadata.Properties;
-
-            SetValueGeneration(entityTypeBuilder, properties);
-            SetIdentity(entityTypeBuilder, properties);
+            SetValueGeneration(keyBuilder.Metadata.Properties);
 
             return keyBuilder;
         }
 
+        public virtual InternalRelationshipBuilder Apply(InternalRelationshipBuilder relationshipBuilder)
+        {
+            foreach (var property in relationshipBuilder.Metadata.Properties)
+            {
+                var propertyBuilder = property.Builder;
+                propertyBuilder.RequiresValueGenerator(false, ConfigurationSource.Convention);
+                propertyBuilder.ValueGenerated(ValueGenerated.Never, ConfigurationSource.Convention);
+            }
+
+            return relationshipBuilder;
+        }
+
         public virtual void Apply(InternalEntityTypeBuilder entityTypeBuilder, ForeignKey foreignKey)
         {
-            Check.NotNull(entityTypeBuilder, nameof(entityTypeBuilder));
-            Check.NotNull(foreignKey, nameof(foreignKey));
-
-            SetValueGeneration(entityTypeBuilder, foreignKey.Properties);
-            SetIdentity(entityTypeBuilder, foreignKey.Properties);
+            var properties = foreignKey.Properties;
+            SetValueGeneration(properties.Where(property => property.IsKey()));
+            SetIdentity(properties, entityTypeBuilder.Metadata);
         }
 
-        protected virtual void SetValueGeneration(
-            [NotNull] InternalEntityTypeBuilder entityTypeBuilder,
-            [NotNull] IReadOnlyList<Property> properties)
+        public virtual bool Apply(InternalKeyBuilder keyBuilder, Key previousPrimaryKey)
         {
-            Check.NotNull(entityTypeBuilder, nameof(entityTypeBuilder));
-            Check.NotNull(properties, nameof(properties));
-
-            foreach (var property in properties.Where(
-                property => !entityTypeBuilder.Metadata.GetForeignKeys().SelectMany(fk => fk.Properties).Contains(property)))
+            if (previousPrimaryKey != null)
             {
-                entityTypeBuilder.ModelBuilder.Entity(property.DeclaringEntityType.Name, ConfigurationSource.Convention)
-                    .Property(property.Name, ConfigurationSource.Convention)
-                    ?.UseValueGenerator(true, ConfigurationSource.Convention);
+                foreach (var property in previousPrimaryKey.Properties)
+                {
+                    property.Builder?.ValueGenerated(ValueGenerated.Never, ConfigurationSource.Convention);
+                    property.Builder?.RequiresValueGenerator(false, ConfigurationSource.Convention);
+                }
+            }
+
+            SetIdentity(keyBuilder.Metadata.Properties, keyBuilder.Metadata.DeclaringEntityType);
+
+            return true;
+        }
+
+        private static void SetValueGeneration(IEnumerable<Property> properties)
+        {
+            var generatingProperties = properties.Where(property =>
+                !property.IsForeignKey()
+                && property.ValueGenerated == ValueGenerated.OnAdd);
+            foreach (var propertyBuilder in generatingProperties)
+            {
+                propertyBuilder.Builder?.RequiresValueGenerator(true, ConfigurationSource.Convention);
             }
         }
 
-        protected virtual void SetIdentity(
-            [NotNull] InternalEntityTypeBuilder entityTypeBuilder,
-            [NotNull] IReadOnlyList<Property> properties)
+        public virtual Property FindValueGeneratedOnAddProperty(
+             [NotNull] IReadOnlyList<Property> properties, [NotNull] EntityType entityType)
         {
-            Check.NotNull(entityTypeBuilder, nameof(entityTypeBuilder));
             Check.NotNull(properties, nameof(properties));
+            Check.NotNull(entityType, nameof(entityType));
 
-            if (entityTypeBuilder.Metadata.FindPrimaryKey(properties) != null)
-            {
-                foreach (var property in entityTypeBuilder.Metadata.GetDeclaredProperties())
-                {
-                    entityTypeBuilder.Property(property.Name, ConfigurationSource.Convention)
-                        ?.ValueGenerated(null, ConfigurationSource.Convention);
-                }
-
-                Property valueGeneratedOnAddProperty;
-                if ((valueGeneratedOnAddProperty =
-                    ValueGeneratedOnAddProperty(properties, entityTypeBuilder.Metadata)) != null)
-                {
-                    entityTypeBuilder.Property(
-                        valueGeneratedOnAddProperty.Name,
-                        ((IProperty)valueGeneratedOnAddProperty).ClrType,
-                        ConfigurationSource.Convention)
-                        ?.ValueGenerated(ValueGenerated.OnAdd, ConfigurationSource.Convention);
-                }
-            }
-        }
-
-        public virtual Property ValueGeneratedOnAddProperty(
-            [NotNull] IReadOnlyList<Property> properties, [NotNull] EntityType entityType)
-        {
-            if (properties.Count == 1)
+            if (entityType.FindPrimaryKey(properties) != null
+                && properties.Count == 1)
             {
                 var property = properties.First();
-
-                var propertyType = ((IProperty)property).ClrType.UnwrapNullableType();
-
-                if ((propertyType.IsInteger()
-                    || propertyType == typeof(Guid))
-                    && entityType.FindPrimaryKey(properties) != null
-                    && !property.IsForeignKey(entityType))
+                if (!property.IsForeignKey())
                 {
-                    return property;
+                    var propertyType = property.ClrType.UnwrapNullableType();
+                    if (propertyType.IsInteger()
+                        || propertyType == typeof(Guid))
+                    {
+                        return property;
+                    }
+                }
+            }
+            return null;
+        }
+
+        private void SetIdentity(IReadOnlyList<Property> properties, EntityType entityType)
+        {
+            var candidateIdentityProperty = FindValueGeneratedOnAddProperty(properties, entityType);
+            if (candidateIdentityProperty != null)
+            {
+                var propertyBuilder = candidateIdentityProperty.Builder;
+                propertyBuilder?.ValueGenerated(ValueGenerated.OnAdd, ConfigurationSource.Convention);
+                propertyBuilder?.RequiresValueGenerator(true, ConfigurationSource.Convention);
+            }
+        }
+
+        public virtual InternalModelBuilder Apply(InternalModelBuilder modelBuilder)
+        {
+            foreach (var entityType in modelBuilder.Metadata.GetEntityTypes())
+            {
+                foreach (var key in entityType.GetDeclaredKeys())
+                {
+                    if (key.Properties.Any(p => p.IsShadowProperty
+                                                && ConfigurationSource.Convention.Overrides(p.GetConfigurationSource())))
+                    {
+                        string message;
+                        var referencingFk = key.FindReferencingForeignKeys().FirstOrDefault();
+                        if (referencingFk != null)
+                        {
+                            message = CoreStrings.ReferencedShadowKey(
+                                Property.Format(key.Properties),
+                                entityType.Name,
+                                Property.Format(key.Properties),
+                                Property.Format(referencingFk.Properties),
+                                referencingFk.DeclaringEntityType.Name);
+                        }
+                        else
+                        {
+                            message = CoreStrings.ShadowKey(
+                                Property.Format(key.Properties),
+                                entityType.Name,
+                                Property.Format(key.Properties));
+                        }
+
+                        throw new InvalidOperationException(message);
+                    }
                 }
             }
 
-            return null;
+            return modelBuilder;
         }
     }
 }

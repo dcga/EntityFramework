@@ -3,6 +3,7 @@
 
 using System;
 using System.Linq;
+using Microsoft.Data.Entity.FunctionalTests.TestUtilities.Xunit;
 using Microsoft.Data.Entity.FunctionalTests.TestModels;
 using Microsoft.Data.Entity.Infrastructure;
 using Microsoft.Data.Entity.InMemory.FunctionalTests;
@@ -17,24 +18,26 @@ namespace Microsoft.Data.Entity.FunctionalTests
         where TTestStore : TestStore
         where TFixture : CrossStoreFixture, new()
     {
-        [Fact]
+        [ConditionalFact]
         public virtual void Can_save_changes_and_query()
         {
+            var secondId = -1;
             using (var context = CreateContext())
             {
-                var first = context.SimpleEntities.Add(new SimpleEntity { Id = 420, StringProperty = "Entity 1" }).Entity;
+                var first = context.SimpleEntities.Add(new SimpleEntity { StringProperty = "Entity 1" }).Entity;
                 SetPartitionId(first, context);
 
                 Assert.Equal(1, context.SaveChanges());
 
-                var second = context.SimpleEntities.Add(new SimpleEntity { Id = 42, StringProperty = "Entity 2" }).Entity;
+                var second = context.SimpleEntities.Add(new SimpleEntity { StringProperty = "Entity 2" }).Entity;
                 // TODO: Replace with
                 // context.ChangeTracker.Entry(entity).Property(SimpleEntity.ShadowPropertyName).CurrentValue = "shadow";
-                var property = context.Model.GetEntityType(typeof(SimpleEntity)).GetProperty(SimpleEntity.ShadowPropertyName);
-                context.Entry(second).GetService()[property] = "shadow";
+                var property = context.Model.FindEntityType(typeof(SimpleEntity)).FindProperty(SimpleEntity.ShadowPropertyName);
+                context.Entry(second).GetInfrastructure()[property] = "shadow";
                 SetPartitionId(second, context);
 
                 Assert.Equal(1, context.SaveChanges());
+                secondId = second.Id;
             }
 
             using (var context = CreateContext())
@@ -43,7 +46,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
 
                 var firstEntity = context.SimpleEntities.Single(e => e.StringProperty == "Entity 1");
 
-                var secondEntity = context.SimpleEntities.Single(e => e.Id == 42);
+                var secondEntity = context.SimpleEntities.Single(e => e.Id == secondId);
                 Assert.Equal("Entity 2", secondEntity.StringProperty);
 
                 var thirdEntity = context.SimpleEntities.Single(e => EF.Property<string>(e, SimpleEntity.ShadowPropertyName) == "shadow");
@@ -67,8 +70,8 @@ namespace Microsoft.Data.Entity.FunctionalTests
         // TODO: Use a value generator to handle this automatically
         private void SetPartitionId(SimpleEntity entity, CrossStoreContext context)
         {
-            var property = context.Model.GetEntityType(entity.GetType()).GetProperty(SimpleEntity.ShadowPartitionIdName);
-            context.Entry(entity).GetService()[property] = "Partition";
+            var property = context.Model.FindEntityType(entity.GetType()).FindProperty(SimpleEntity.ShadowPartitionIdName);
+            context.Entry(entity).GetInfrastructure()[property] = "Partition";
         }
 
         protected EndToEndTest(TFixture fixture)
@@ -100,6 +103,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
         }
     }
 
+    [SqlServerConfiguredCondition]
     public class SqlServerEndToEndTest : EndToEndTest<SqlServerTestStore, SqlServerCrossStoreFixture>, IClassFixture<SqlServerCrossStoreFixture>
     {
         public SqlServerEndToEndTest(SqlServerCrossStoreFixture fixture)
@@ -126,6 +130,7 @@ namespace Microsoft.Data.Entity.FunctionalTests
     }
 
     [Collection("SharedEndToEndCollection")]
+    [SqlServerConfiguredCondition]
     public class SharedSqlServerEndToEndTest : EndToEndTest<SqlServerTestStore, SharedCrossStoreFixture>
     {
         public SharedSqlServerEndToEndTest(SharedCrossStoreFixture fixture)

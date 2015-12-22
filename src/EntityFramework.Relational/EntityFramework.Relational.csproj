@@ -11,26 +11,29 @@
     <RootNamespace>Microsoft.Data.Entity</RootNamespace>
     <AssemblyName>EntityFramework.Relational</AssemblyName>
     <FileAlignment>512</FileAlignment>
-    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.5.1</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE;CSPROJ;NET45</DefineConstants>
+    <DefineConstants>DEBUG;TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>
+    </NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE;CSPROJ;NET45</DefineConstants>
+    <DefineConstants>TRACE;CSPROJ;NET451</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>618</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />
@@ -49,20 +52,34 @@
     <Compile Include="..\Shared\AsyncEnumerableExtensions.cs">
       <Link>Extensions\AsyncEnumerableExtensions.cs</Link>
     </Compile>
+    <Compile Include="Extensions\DbCommandLogData.cs" />
+    <Compile Include="Extensions\TaskExtensions.cs" />
+    <Compile Include="Internal\RelationalDiagnosticSourceMessage.cs" />
+    <Compile Include="QueryClientEvaluationBehavior.cs" />
+    <Compile Include="Internal\RelationalDiagnostics.cs" />
     <Compile Include="..\Shared\LoggingExtensions.cs">
       <Link>Extensions\LoggingExtensions.cs</Link>
     </Compile>
+    <Compile Include="..\Shared\PropertyInfoExtensions.cs">
+      <Link>Extensions\PropertyInfoExtensions.cs</Link>
+    </Compile>
+    <Compile Include="Infrastructure\DesignTimeProviderServicesAttribute.cs" />
     <Compile Include="Infrastructure\RelationalDbContextOptionsBuilder.cs" />
     <Compile Include="Infrastructure\RelationalEntityFrameworkServicesBuilderExtensions.cs" />
-    <Compile Include="Infrastructure\RelationalLoggingEventIds.cs" />
+    <Compile Include="Infrastructure\RelationalLoggingEventId.cs" />
     <Compile Include="Infrastructure\RelationalOptionsExtension.cs" />
-    <Compile Include="Infrastructure\SqlBatchBuilder.cs" />
+    <Compile Include="Infrastructure\RelationalCommandListBuilder.cs" />
     <Compile Include="Internal\RelationalModelValidator.cs" />
     <Compile Include="Metadata\Builders\DiscriminatorBuilder.cs" />
     <Compile Include="Metadata\Builders\DiscriminatorBuilder`.cs" />
     <Compile Include="Metadata\Conventions\Internal\DiscriminatorConvention.cs" />
     <Compile Include="Metadata\Conventions\Internal\RelationalColumnAttributeConvention.cs" />
     <Compile Include="Metadata\Conventions\Internal\RelationalConventionSetBuilder.cs" />
+    <Compile Include="Metadata\Conventions\Internal\RelationalPropertyMappingValidationConvention.cs" />
+    <Compile Include="Metadata\Conventions\Internal\RelationalRelationshipDiscoveryConvention.cs" />
+    <Compile Include="Metadata\Conventions\Internal\RelationalForeignKeyAttributeConvention.cs" />
+    <Compile Include="Metadata\Conventions\Internal\RelationalInversePropertyAttributeConvention.cs" />
+    <Compile Include="Metadata\Conventions\Internal\RelationalPropertyDiscoveryConvention.cs" />
     <Compile Include="Metadata\Conventions\Internal\RelationalTableAttributeConvention.cs" />
     <Compile Include="Metadata\Internal\RelationalForeignKeyBuilderAnnotations.cs" />
     <Compile Include="Metadata\Internal\RelationalIndexBuilderAnnotations.cs" />
@@ -70,17 +87,41 @@
     <Compile Include="Metadata\Internal\RelationalKeyBuilderAnnotations.cs" />
     <Compile Include="Metadata\Internal\RelationalModelBuilderAnnotations.cs" />
     <Compile Include="Metadata\Internal\RelationalPropertyBuilderAnnotations.cs" />
-    <Compile Include="Metadata\IRelationalMetadataExtensionProvider.cs" />
+    <Compile Include="Metadata\IRelationalAnnotationProvider.cs" />
     <Compile Include="Metadata\RelationalAnnotations.cs" />
     <Compile Include="Metadata\Internal\RelationalAnnotationsBuilder.cs" />
     <Compile Include="Metadata\Internal\RelationalEntityTypeBuilderAnnotations.cs" />
-    <Compile Include="Metadata\RelationalEntityTypeExtensions.cs" />
     <Compile Include="Metadata\RelationalModelExtensions.cs" />
     <Compile Include="Metadata\RelationalPropertyExtensions.cs" />
     <Compile Include="Migrations\Internal\MigrationExtensions.cs" />
     <Compile Include="Migrations\MigrationAttribute.cs" />
     <Compile Include="Migrations\MigrationsAssemblyExtensions.cs" />
-    <Compile Include="Query\Expressions\CrossApplyExpression.cs" />
+    <Compile Include="Query\Expressions\ColumnExpression.cs" />
+    <Compile Include="Query\Expressions\ExplicitCastExpression.cs" />
+    <Compile Include="Query\Expressions\LateralJoinExpression.cs" />
+    <Compile Include="Query\Expressions\ISelectExpressionFactory.cs" />
+    <Compile Include="Query\Expressions\SelectExpressionFactory.cs" />
+    <Compile Include="Query\ExpressionTranslators\StringConcatTranslator.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\BufferedOffsetEntityShaper.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\EntityShaper.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\BufferedEntityShaper`.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\CompositePredicateExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\ICompositePredicateExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\IIncludeExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\IMaterializerFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\IncludeExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\IQueryFlattenerFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\IShaper.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\UnbufferedOffsetEntityShaper.cs" />
+    <Compile Include="Query\ExpressionVisitors\ISqlTranslatingExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\QueryFlattenerFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\RelationalProjectionExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\RelationalEntityQueryableExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\Shaper.cs" />
+    <Compile Include="Query\ExpressionVisitors\SqlTranslatingExpressionVisitorFactory.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\UnbufferedEntityShaper.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\ValueBufferShaper.cs" />
+    <Compile Include="Query\Internal\IShaperCommandContextFactory.cs" />
     <Compile Include="Query\Expressions\StringCompareExpression.cs" />
     <Compile Include="Query\ExpressionTranslators\ContainsTranslator.cs" />
     <Compile Include="Query\ExpressionTranslators\EndsWithTranslator.cs" />
@@ -97,7 +138,23 @@
     <Compile Include="Query\ExpressionTranslators\SingleOverloadStaticMethodCallTranslator.cs" />
     <Compile Include="Query\ExpressionTranslators\StartsWithTranslator.cs" />
     <Compile Include="Query\ExpressionTranslators\StringCompareTranslator.cs" />
+    <Compile Include="Query\Internal\AsyncIncludeCollectionIterator.cs" />
+    <Compile Include="Query\Internal\AsyncQueryingEnumerable.cs" />
+    <Compile Include="Query\Internal\ShaperCommandContext.cs" />
+    <Compile Include="Query\Internal\ShaperCommandContextFactory.cs" />
+    <Compile Include="Query\Internal\IncludeCollectionIterator.cs" />
+    <Compile Include="Query\Internal\IValueBufferCursor.cs" />
+    <Compile Include="Query\Internal\QueryingEnumerable.cs" />
+    <Compile Include="Query\Internal\RelationalCompiledQueryCacheKeyGenerator.cs" />
     <Compile Include="Query\Internal\RelationalExpressionPrinter.cs" />
+    <Compile Include="Query\Internal\RelationalQueryContextFactory.cs" />
+    <Compile Include="Query\Internal\RelationalResultOperatorHandler.cs" />
+    <Compile Include="Query\RelationalQueryModelVisitorFactory.cs" />
+    <Compile Include="Query\RelationalQueryCompilationContextFactory.cs" />
+    <Compile Include="Query\ResultOperators\Internal\FromSqlExpressionNode.cs" />
+    <Compile Include="Query\ResultOperators\Internal\FromSqlResultOperator.cs" />
+    <Compile Include="Query\Sql\IQuerySqlGeneratorFactory.cs" />
+    <Compile Include="Query\Sql\QuerySqlGeneratorFactoryBase.cs" />
     <Compile Include="RelationalReferenceReferenceBuilderExtensions.cs" />
     <Compile Include="Migrations\Operations\Builders\ColumnsBuilder.cs" />
     <Compile Include="Migrations\Operations\Builders\CreateTableBuilder.cs" />
@@ -123,7 +180,7 @@
     <Compile Include="Metadata\IRelationalModelAnnotations.cs" />
     <Compile Include="Metadata\IRelationalPropertyAnnotations.cs" />
     <Compile Include="Metadata\ISequence.cs" />
-    <Compile Include="Metadata\RelationalAnnotationNames.cs" />
+    <Compile Include="Metadata\Internal\RelationalAnnotationNames.cs" />
     <Compile Include="RelationalEntityTypeBuilderExtensions.cs" />
     <Compile Include="Metadata\RelationalEntityTypeAnnotations.cs" />
     <Compile Include="Metadata\RelationalForeignKeyAnnotations.cs" />
@@ -169,48 +226,52 @@
     <Compile Include="Migrations\MigrationsSqlGenerator.cs" />
     <Compile Include="Migrations\Internal\MigrationsModelDiffer.cs" />
     <Compile Include="Query\Expressions\SqlFunctionExpression.cs" />
-    <Compile Include="Query\ExpressionVisitors\ShapedQueryFindingExpressionVisitor.cs" />
-    <Compile Include="Query\IValueBufferCursor.cs" />
-    <Compile Include="Storage\Commands\RelationalCommandBuilder.cs" />
-    <Compile Include="Storage\Commands\RelationalParameterList.cs" />
+    <Compile Include="Storage\CompositeRelationalParameter.cs" />
+    <Compile Include="Storage\DbContextTransactionExtensions.cs" />
+    <Compile Include="Storage\Internal\RemappingUntypedRelationalValueBufferFactory.cs" />
+    <Compile Include="Storage\Internal\TypedRelationalValueBufferFactory.cs" />
+    <Compile Include="Storage\Internal\UntypedRelationalValueBufferFactory.cs" />
+    <Compile Include="Storage\IRelationalCommand.cs" />
+    <Compile Include="Storage\IRelationalCommandBuilder.cs" />
+    <Compile Include="Storage\IRelationalCommandBuilderFactory.cs" />
     <Compile Include="Storage\IRelationalConnection.cs" />
     <Compile Include="Storage\IRelationalDatabaseCreator.cs" />
     <Compile Include="Storage\IRelationalDatabaseProviderServices.cs" />
-    <Compile Include="Infrastructure\RelationalSqlExecutor.cs" />
-    <Compile Include="Storage\IRelationalTransaction.cs" />
+    <Compile Include="Storage\IRelationalParameter.cs" />
+    <Compile Include="Storage\IRelationalTransactionManager.cs" />
     <Compile Include="Storage\IRelationalTypeMapper.cs" />
     <Compile Include="Storage\IRelationalValueBufferFactory.cs" />
     <Compile Include="Storage\IRelationalValueBufferFactoryFactory.cs" />
-    <Compile Include="Storage\ISqlStatementExecutor.cs" />
-    <Compile Include="Storage\ProviderDesignTimeServicesAttribute.cs" />
-    <Compile Include="Storage\Commands\RelationalCommand.cs" />
+    <Compile Include="Storage\IRawSqlCommandBuilder.cs" />
+    <Compile Include="Storage\ISqlGenerationHelper.cs" />
+    <Compile Include="Storage\Internal\RelationalCommand.cs" />
+    <Compile Include="Storage\Internal\RelationalCommandBuilder.cs" />
+    <Compile Include="Storage\Internal\RelationalCommandBuilderFactory.cs" />
+    <Compile Include="Storage\RelationalCommandBuilderExtensions.cs" />
+    <Compile Include="Storage\Internal\RelationalCommandExtensions.cs" />
     <Compile Include="Storage\RelationalConnection.cs" />
     <Compile Include="Storage\RelationalDatabase.cs" />
     <Compile Include="Storage\RelationalDatabaseCreator.cs" />
     <Compile Include="Storage\RelationalDatabaseProviderServices.cs" />
-    <Compile Include="Storage\Commands\RelationalParameter.cs" />
+    <Compile Include="Storage\RelationalDataReader.cs" />
+    <Compile Include="Storage\RelationalParameter.cs" />
     <Compile Include="Storage\RelationalSizedTypeMapping.cs" />
+    <Compile Include="Storage\RelationalSqlGenerationHelper.cs" />
     <Compile Include="Storage\RelationalTransaction.cs" />
     <Compile Include="Storage\RelationalTypeMapper.cs" />
     <Compile Include="Storage\RelationalTypeMapperExtensions.cs" />
     <Compile Include="Storage\RelationalTypeMapping.cs" />
-    <Compile Include="Storage\RemappingUntypedRelationalValueBufferFactory.cs" />
-    <Compile Include="Storage\SqlStatementExecutor.cs" />
-    <Compile Include="Storage\TypedRelationalValueBufferFactory.cs" />
-    <Compile Include="Storage\TypedValueBufferFactoryFactory.cs" />
-    <Compile Include="Storage\UntypedRelationalValueBufferFactory.cs" />
-    <Compile Include="Storage\UntypedValueBufferFactoryFactory.cs" />
-    <Compile Include="Query\AsyncQueryingEnumerable.cs" />
+    <Compile Include="Storage\Internal\RawSqlCommandBuilder.cs" />
+    <Compile Include="Storage\TypedRelationalValueBufferFactoryFactory.cs" />
+    <Compile Include="Storage\UntypedRelationalValueBufferFactoryFactory.cs" />
     <Compile Include="Query\AsyncQueryMethodProvider.cs" />
-    <Compile Include="Query\CommandBuilder.cs" />
-    <Compile Include="Query\CommandParameter.cs" />
     <Compile Include="Query\Expressions\NotNullableExpression.cs" />
-    <Compile Include="Query\ExpressionVisitors\CompositePredicateExpressionVisitor.cs" />
-    <Compile Include="Query\ExpressionVisitors\EqualityPredicateExpandingVisitor.cs" />
-    <Compile Include="Query\ExpressionVisitors\EqualityPredicateInExpressionOptimizer.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\CompositePredicateExpressionVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\EqualityPredicateExpandingVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\EqualityPredicateInExpressionOptimizer.cs" />
     <Compile Include="Query\Expressions\AggregateExpression.cs" />
     <Compile Include="Query\Expressions\AliasExpression.cs" />
-    <Compile Include="Query\Expressions\RawSqlDerivedTableExpression.cs" />
+    <Compile Include="Query\Expressions\FromSqlExpression.cs" />
     <Compile Include="Query\Expressions\DiscriminatorPredicateExpression.cs" />
     <Compile Include="Query\Expressions\InExpression.cs" />
     <Compile Include="Query\Expressions\JoinExpressionBase.cs" />
@@ -219,20 +280,17 @@
     <Compile Include="Query\Expressions\MinExpression.cs" />
     <Compile Include="Query\Expressions\SumExpression.cs" />
     <Compile Include="Query\Expressions\TableExpressionBase.cs" />
-    <Compile Include="Query\ExpressionVisitors\IsNullExpressionBuildingVisitor.cs" />
-    <Compile Include="Query\ExpressionVisitors\NullSemanticsExpressionVisitorBase.cs" />
-    <Compile Include="Query\ExpressionVisitors\PredicateNegationExpressionOptimizer.cs" />
-    <Compile Include="Query\ExpressionVisitors\NullSemanticsExpandingVisitor.cs" />
-    <Compile Include="Query\ExpressionVisitors\NullSemanticsOptimizedExpandingVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\IsNullExpressionBuildingVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\RelationalNullsExpressionVisitorBase.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\PredicateNegationExpressionOptimizer.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\RelationalNullsExpandingVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\RelationalNullsOptimizedExpandingVisitor.cs" />
     <Compile Include="Query\ExpressionVisitors\SqlTranslatingExpressionVisitor.cs" />
-    <Compile Include="Query\AsyncIncludeCollectionIterator.cs" />
-    <Compile Include="Query\ExpressionVisitors\IncludeExpressionVisitor.cs" />
-    <Compile Include="Query\ExpressionVisitors\MaterializerFactory.cs" />
-    <Compile Include="Query\IAsyncIncludeRelatedValuesStrategy.cs" />
-    <Compile Include="Query\IIncludeRelatedValuesStrategy.cs" />
-    <Compile Include="Query\IncludeCollectionIterator.cs" />
-    <Compile Include="Query\ExpressionVisitors\QueryFlatteningExpressionVisitor.cs" />
-    <Compile Include="Query\QueryingEnumerable.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\IncludeExpressionVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\MaterializerFactory.cs" />
+    <Compile Include="Query\Internal\IAsyncIncludeRelatedValuesStrategy.cs" />
+    <Compile Include="Query\Internal\IIncludeRelatedValuesStrategy.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\QueryFlattener.cs" />
     <Compile Include="Query\QueryMethodProvider.cs" />
     <Compile Include="Query\Expressions\CountExpression.cs" />
     <Compile Include="Query\Expressions\ExistsExpression.cs" />
@@ -244,18 +302,15 @@
     <Compile Include="Query\Expressions\SelectExpression.cs" />
     <Compile Include="Query\Expressions\TableExpression.cs" />
     <Compile Include="Query\IQueryMethodProvider.cs" />
-    <Compile Include="Query\ExpressionVisitors\ResultTransformingExpressionVisitor.cs" />
+    <Compile Include="Query\ExpressionVisitors\Internal\ResultTransformingExpressionVisitor.cs" />
     <Compile Include="Query\ExpressionVisitors\RelationalProjectionExpressionVisitor.cs" />
     <Compile Include="Query\ExpressionVisitors\RelationalEntityQueryableExpressionVisitor.cs" />
-    <Compile Include="Query\RelationalQueryContextFactory.cs" />
     <Compile Include="Query\Sql\ISqlExpressionVisitor.cs" />
-    <Compile Include="Query\Expressions\ColumnExpression.cs" />
     <Compile Include="Query\RelationalQueryCompilationContext.cs" />
     <Compile Include="Query\RelationalQueryModelVisitor.cs" />
-    <Compile Include="Query\RelationalResultOperatorHandler.cs" />
-    <Compile Include="Query\Sql\ISqlQueryGenerator.cs" />
+    <Compile Include="Query\Sql\IQuerySqlGenerator.cs" />
     <Compile Include="Query\Sql\DefaultQuerySqlGenerator.cs" />
-    <Compile Include="Query\Sql\RawSqlQueryGenerator.cs" />
+    <Compile Include="Query\Sql\Internal\FromSqlNonComposedQuerySqlGenerator.cs" />
     <Compile Include="RelationalDatabaseFacadeExtensions.cs" />
     <Compile Include="RelationalQueryableExtensions.cs" />
     <Compile Include="RelationalMetadataExtensions.cs" />
@@ -263,26 +318,30 @@
     <Compile Include="Query\RelationalQueryContext.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\InternalsVisibleTo.cs" />
-    <Compile Include="Properties\Strings.Designer.cs">
-      <DependentUpon>Strings.resx</DependentUpon>
+    <Compile Include="Properties\RelationalStrings.Designer.cs">
+      <DependentUpon>RelationalStrings.resx</DependentUpon>
     </Compile>
     <Compile Include="Update\AffectedCountModificationCommandBatch.cs" />
-    <Compile Include="Update\BatchExecutor.cs" />
     <Compile Include="Update\ColumnModification.cs" />
-    <Compile Include="Update\CommandBatchPreparer.cs" />
     <Compile Include="Update\IBatchExecutor.cs" />
     <Compile Include="Update\ICommandBatchPreparer.cs" />
     <Compile Include="Update\IModificationCommandBatchFactory.cs" />
     <Compile Include="Storage\IParameterNameGeneratorFactory.cs" />
+    <Compile Include="Update\Internal\BatchExecutor.cs" />
+    <Compile Include="Update\Internal\CommandBatchPreparer.cs" />
+    <Compile Include="Update\Internal\IKeyValueIndex.cs" />
+    <Compile Include="Update\Internal\IKeyValueIndexFactory.cs" />
+    <Compile Include="Update\Internal\IKeyValueIndexFactorySource.cs" />
+    <Compile Include="Update\Internal\KeyValueIndex.cs" />
+    <Compile Include="Update\Internal\KeyValueIndexFactory.cs" />
+    <Compile Include="Update\Internal\KeyValueIndexFactorySource.cs" />
+    <Compile Include="Update\Internal\ModificationCommandComparer.cs" />
     <Compile Include="Update\IUpdateSqlGenerator.cs" />
     <Compile Include="Update\ModificationCommand.cs" />
     <Compile Include="Update\ModificationCommandBatch.cs" />
     <Compile Include="Update\ReaderModificationCommandBatch.cs" />
-    <Compile Include="Update\ModificationCommandBatchFactory.cs" />
-    <Compile Include="Update\ModificationCommandComparer.cs" />
     <Compile Include="Storage\ParameterNameGenerator.cs" />
     <Compile Include="Storage\ParameterNameGeneratorFactory.cs" />
-    <Compile Include="Update\SingularModificationCommandBatch.cs" />
     <Compile Include="..\Shared\Check.cs">
       <Link>Utilities\Check.cs</Link>
     </Compile>
@@ -295,22 +354,33 @@
     <Compile Include="..\Shared\SharedTypeExtensions.cs">
       <Link>Extensions\SharedTypeExtensions.cs</Link>
     </Compile>
-    <Compile Include="Extensions\EnumerableExtensions.cs" />
     <Compile Include="Extensions\ExpressionExtensions.cs" />
     <Compile Include="Extensions\MethodInfoExtensions.cs" />
+    <Compile Include="Update\ResultSetMapping.cs" />
+    <Compile Include="Update\SingularModificationCommandBatch.cs" />
     <Compile Include="Update\UpdateSqlGenerator.cs" />
-    <Compile Include="ValueGeneration\DiscriminatorValueGenerator.cs" />
+    <Compile Include="Utilities\RelationalImplyGen.cs">
+      <DependentUpon>RelationalImplyGen.tt</DependentUpon>
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <Compile Include="Utilities\RelationalImply.cs" />
+    <Compile Include="ValueGeneration\Internal\DiscriminatorValueGenerator.cs" />
     <Compile Include="ValueGeneration\RelationalValueGeneratorSelector.cs" />
+    <Content Include="Utilities\RelationalImplyGen.tt">
+      <Generator>TextTemplatingFileGenerator</Generator>
+      <LastGenOutput>RelationalImplyGen.cs</LastGenOutput>
+    </Content>
     <EmbeddedResource Include="Properties\EntityFramework.Relational.rd.xml" />
-    <EmbeddedResource Include="Properties\Strings.resx">
-      <LogicalName>EntityFramework.Relational.Strings.resources</LogicalName>
+    <EmbeddedResource Include="Properties\RelationalStrings.resx">
+      <LogicalName>EntityFramework.Relational.RelationalStrings.resources</LogicalName>
       <SubType>Designer</SubType>
     </EmbeddedResource>
     <Content Include="..\..\tools\Resources.tt">
       <Link>Properties\Resources.tt</Link>
       <Generator>TextTemplatingFileGenerator</Generator>
       <LastGenOutput>Resources.cs</LastGenOutput>
-      <CustomToolNamespace>Microsoft.Data.Entity.Relational.Internal</CustomToolNamespace>
+      <CustomToolNamespace>Microsoft.Data.Entity.Internal</CustomToolNamespace>
     </Content>
     <None Include="project.json" />
   </ItemGroup>
@@ -323,6 +393,7 @@
   <ItemGroup>
     <Service Include="{508349B6-6B84-4DF5-91F0-309BEEBAD82D}" />
   </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
        Other similar extension points exist, see Microsoft.Common.targets.

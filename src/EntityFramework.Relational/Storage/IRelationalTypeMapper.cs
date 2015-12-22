@@ -9,7 +9,9 @@ namespace Microsoft.Data.Entity.Storage
 {
     public interface IRelationalTypeMapper
     {
-        RelationalTypeMapping MapPropertyType([NotNull] IProperty property);
-        RelationalTypeMapping GetDefaultMapping([NotNull] Type clrType);
+        RelationalTypeMapping FindMapping([NotNull] IProperty property);
+        RelationalTypeMapping FindMapping([NotNull] Type clrType);
+        RelationalTypeMapping FindMapping([NotNull] string typeName);
+        bool IsTypeMapped([NotNull] Type clrType);
     }
 }

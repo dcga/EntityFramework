@@ -5,25 +5,22 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using JetBrains.Annotations;
-using Microsoft.Data.Entity.ChangeTracking.Internal;
 using Microsoft.Data.Entity.Internal;
 using Microsoft.Data.Entity.Metadata;
 using Microsoft.Data.Entity.Storage;
 using Microsoft.Data.Entity.Utilities;
-using Strings = Microsoft.Data.Entity.Relational.Internal.Strings;
 
 namespace Microsoft.Data.Entity.Update
 {
     public class ModificationCommand
     {
         private readonly Func<IProperty, IRelationalPropertyAnnotations> _getPropertyExtensions;
-        private readonly IRelationalValueBufferFactoryFactory _valueBufferFactoryFactory;
-        private readonly List<InternalEntityEntry> _entries = new List<InternalEntityEntry>();
+        private readonly ParameterNameGenerator _parameterNameGenerator;
+
+        private readonly List<IUpdateEntry> _entries = new List<IUpdateEntry>();
 
         private readonly LazyRef<IReadOnlyList<ColumnModification>> _columnModifications
             = new LazyRef<IReadOnlyList<ColumnModification>>(() => new ColumnModification[0]);
-
-        private readonly LazyRef<IRelationalValueBufferFactory> _valueBufferFactory;
 
         private bool _requiresResultPropagation;
 
@@ -31,34 +28,27 @@ namespace Microsoft.Data.Entity.Update
             [NotNull] string name,
             [CanBeNull] string schema,
             [NotNull] ParameterNameGenerator parameterNameGenerator,
-            [NotNull] Func<IProperty, IRelationalPropertyAnnotations> getPropertyExtensions,
-            [NotNull] IRelationalValueBufferFactoryFactory valueBufferFactoryFactory)
+            [NotNull] Func<IProperty, IRelationalPropertyAnnotations> getPropertyExtensions)
         {
             Check.NotEmpty(name, nameof(name));
             Check.NotNull(parameterNameGenerator, nameof(parameterNameGenerator));
             Check.NotNull(getPropertyExtensions, nameof(getPropertyExtensions));
-            Check.NotNull(valueBufferFactoryFactory, nameof(valueBufferFactoryFactory));
 
             TableName = name;
             Schema = schema;
-            ParameterNameGenerator = parameterNameGenerator;
+            _parameterNameGenerator = parameterNameGenerator;
             _getPropertyExtensions = getPropertyExtensions;
-            _valueBufferFactoryFactory = valueBufferFactoryFactory;
-
-            _valueBufferFactory = new LazyRef<IRelationalValueBufferFactory>(CreateValueBufferFactory);
         }
 
         public virtual string TableName { get; }
 
         public virtual string Schema { get; }
 
-        public virtual IReadOnlyList<InternalEntityEntry> Entries => _entries;
+        public virtual IReadOnlyList<IUpdateEntry> Entries => _entries;
 
         public virtual EntityState EntityState => _entries.FirstOrDefault()?.EntityState ?? EntityState.Detached;
 
         public virtual IReadOnlyList<ColumnModification> ColumnModifications => _columnModifications.Value;
-
-        public virtual IRelationalValueBufferFactory ValueBufferFactory => _valueBufferFactory.Value;
 
         public virtual bool RequiresResultPropagation
         {
@@ -70,34 +60,28 @@ namespace Microsoft.Data.Entity.Update
             }
         }
 
-        public virtual ParameterNameGenerator ParameterNameGenerator { get; }
-
-        public virtual ModificationCommand AddEntry([NotNull] InternalEntityEntry entry)
+        public virtual void AddEntry([NotNull] IUpdateEntry entry)
         {
             Check.NotNull(entry, nameof(entry));
 
-            if (entry.EntityState != EntityState.Added
-                && entry.EntityState != EntityState.Modified
-                && entry.EntityState != EntityState.Deleted)
+            if ((entry.EntityState != EntityState.Added)
+                && (entry.EntityState != EntityState.Modified)
+                && (entry.EntityState != EntityState.Deleted))
             {
-                throw new NotSupportedException(Strings.ModificationFunctionInvalidEntityState(entry.EntityState));
+                throw new NotSupportedException(RelationalStrings.ModificationFunctionInvalidEntityState(entry.EntityState));
             }
 
             var firstEntry = _entries.FirstOrDefault();
-            if (firstEntry != null
-                && firstEntry.EntityState != entry.EntityState)
+            if ((firstEntry != null)
+                && (firstEntry.EntityState != entry.EntityState))
             {
-                // TODO: Proper message
-                throw new InvalidOperationException("Two entities cannot make conflicting updates to the same row.");
+                throw new InvalidOperationException(RelationalStrings.ConflictingRowUpdates);
 
                 // TODO: Check for any other conflicts between the two entries
             }
 
             _entries.Add(entry);
             _columnModifications.Reset(GenerateColumnModifications);
-            _valueBufferFactory.Reset(CreateValueBufferFactory);
-
-            return this;
         }
 
         private IReadOnlyList<ColumnModification> GenerateColumnModifications()
@@ -113,8 +97,8 @@ namespace Microsoft.Data.Entity.Update
                 {
                     var isKey = property.IsPrimaryKey();
                     var isCondition = !adding && (isKey || property.IsConcurrencyToken);
-                    var readValue = entry.StoreMustGenerateValue(property);
-                    var writeValue = !readValue && (adding || entry.IsPropertyModified(property));
+                    var readValue = entry.IsStoreGenerated(property);
+                    var writeValue = !readValue && (adding || entry.IsModified(property));
 
                     if (readValue
                         || writeValue
@@ -129,7 +113,7 @@ namespace Microsoft.Data.Entity.Update
                             entry,
                             property,
                             _getPropertyExtensions(property),
-                            ParameterNameGenerator,
+                            _parameterNameGenerator,
                             readValue,
                             writeValue,
                             isKey,
@@ -140,15 +124,6 @@ namespace Microsoft.Data.Entity.Update
 
             return columnModifications;
         }
-
-        private IRelationalValueBufferFactory CreateValueBufferFactory()
-            => _valueBufferFactoryFactory
-                .Create(
-                    ColumnModifications
-                        .Where(c => c.IsRead)
-                        .Select(c => c.Property.ClrType)
-                        .ToArray(),
-                    indexMap: null);
 
         public virtual void PropagateResults(ValueBuffer valueBuffer)
         {
